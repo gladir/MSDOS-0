@@ -3,7 +3,7 @@ Clone de MS-DOS en Pascal
 
 <h2>Liste des fichiers</h2>
 
-Voici la liste des différents fichiers proposés dans Corail :
+Voici la liste des différents fichiers proposés dans MSDOS-0 :
 
 <table>
 		<tr>
