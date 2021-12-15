@@ -1,2 +1,2 @@
-# MSDOS-0
+# MSDOS/0
 Clone de MS-DOS en Pascal
