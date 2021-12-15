@@ -205,7 +205,7 @@ End;
 
 Procedure HomeMessage;Begin
  WriteLn;
- WriteLn('Corail COMMAND.COM');
+ WriteLn('MSDOS-0 COMMAND.COM');
  WriteLn('gladir.com 2021. Tous droits reserves.');
  WriteLn;
 End;
