@@ -1,4 +1,4 @@
-# MSDOS/0
+# MSDOS-0
 Clone de MS-DOS en Pascal
 
 <h2>Liste des fichiers</h2>
