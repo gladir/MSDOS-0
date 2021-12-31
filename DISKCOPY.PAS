@@ -1,7 +1,7 @@
 { @author: Sylvain Maltais (support@gladir.com)
   @created: 2021
   @website(https://www.gladir.com/msdos0)
-  @abstract(Target: Free Pascal)
+  @abstract(Target: Turbo Pascal, Free Pascal)
 }
 
 Program DISKCOPY;
@@ -40,7 +40,7 @@ Var
  NmHeads,NumTrack,SecPerTrk:Word;
  CurrParam:String;
  FileName1,FileName2:String;
- FileSource,FileTarget:File of Byte;
+ FileSource,FileTarget:File {$IFDEF FPC}of Byte{$ENDIF};
  Buffer:Array[0..511]of Byte;
  TeleDisk:TeleDiskHeader Absolute Buffer;
  _CurrTrack:Array[0..3]of Byte;

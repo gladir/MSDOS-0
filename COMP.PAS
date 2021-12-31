@@ -1,7 +1,7 @@
 { @author: Sylvain Maltais (support@gladir.com)
   @created: 2021
   @website(https://www.gladir.com/msdos0)
-  @abstract(Target: Free Pascal)
+  @abstract(Target: Turbo Pascal, Free Pascal)
 }
 
 Program COMP;
@@ -15,7 +15,7 @@ Var
  OutputStatus:(_Offset,_Line);
  I:Integer;
  FileName1,FileName2:String;
- FileComp1,FileComp2:File of Byte;
+ FileComp1,FileComp2:File {$IFDEF FPC}of Byte{$ENDIF};
  Buffer1,Buffer2:Array[0..255]of Byte;
  ByteReaded1,ByteReaded2:Integer;
  CurrPos,CurrLineCount:LongInt;
