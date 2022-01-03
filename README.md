@@ -17,6 +17,10 @@ Voici la liste des différents fichiers proposés dans MSDOS-0 :
 			<td><b>ATTRIB.PAS</b></td>
 			<td>Cette commande permet de demander ou de changer les attributs d'un fichier.</td>
 		</tr>
+	        <tr>
+			<td><b>CHOICE.PAS/b></td>
+			<td>Cette commande permet de faire une choix.</td>
+		</tr>
 		<tr>
 			<td><b>COMMAND.PAS</b></td>
 			<td>Logiciel clone d'un <i>COMMAND.COM</i> du système d'exploitation <a href="https://www.gladir.com/OS/DOS/intro.htm"><i>DOS</i></a>.</td>
