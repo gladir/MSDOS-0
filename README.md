@@ -46,6 +46,10 @@ Voici la liste des différents fichiers proposés dans MSDOS-0 :
 			<td>Cette commande permet de rechercher une chaine de caractères dans des fichiers. Cette commande est un équivalent du DOS.</td>
 		</tr>
 		<tr>
+			<td><b>FORMAT.PAS</b></td>
+			<td>Cette commande permet de formater un unite de disquette.</td>
+		</tr>
+		<tr>
 			<td><b>LABEL.PAS</b></td>
 			<td>Cette commande permet de changer le nom d'un volume.</td>
 		</tr>
