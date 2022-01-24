@@ -57,6 +57,10 @@ Voici la liste des différents fichiers proposés dans MSDOS-0 :
 			<td><b>LABEL.PAS</b></td>
 			<td>Cette commande permet de changer le nom d'un volume.</td>
 		</tr>
+	        <tr>
+			<td><b>MEM.PAS</b></td>
+			<td>Cette commande permet d'afficher les informations sur la mémoire. Cette commande est un clone de la commande MS-DOS ou PC-DOS.</td>
+		</tr>
 		<tr>
 			<td><b>MODE.PAS</b></td>
 			<td>Cette commande permet d'effectuer la gestion des paramètres d'un périphérique.</td>
