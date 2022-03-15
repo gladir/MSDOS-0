@@ -73,6 +73,10 @@ Voici la liste des différents fichiers proposés dans MSDOS-0 :
 			<td><b>MORE.PAS</b></td>
 			<td>Cette commande permet de recevoir l'entrée puis l'affichage sur un périphérique un écran à la fois.</td>
 		</tr>
+	        <tr>
+			<td><b>MOVE.PAS</td>
+			<td>Cette commande permet de déplacer un fichier.</td>
+		</tr>
 		<tr>
 			<td><b>SORT.PAS</b></td>
 			<td>Cette commande permet de trier une fichier texte ASCII et de retourner le résultat. Cette commande est un équivalent de la commande du DOS.</td>
