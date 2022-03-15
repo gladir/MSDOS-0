@@ -81,4 +81,8 @@ Voici la liste des différents fichiers proposés dans MSDOS-0 :
 			<td><b>SORT.PAS</b></td>
 			<td>Cette commande permet de trier une fichier texte ASCII et de retourner le résultat. Cette commande est un équivalent de la commande du DOS.</td>
 		</tr>	
+		 <tr>
+			<td><b>XCOPY.PAS</b></td>
+			<td>Cette commande permet d'effectuer la copie étendue avec sous-répertoire de fichier(s) vers un nouvel emplacement.</td>
+		</tr>
 	</table>
