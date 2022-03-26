@@ -44,7 +44,11 @@ Voici la liste des différents fichiers proposés dans MSDOS-0 :
   	<tr>
 		    	<td><b>DISKCOPY.PAS</b></td>
 		    	<td>Cette commande permet de copier des disquettes ou des images.</td>
-		</tr>	
+		</tr>
+		<tr>
+			<td><b>EDLIN.PAS</b></td>
+			<td>Cette commande permet de lancer l'éditeur en ligne de commande.</td>
+		</tr>
 		<tr>
 			<td><b>EXE2BIN.PAS</b></td>
 			<td>Cette commande permet de convertir un fichier EXE en binaire (COM).</td>
