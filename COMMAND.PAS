@@ -1229,7 +1229,7 @@ Begin
 End;
 
 BEGIN
- Echo:=True;
+ Echo:=True;InCmd:=0;
  If(ParamStr(1)='/?')or(ParamStr(1)='--help')or(ParamStr(1)='-h')Then Begin
   WriteLn('COMMAND : Cette commande permet de lancer l''interpreteur de commande.');
   WriteLn;
