@@ -6,6 +6,8 @@
 
 Program GRAFTABL;
 
+{$M 1024,0,0}
+
 Uses DOS;
 
 Const Matrix8x8:Array[0..1023] of Byte=(
