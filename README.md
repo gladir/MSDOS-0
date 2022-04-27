@@ -41,7 +41,11 @@ Voici la liste des différents fichiers proposés dans MSDOS-0 :
 			<td><b>DELTREE.PAS</b></td>
 			<td>Cette commande permet d'effectuer la suppression d'un répertoire avec tous ses fichiers et répertoires inclusivement sur une unité de disque. Cette commande est un équivalent de la commande <a href="https://www.gladir.com/OS/MSDOS/deltree.htm">DELTREE</a> du MS-DOS.</td>
 		</tr>
-  	<tr>
+		<tr>
+			<td><b>DISKCOMP.PAS</b></td>
+			<td>Cette commande permet de comparer des disquettes ou des images.</td>
+		</tr>
+  		<tr>
 		    	<td><b>DISKCOPY.PAS</b></td>
 		    	<td>Cette commande permet de copier des disquettes ou des images.</td>
 		</tr>
