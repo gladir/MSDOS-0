@@ -9,10 +9,12 @@ Program Attrib;
 Uses DOS;
 
 Var
+ Language:(_French,_English);
  IsAttrSetting:Array[Byte]of Boolean;
  AttrAdd,AttrRemove:Word;
  I:Byte;
  SubDirectory:Boolean;
+ TmpLanguage:String;
 
 Function StrToUpper(S:String):String;
 Var
@@ -22,6 +24,30 @@ Begin
   If S[I] in['a'..'z']Then S[I]:=Chr(Ord(S[I])-32);
  End;
  StrToUpper:=S;
+End;
+
+Function Path2Dir(Const Path:String):String;
+Var
+ D:DirStr;
+ N:NameStr;
+ E:ExtStr;
+Begin
+ Path2Dir:='';
+ If Path=''Then Exit;
+ FSplit(Path,D,N,E);
+ If E=''Then Begin
+  If D[Length(D)]<>'\'Then D:=D+'\';
+  D:=D+E;
+ End;
+ If D=''Then Path2Dir:='' Else
+ If D[Length(D)]<>'\'Then D:=D+'\';
+ Path2Dir:=D;
+End;
+
+Function SetPath4AddFile(Path:String):String;Begin
+ If Path=''Then GetDir(0,Path);
+ If Path[Length(Path)]<>'\'Then Path:=Path+'\';
+ SetPath4AddFile:=Path;
 End;
 
 Procedure SetAttribut(Var F:File);
@@ -47,16 +73,21 @@ Var
  CurrFile:File;
  Found:Boolean;
 Begin
+ FileSpec:=FExpand(FileSpec);
  FindFirst(FileSpec,AnyFile,Info);
  Found:=False;
  While DOSError=0 do Begin
   Found:=True;
   If Info.Attr and Directory=Directory Then Begin
-   {If(SubDirectory)Then SetAttributFiles(Info.Name+'\*.*');}
+   If(SubDirectory)Then Begin
+    If Not((Info.Name='.')or(Info.Name='..')or(Info.Name=''))Then Begin
+     SetAttributFiles(SetPath4AddFile(Path2Dir(FileSpec)+Info.Name)+'*.*');
+    End;
+   End;
   End
    Else
   Begin
-   Assign(CurrFile,Info.Name);
+   Assign(CurrFile,Path2Dir(FileSpec)+Info.Name);
    SetAttribut(CurrFile);
   End;
   FindNext(Info);
@@ -83,10 +114,43 @@ Begin
 End;
 
 BEGIN
+ Language:=_French;
+ TmpLanguage:=GetEnv('LANGUAGE');
+ If TmpLanguage<>''Then Begin
+  If TmpLanguage[1]='"'Then TmpLanguage:=Copy(TmpLanguage,2,255);
+  If StrToUpper(Copy(TmpLanguage,1,2))='EN'Then Language:=_English;
+ End;
  If ParamStr(1)='/?'Then Begin
-  WriteLn('ATTRIB - Cette commande permet de demander ou changer l''attribut d''un fichier');
-  WriteLn;
-  WriteLn('Syntaxe : ATTRIB nomdufichier [+R|-R] [+A|-A] [+S|-S] [+H|-H]');
+  Case Language of
+   _English:Begin
+    WriteLn('ATTRIB - This command allow to request or change the attribute of a file.');
+    WriteLn;
+    WriteLn('Syntax: ATTRIB filename [+R|-R] [+A|-A] [+S|-S] [+H|-H]');
+    WriteLn;
+    WriteLn(' -A   Clear archive attribut');
+    WriteLn(' +A   Set archive attribut');
+    WriteLn(' -R   Clear read only attribut');
+    WriteLn(' +R   Set read only attribut');
+    WriteLn(' -S   Clear system attribut');
+    WriteLn(' +S   Set system attribut');
+    WriteLn;
+    WriteLn(' /S   Recursive subdirectories');
+   End;
+   Else Begin
+    WriteLn('ATTRIB - Cette commande permet de demander ou changer l''attribut d''un fichier');
+    WriteLn;
+    WriteLn('Syntaxe : ATTRIB nomdufichier [+R|-R] [+A|-A] [+S|-S] [+H|-H]');
+    WriteLn;
+    WriteLn(' -A   Enleve de l''attribut d''archive');
+    WriteLn(' +A   Ajout de l''attribut d''archive');
+    WriteLn(' -R   Enleve de l''attribut de lecture seulement');
+    WriteLn(' +R   Ajout de l''attribut de lecture seulement');
+    WriteLn(' -S   Enleve de l''attribut de systeme');
+    WriteLn(' +S   Ajout de l''attribut de systeme');
+    WriteLn;
+    WriteLn(' /S   Applique le changement dans les sous-repertoires recursivement');
+   End;
+  End;
  End
   Else
  If ParamCount=0Then ShowAttribut
