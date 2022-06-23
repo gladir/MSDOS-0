@@ -49,6 +49,10 @@ Voici la liste des différents fichiers proposés dans MSDOS-0 :
 		    	<td><b>DISKCOPY.PAS</b></td>
 		    	<td>Cette commande permet de copier des disquettes ou des images.</td>
 		</tr>
+	        <tr>
+			<td><b>DOSKEY.PAS</b></td>
+			<td>Cette commande permet de charger le programme DOSKEY.</td>
+		</tr>
 		<tr>
 			<td><b>EDLIN.PAS</b></td>
 			<td>Cette commande permet de lancer l'éditeur en ligne de commande.</td>
