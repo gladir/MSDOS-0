@@ -851,7 +851,8 @@ Const
  ErrMsg:String[27]='A:\COMMAND.COM Introuvable'#10;
 Begin
  SetSpLow;
- Exec('C:\COMMAND.COM','');
+ Exec(GetEnv('COMSPEC'),'');
+ If DosError<>0Then Exec('C:\COMMAND.COM','');
  If DosError<>0Then Exec('A:\COMMAND.COM','');
  If DosError<>0Then WriteSubStr(ErrMsg,1,Length(ErrMsg));
  Irestore;
