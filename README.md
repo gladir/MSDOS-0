@@ -3,7 +3,7 @@ Clone de MS-DOS en Pascal
 
 ![image](https://user-images.githubusercontent.com/11842176/146283572-9ec412c9-cee5-4ba3-ba5d-d9ddfda47e4e.png)
 
-![image](https://user-images.githubusercontent.com/11842176/177667148-4ceaef7c-7cf9-4d48-a818-650372f09813.png)
+![image](https://user-images.githubusercontent.com/11842176/177667334-5e1c5c2c-ed44-478b-a76d-ce8797d6b5ba.png)
 
 
 <h2>Liste des fichiers</h2>
