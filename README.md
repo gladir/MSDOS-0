@@ -3,6 +3,8 @@ Clone de MS-DOS en Pascal
 
 ![image](https://user-images.githubusercontent.com/11842176/146283572-9ec412c9-cee5-4ba3-ba5d-d9ddfda47e4e.png)
 
+![image](https://user-images.githubusercontent.com/11842176/177667334-5e1c5c2c-ed44-478b-a76d-ce8797d6b5ba.png)
+
 
 <h2>Liste des fichiers</h2>
 
@@ -53,6 +55,10 @@ Voici la liste des différents fichiers proposés dans MSDOS-0 :
 			<td><b>DOSKEY.PAS</b></td>
 			<td>Cette commande permet de charger le programme DOSKEY.</td>
 		</tr>
+		<tr>
+			<td><b>DOSSHELL.PAS</b></td>
+			<td>Cette commande permet de lancer un clone du MS-DOS Shell.</td>
+		</tr>	
 		<tr>
 			<td><b>EDLIN.PAS</b></td>
 			<td>Cette commande permet de lancer l'éditeur en ligne de commande.</td>
