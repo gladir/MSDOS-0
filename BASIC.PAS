@@ -6,7 +6,7 @@
 
 Program BASIC;
 
-Uses Crt,DOS;
+Uses Crt,DOS,Printer;
 
 Const
  CommandList:Array[0..91]of String[12]=(
@@ -51,7 +51,7 @@ Type
  VarPointer=^VarRec;
 
 Var
- Terminated:Boolean;
+ Terminated,Tron:Boolean;
  CurrCommand:String;
  FileName,CurrLine:String;
  CurrPos:Byte;
@@ -59,7 +59,7 @@ Var
  CurrLinePtr,NumberLine:Integer;
  CurrNumberLine:Integer;
  VarList:Array[1..MaxVariable]of VarPointer;
- NumberVariable:Integer;
+ I,NumberVariable:Integer;
 
 Function RunBasic(InList:Boolean):Boolean;Forward;
 Procedure NewCommand;Forward;
@@ -95,6 +95,14 @@ Begin
   If S[I] in['a'..'z']Then S[I]:=Chr(Ord(S[I])-32);
  End;
  StrToUpper:=S;
+End;
+
+Function GetCurrentDisk:Char;
+Var
+ CurrentDir:String;
+Begin
+ GetDir(0,CurrentDir);
+ GetCurrentDisk:=CurrentDir[1];
 End;
 
 Function GetErrorMessage(Code:Word):String;Begin
@@ -804,6 +812,10 @@ Begin
        End;
       End;
       Break;
+     End
+      Else
+     Begin { Variable vide }
+      Value:='0';
      End;
     End;
    End;
@@ -948,6 +960,22 @@ Begin
  {$I-} ChDir(GetStringValue);{$I+}
  Error:=IoResult;
  If Error<>0Then WriteLn(GetErrorMessage(Error));
+End;
+
+Procedure FilesCommand;
+Var
+ Info:SearchRec;
+ CurrDrive:Char;
+Begin
+ CurrDrive:=GetCurrentDisk;
+ FindFirst('*.*',AnyFile,Info);
+ While DOSError=0 do Begin
+  Write(PadRight(Info.Name,16));
+  FindNext(Info);
+ End;
+ WriteLn;
+ WriteLn(' ',DiskFree(Byte(CurrDrive)-64):10,' octet(s) de libre');
+ WriteLn;
 End;
 
 Function GotoCommand:Boolean;
@@ -1113,6 +1141,15 @@ Begin
  End;
 End;
 
+Procedure LListCommand;
+Var
+ I:Integer;
+Begin
+ If NumberLine>0Then Begin
+  For I:=1 to NumberLine do WriteLn(Lst,PA[I]^);
+ End;
+End;
+
 Procedure LoadCommand;
 Var
  FileLoad:Text;
@@ -1146,6 +1183,24 @@ Begin
  WriteLn('Chaine de caractŠres attendu');
 End;
 
+Procedure LocateCommand;
+Var
+ X,Y:Real;
+Begin
+ Y:=GetNumberValue(1);
+ If GetSeparator=','Then Begin
+  Inc(CurrPos);
+  X:=GetNumberValue(1);
+  If(X>80.0)or(X<0.0)Then Begin
+   WriteLn('Depassement d''intervalle');
+   Exit;
+  End;
+  GotoXY(Trunc(X),Trunc(Y));
+ End
+  Else
+ GotoXY(1,Trunc(Y));
+End;
+
 Procedure MkDirCommand;
 Var
  Error:Word;
@@ -1174,10 +1229,25 @@ Begin
  End
   Else
  Begin
-  R:=GetNumberValue(1);
-  If Frac(R)=0.0Then WriteLn(R:0:0)
-                Else WriteLn(R);
+  If CurrPos>Length(CurrLine)Then WriteLn
+   Else
+  Begin
+   R:=GetNumberValue(1);
+   If Frac(R)=0.0Then WriteLn(R:0:0)
+                 Else WriteLn(R);
+  End;
  End;
+End;
+
+Procedure RmDirCommand;
+Var
+ Error:Word;
+ S:String;
+Begin
+ SkipSpace;
+ {$I-} RmDir(GetStringValue);{$I+}
+ Error:=IoResult;
+ If Error<>0Then WriteLn(GetErrorMessage(Error));
 End;
 
 Procedure RunCommand;
@@ -1194,6 +1264,7 @@ Begin
    While(J<Length(CurrLine))do Begin
     If Not(CurrLine[J]in['0'..'9'])Then Begin
      Val(Copy(CurrLine,1,J-1),CurrNumberLine,Err);
+     If(Tron)Then Write('[',CurrNumberLine,']');
      Break;
     End;
     Inc(J);
@@ -1256,6 +1327,14 @@ Var
 Begin
  N:=GetNumberValue(1);
  Delay(Trunc(N*1000));
+End;
+
+Procedure TroffCommand;Begin
+ Tron:=False;
+End;
+
+Procedure TronCommand;Begin
+ Tron:=True;
 End;
 
 Function WidthCommand:Boolean;
@@ -1331,7 +1410,7 @@ Begin
    26: NoImplementation:=True;{ERASE}
    27: NoImplementation:=True;{ERROR}
    28: NoImplementation:=True;{FIELD}
-   29: NoImplementation:=True;{FILES}
+   29: FilesCommand;{FILES}
    30: NoImplementation:=True;{FOR}
    31: NoImplementation:=True;{GET}
    32: NoImplementation:=True;{GOSUB}
@@ -1344,9 +1423,9 @@ Begin
    39: NoImplementation:=True;{LET}
    40: NoImplementation:=True;{LINE}
    41: ListCommand;{LIST}
-   42: NoImplementation:=True;{LLIST}
+   42: LListCommand;{LLIST}
    43: LoadCommand;{LOAD}
-   44: NoImplementation:=True;{LOCATE}
+   44: LocateCommand;{LOCATE}
    45: NoImplementation:=True;{LPRINT}
    46: NoImplementation:=True;{LSET}
    47: NoImplementation:=True;{MERGE}
@@ -1369,27 +1448,30 @@ Begin
    64: NoImplementation:=True;{PUT}
    65: NoImplementation:=True;{RANDOMIZE}
    66: NoImplementation:=True;{READ}
-   67: Exit;{REM}
+   67: Begin
+    RunBasic:=True;
+    Exit;{REM}
+   End;
    68: NoImplementation:=True;{RENUM}
    69: NoImplementation:=True;{RESET}
    70: NoImplementation:=True;{RESUME}
    71: NoImplementation:=True;{RESTORE}
    72: NoImplementation:=True;{RETURN}
-   73: NoImplementation:=True;{RMDIR}
+   73: RmDirCommand;{RMDIR}
    74: NoImplementation:=True;{RSET}
    75: RunCommand;{RUN}
    76: SaveCommand;{SAVE}
    77: NoImplementation:=True;{SCREEN}
    78: NoImplementation:=True;{SHELL}
    79: SleepCommand;{SLEEP}
-   80: NoImplementation:=True;{STOP}
+   80: Exit;{STOP}
    81: Begin {SYSTEM}
     Terminated:=True;
     Exit;
    End;
    82: NoImplementation:=True;{THEN}
-   83: NoImplementation:=True;{TROFF}
-   84: NoImplementation:=True;{TRON}
+   83: TroffCommand;{TROFF}
+   84: TronCommand;{TRON}
    85: NoImplementation:=True;{VIEW}
    86: NoImplementation:=True;{WAIT}
    87: NoImplementation:=True;{WEND}
@@ -1446,15 +1528,31 @@ Begin
 End;
 
 BEGIN
- FileName:='';
- NumberLine:=0;CurrNumberLine:=0;
- NumberVariable:=0;
- HomeMessage;
- Terminated:=False;
- Repeat
-  WriteLn('Ok');
-  ReadLn(CurrLine);
-  CurrLine:=LTrim(CurrLine);
-  RunBasic(False);
- Until Terminated;
+ If(ParamStr(1)='/?')or(ParamStr(1)='--help')or(ParamStr(1)='-h')Then Begin
+  WriteLn('BASIC : Cette commande permet de lancer l''interpreteur de BASIC.');
+  WriteLn;
+  WriteLn('Syntaxe : BASIC [fichier]');
+ End
+  Else
+ Begin
+  FileName:='';
+  Tron:=False;
+  NumberLine:=0;CurrNumberLine:=0;
+  NumberVariable:=0;
+  For I:=1 to ParamCount do Begin
+   FileName:=ParamStr(I);
+  End;
+  HomeMessage;
+  If FileName<>''Then Begin
+   CurrLine:='LOAD "'+FileName+'":RUN';
+   RunBasic(False);
+  End;
+  Terminated:=False;
+  Repeat
+   WriteLn('Ok');
+   ReadLn(CurrLine);
+   CurrLine:=LTrim(CurrLine);
+   RunBasic(False);
+  Until Terminated;
+ End;
 END.
