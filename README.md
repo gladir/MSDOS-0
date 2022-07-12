@@ -58,7 +58,11 @@ Voici la liste des différents fichiers proposés dans MSDOS-0 :
 		<tr>
 			<td><b>DOSSHELL.PAS</b></td>
 			<td>Cette commande permet de lancer un clone du MS-DOS Shell.</td>
-		</tr>	
+		</tr>
+		<tr>
+			<td><b>EDIT.PAS</b></td>
+			<td>Cette commande permet d'éditer un fichier texte ASCII.</td>
+		</tr>
 		<tr>
 			<td><b>EDLIN.PAS</b></td>
 			<td>Cette commande permet de lancer l'éditeur en ligne de commande.</td>
