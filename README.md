@@ -86,6 +86,10 @@ Voici la liste des différents fichiers proposés dans MSDOS-0 :
 			<td>Cette commande permet d'effectuer le chargement en mémoire conventionnelle d'une table de police de caractères pour les modes graphiques.</td>
 		</tr>
 		<tr>
+			<td><b>GWBASIC.PAS</b></td>
+			<td>Cette commande permet de lancer un interprÃ©teur BASIC Ã©tant un clone du GWBASIC.</td>
+		</tr>
+		<tr>
 			<td><b>LABEL.PAS</b></td>
 			<td>Cette commande permet de changer le nom d'un volume.</td>
 		</tr>
