@@ -9,8 +9,6 @@ Clone de MS-DOS en Pascal
 
 ![image](https://user-images.githubusercontent.com/11842176/178855949-f77527a5-caf9-44aa-96a4-54e4a46b25c6.png)
 
-
-
 <h2>Liste des fichiers</h2>
 
 Voici la liste des différents fichiers proposés dans MSDOS-0 :
@@ -129,6 +127,12 @@ Voici la liste des différents fichiers proposés dans MSDOS-0 :
 			<td>Cette commande permet d'effectuer la copie étendue avec sous-répertoire de fichier(s) vers un nouvel emplacement.</td>
 		</tr>
 	</table>
+
+<h2>Langage humain</h3>
+
+Pour changer la langue des commandes, vous devez fixer la valeur de la variable d'environnement LANGUAGE, par exemple, pour passer à l'allemand :
+
+SET LANGUAGE=GR
 
 <h2>Compilation</h2>
 	
