@@ -9,7 +9,7 @@ Program Attrib;
 Uses DOS;
 
 Var
- Language:(_French,_English);
+ Language:(_French,_English,_Germany,_Italian,_Spain);
  IsAttrSetting:Array[Byte]of Boolean;
  AttrAdd,AttrRemove:Word;
  I:Byte;
@@ -118,7 +118,10 @@ BEGIN
  TmpLanguage:=GetEnv('LANGUAGE');
  If TmpLanguage<>''Then Begin
   If TmpLanguage[1]='"'Then TmpLanguage:=Copy(TmpLanguage,2,255);
-  If StrToUpper(Copy(TmpLanguage,1,2))='EN'Then Language:=_English;
+  If StrToUpper(Copy(TmpLanguage,1,2))='EN'Then Language:=_English Else
+  If StrToUpper(Copy(TmpLanguage,1,2))='GR'Then Language:=_Germany Else
+  If StrToUpper(Copy(TmpLanguage,1,2))='IT'Then Language:=_Italian Else
+  If StrToUpper(Copy(TmpLanguage,1,2))='SP'Then Language:=_Spain;
  End;
  If ParamStr(1)='/?'Then Begin
   Case Language of
@@ -135,6 +138,18 @@ BEGIN
     WriteLn(' +S   Set system attribut');
     WriteLn;
     WriteLn(' /S   Recursive subdirectories');
+   End;
+   _Germany:Begin
+    WriteLn('ATTRIB - Zeigt Dateiattribute an oder Ñndert sie.');
+    WriteLn;
+    WriteLn(' +  Setzt ein Attribut.');
+    WriteLn(' -  Lîscht ein Attribut.');
+    WriteLn(' R  Attribut fÅr ''SchreibgeschÅtzte Datei''');
+    WriteLn(' A  Attribut fÅr ''Zu archivierende Datei''');
+    WriteLn(' S  Attribut fÅr ''Systemdatei''');
+    WriteLn(' H  Attribut fÅr ''Versteckte Datei''');
+    WriteLn;
+    WriteLn('/S  Verarbeitet Dateien in allen Verzeichnissen des angegebenen Pfads.');
    End;
    Else Begin
     WriteLn('ATTRIB - Cette commande permet de demander ou changer l''attribut d''un fichier');

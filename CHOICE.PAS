@@ -6,9 +6,11 @@
 
 Program Choice;
 
-Uses Crt;
+Uses Crt,DOS;
 
 Var
+ Language:(_French,_English,_Germany,_Italian,_Spain);
+ TmpLanguage:String;
  OptionFlag:(_None,_C);
  NoPrompt,Found,CheckCase:Boolean;
  I:Integer;
@@ -26,10 +28,32 @@ Begin
 End;
 
 BEGIN
+ Language:=_French;
+ TmpLanguage:=GetEnv('LANGUAGE');
+ If TmpLanguage<>''Then Begin
+  If TmpLanguage[1]='"'Then TmpLanguage:=Copy(TmpLanguage,2,255);
+  If StrToUpper(Copy(TmpLanguage,1,2))='EN'Then Language:=_English Else
+  If StrToUpper(Copy(TmpLanguage,1,2))='GR'Then Language:=_Germany Else
+  If StrToUpper(Copy(TmpLanguage,1,2))='IT'Then Language:=_Italian Else
+  If StrToUpper(Copy(TmpLanguage,1,2))='SP'Then Language:=_Spain;
+ End;
  If(ParamStr(1)='/?')or(ParamStr(1)='--help')or(ParamStr(1)='-h')Then Begin
-  Write('CHOICE : Cette commande permet de faire un choix.');
-  WriteLn;
-  WriteLn('Syntaxe : CHOICE [/C[:]choix] [/N]');
+  Case Language of
+   _English:Begin
+    WriteLn('CHOICE : Waits for you to choose one of a set of choices.');
+    WriteLn;
+    WriteLn('Formats: CHOICE [/C[:]choices] [/N] [/S]');
+    WriteLn;
+    WriteLn('/C[:]choices  Specifies allowable keys. Default is YN.');
+    WriteLn('/N            Does not display choices and ? at end of prompt string.');
+    WriteLn('/S            Treats choice keys as case sensitive.');
+   End;
+   Else Begin
+    WriteLn('CHOICE : Cette commande permet de faire un choix.');
+    WriteLn;
+    WriteLn('Syntaxe : CHOICE [/C[:]choix] [/N] [/S]');
+   End;
+  End;
  End
   Else
  Begin
