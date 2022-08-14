@@ -6,7 +6,7 @@
 
 Program DOSSHELL;
 
-{$M 4096,0,65536}
+{$M 8192,0,65536}
 
 Uses Crt,DOS;
 

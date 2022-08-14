@@ -6,7 +6,7 @@
 
 Program COMMAND;
 
-{$M 4096,0,0}
+{$M 8192,0,0}
 
 Uses Crt,DOS;
 
