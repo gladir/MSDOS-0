@@ -83,12 +83,130 @@ Var
  ShowASCII128,OnMenu:Boolean;
  YMenu,XMenu:Integer;
 
+{$IFNDEF FPC}
+ Procedure CursorOff;
+ Var
+  Regs:Registers;
+ Begin
+  Regs.AH:=1;
+  Regs.CH:=32;
+  Regs.CL:=0;
+  Intr($10,Regs);
+ End;
+
+ Procedure CursorOn;
+ Var
+  Regs:Registers;
+ Begin
+  Regs.AX:=$0100;
+  Regs.CX:=(7 shl 8)+9;
+  Intr($10,Regs);
+ End;
+{$ENDIF}
+
+Function MouseDriverFound:Boolean;
+Var
+ Int33h:Pointer;
+ Regs:Registers;
+Begin
+ MouseDriverFound:=False;
+ GetIntVec($33,Int33h);
+ If Int33h=NIL Then Exit;
+ Regs.AX:=0;
+ Intr($33,Regs);
+ MouseDriverFound:=Regs.AX=$FFFF;
+End;
+
+Function MicrosoftMouseFound:Boolean;
+Var
+ Regs:Registers;
+Begin
+ MicrosoftMouseFound:=False;
+ Regs.AX:=$006D;
+ Regs.ES:=0;
+ Regs.DI:=0;
+ Intr($33,Regs);
+ If(Regs.ES=0)and(Regs.DI=0)Then Exit;
+ MicrosoftMouseFound:=True;
+End;
+
+Function GeniusMouseFound:Boolean;
+Var
+ Regs:Registers;
+Begin
+ GeniusMouseFound:=False;
+ Regs.AX:=$004D;
+ Regs.ES:=0;
+ Regs.DI:=0;
+ Intr($33,Regs);
+ If(Regs.ES=0)and(Regs.DI=0)Then Exit;
+ {$IFDEF FPC}
+  GeniusMouseFound:=True;
+ {$ELSE}
+  If(Chr(Mem[Regs.ES:Regs.DI])='K')and
+    (Chr(Mem[Regs.ES:Regs.DI+1])='Y')and
+    (Chr(Mem[Regs.ES:Regs.DI]+2)='E')Then GeniusMouseFound:=True;
+ {$ENDIF}
+End;
+
+Function ZNIXMouseFound:Boolean;
+Var
+ Regs:Registers;
+Begin
+ ZNIXMouseFound:=False;
+ Regs.AX:=$004B;
+ Regs.ES:=0;
+ Regs.DI:=0;
+ Intr($33,Regs);
+ If(Regs.ES=0)and(Regs.DI=0)Then Exit;
+ {$IFDEF FPC}
+  ZNIXMouseFound:=True;
+ {$ELSE}
+  If(Chr(Mem[Regs.ES:Regs.DI])='Z')and
+    (Chr(Mem[Regs.ES:Regs.DI+1])='-')and
+    (Chr(Mem[Regs.ES:Regs.DI+2])='N')and
+    (Chr(Mem[Regs.ES:Regs.DI+3])='I')and
+    (Chr(Mem[Regs.ES:Regs.DI]+4)='X')Then ZNIXMouseFound:=True;
+ {$ENDIF}
+End;
+
+Function GetCurrentDisk:Char;
+Var
+ CurrentDir:String;
+Begin
+ GetDir(0,CurrentDir);
+ GetCurrentDisk:=CurrentDir[1];
+End;
+
+Function GetBootDrive:Char;
+Var
+ Regs:Registers;
+Begin
+ Regs.AX:=$3305;
+ MsDos(Regs);
+ If Regs.AL=0 Then GetBootDrive:=GetCurrentDisk
+              Else GetBootDrive:=Chr(Regs.AL+64);
+End;
+
 Function GetModelROM:Byte;Begin
  {$IFDEF FPC}
   GetModelROM:=0;
  {$ELSE}
   GetModelROM:=Mem[$FFFF:$E];
  {$ENDIF}
+End;
+
+Function GetEquip:Word;
+Var
+ Regs:Registers;
+Begin
+ Regs.AX:=0;
+ Intr($11,Regs);
+ GetEquip:=Regs.AX;
+End;
+
+Function JoystickPresent:Boolean;Begin
+ JoystickPresent:=(GetEquip shr 12)and 1=1;
 End;
 
 Function StrToUpper(S:String):String;
@@ -135,6 +253,13 @@ Var
 Begin
  If Length(S)<Space Then For I:=Length(S)+1 to Space do S:=S+' ';
  PadRight:=S;
+End;
+
+Function ByteHex2Str(value:Byte):String;
+Const
+ matrix:Array[0..15]of Char = ('0','1','2','3','4','5','6','7','8','9','A','B','C','D','E','F');
+Begin
+ ByteHex2Str:=matrix[(value shr 4) and $0F]+matrix[value and $F];
 End;
 
 Procedure Box(X1,Y1,X2,Y2,Couleur:Byte);Begin
@@ -408,24 +533,35 @@ Procedure NotImplemented;Begin
  HideSubMenu;
 End;
 
-Procedure ShowComputer;Begin
+Procedure ShowComputer;
+Var
+ Regs:Registers;
+Begin
  Box(20,4,60,22,$F0);
  FrameEmpty(20,4,60,22,$F0);
  Window(21,5,59,21);
  GotoXY(1,1);
- Write('Computer Name:':19,' ');
- Case GetModelROM of
-  $55: WriteLn('Conterm Max');
-  $FB: WriteLn('PC XT avec carte 256/640');
-  $FC: WriteLn('PC AT');
-  $FD: WriteLn('PC Junior');
-  $FE: WriteLn('PC XT');
-  Else WriteLn('Unknown');
- End;
+ WriteLn('Computer Name:':19,' ','Unknown');
+ Regs.AH:=$C0;
+ Intr($10,Regs);
  WriteLn('BIOS Manufacturer:':19,' ','Unknown');
  WriteLn('BIOS Version:':19,' ','Unknown');
- WriteLn('BIOS Category:':19,' ','Unknown');
- WriteLn('BIOS ID Bytes:':19,' ','Unknown');
+ Write('BIOS Category:':19,' ');
+ Case GetModelROM of
+  $55: WriteLn('Conterm Max');
+  $FB: WriteLn('IBM PC XT avec carte 256/640');
+  $FC: WriteLn('IBM PC AT');
+  $FD: WriteLn('IBM PC Junior');
+  $FE: WriteLn('IBM PC XT');
+  Else WriteLn('Unknown');
+ End;
+ {$IFDEF FPC}
+  WriteLn('BIOS ID Bytes:':19,' ','Unknown');
+ {$ELSE}
+  WriteLn('BIOS ID Bytes:':19,' ',ByteHex2Str(Mem[Regs.ES:Regs.BX+2]),' ',
+          ByteHex2Str(Mem[Regs.ES:Regs.BX+3]),' ',
+          ByteHex2Str(Mem[Regs.ES:Regs.BX+4]));
+ {$ENDIF}
  WriteLn('BIOS Date:':19,' ','Unknown');
  Write('Processor:':19,' ');
  Case Test8086 of
@@ -508,7 +644,7 @@ Procedure ShowOSVersion;Begin
  WriteLn('User Serial Number:':19,' ','Unknown');
  WriteLn('OEM Version String:':19,' ','Unknown');
  WriteLn('DOS Located in:':19,' ','Unknown');
- WriteLn('Boot Drive:':19,' ','Unknown');
+ WriteLn('Boot Drive:':19,' ',GetBootDrive,':');
  WriteLn('Path to Program:':19,' ','Unknown');
  WriteLn;
  WriteLn('  Environment Strings');
@@ -531,8 +667,15 @@ Procedure ShowMouse;Begin
  FrameEmpty(20,10,60,16,$F0);
  Window(21,11,59,15);
  GotoXY(1,1);
- WriteLn('Mouse Hardware:':19,' ','Unknown');
- WriteLn('Driver Manufacturer:':19,' ','Unknown');
+ Write('Mouse Hardware:':19,' ');
+ If Not MouseDriverFound Then WriteLn('Absent')
+                         Else WriteLn('Unknown');
+ Write('Driver Manufacturer:':19,' ');
+ If Not MouseDriverFound Then WriteLn('Absent')Else
+ If MicrosoftMouseFound Then WriteLn('Microsoft') Else
+ If GeniusMouseFound Then WriteLn('Genius') Else
+ If ZNIXMouseFound Then Write('Z-NIX')
+                   Else WriteLn('Unknown');
  Write(DuplicateString(#196,39));
  Write(' ':16);
  TextColor(Black);
@@ -547,7 +690,9 @@ Procedure ShowOtherAdapters;Begin
  FrameEmpty(20,10,60,15,$F0);
  Window(21,11,59,14);
  GotoXY(1,1);
- WriteLn('Game Adapter:':19,' ','Unknown');
+ Write('Game Adapter:':19,' ');
+ If(JoystickPresent)Then WriteLn('Pr‚sent')
+                    Else WriteLn('Absent');
  Write(DuplicateString(#196,39));
  Write(' ':16);
  TextColor(Black);
@@ -586,6 +731,7 @@ Procedure ShowDeviceDrivers;Begin
 End;
 
 Procedure Init;Begin
+ CursorOff;
  ShowHome;
  ShowStatusBar;
  ShowMenu;
@@ -748,6 +894,7 @@ Procedure Done;Begin
  TextColor(7);
  TextBackground(0);
  ClrScr;
+ CursorOn;
 End;
 
 BEGIN
