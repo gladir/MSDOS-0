@@ -115,6 +115,10 @@ Voici la liste des différents fichiers proposés dans MSDOS-0 :
 			<td>Cette commande permet de déplacer un fichier.</td>
 		</tr>
 		<tr>
+			<td><b>MSD.PAS</td>
+			<td>Cette commande permet de fournir des informations techniques à propos de votre ordinateur.</td>
+		</tr>
+		<tr>
 			<td><b>REPLACE.PAS</b></td>
 			<td>Cette commande permet de remplacer un fichier. Cette commande est un équivalent du DOS.</td>
 		</tr>
