@@ -202,7 +202,7 @@ BEGIN
    FillChar(BufferSource,SizeOf(BufferSource),0);
    FillChar(BufferTarget,SizeOf(BufferTarget),0);
    {$I-}Assign(FileSource,FileName1);
-   Reset(FileSource);{$I+}
+   Reset(FileSource{$IFNDEF FPC},1{$ENDIF});{$I+}
    If IoResult=0Then Begin
     CurrPos:=0;
     SecPerTrk:=9;
@@ -304,7 +304,7 @@ BEGIN
      NmHeads:=56;
     End;
     {$I-}Assign(FileTarget,FileName2);
-    Reset(FileTarget);{$I+}
+    Reset(FileTarget{$IFNDEF FPC},1{$ENDIF});{$I+}
     If IoResult<>0Then Begin
      Close(FileSource);
      WriteLn('Erreur de lecture du fichier destinataire !');
