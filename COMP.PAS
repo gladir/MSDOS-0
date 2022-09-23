@@ -70,9 +70,9 @@ BEGIN
     CurrPos:=0;
     CurrLineCount:=1;
     Assign(FileComp1,FileName1);
-    Reset(FileComp1);
+    Reset(FileComp1{$IFNDEF FPC},1{$ENDIF});
     Assign(FileComp2,FileName2);
-    Reset(FileComp2);
+    Reset(FileComp2{$IFNDEF FPC},1{$ENDIF});
     While Not EOF(FileComp1)do Begin
      BlockRead(FileComp1,Buffer1,SizeOf(Buffer1),ByteReaded1);
      BlockRead(FileComp2,Buffer2,SizeOf(Buffer2),ByteReaded2);
