@@ -1,6 +1,6 @@
 { @author: Sylvain Maltais (support@gladir.com)
   @created: 2022
-  @website(https://www.gladir.com/msdos-0)
+  @website(https://www.gladir.com/msdos0)
   @abstract(Target: Turbo Pascal, Free Pascal)
 }
 
@@ -1860,7 +1860,7 @@ Begin
    69: NoImplementation:=True;{RESET}
    70: NoImplementation:=True;{RESUME}
    71: NoImplementation:=True;{RESTORE}
-   72: NoImplementation:=True;{RETURN}
+   72: ReturnCommand;{RETURN}
    73: RmDirCommand;{RMDIR}
    74: NoImplementation:=True;{RSET}
    75: RunCommand;{RUN}

@@ -1762,7 +1762,7 @@ Begin
    69: NoImplementation:=True;{RESET}
    70: NoImplementation:=True;{RESUME}
    71: NoImplementation:=True;{RESTORE}
-   72: NoImplementation:=True;{RETURN}
+   72: ReturnCommand;{RETURN}
    73: RmDirCommand;{RMDIR}
    74: NoImplementation:=True;{RSET}
    75: RunCommand;{RUN}
