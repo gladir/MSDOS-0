@@ -121,7 +121,7 @@ Var
  ByteReaded:Word;
 Begin
  If(IsDisk)Then Begin
-  ReadTrack(CurrentDisk-1,0,0,1,1,Buffer);
+  ReadTrack($80+CurrentDisk-1,0,0,1,1,Buffer);
  End
   Else
  If FileName<>''Then Begin
@@ -140,7 +140,7 @@ Var
  ByteReaded:Word;
 Begin
  If(IsDisk)Then Begin
-  WriteTrack(CurrentDisk-1,0,0,1,1,Buffer);
+  WriteTrack($80+CurrentDisk-1,0,0,1,1,Buffer);
  End
   Else
  If FileName<>''Then Begin
