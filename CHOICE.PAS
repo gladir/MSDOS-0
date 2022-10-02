@@ -11,11 +11,21 @@ Uses Crt,DOS;
 Var
  Language:(_French,_English,_Germany,_Italian,_Spain);
  TmpLanguage:String;
+ StartTime,EndTime,CurrTime:LongInt;
  OptionFlag:(_None,_C);
  NoPrompt,Found,CheckCase:Boolean;
- I:Integer;
- C:Char;
- ChoiceString,TextString:String;
+ I,nn:Integer;
+ Err:Word;
+ C,defaultChar:Char;
+ ChoiceString,TextString,CurrParam:String;
+
+Function GetCurrTime:LongInt;
+Var
+ Hour,Min,Sec,Sec100:Word;
+Begin
+ GetTime(Hour,Min,Sec,Sec100);
+ GetCurrTime:=Sec100+(Sec*100)+(Min*60*100)+(Hour*60*60*100);
+End;
 
 Function StrToUpper(S:String):String;
 Var
@@ -58,7 +68,7 @@ BEGIN
    _English:Begin
     WriteLn('CHOICE : Waits for you to choose one of a set of choices.');
     WriteLn;
-    WriteLn('Formats: CHOICE [/C[:]choices] [/N] [/S]');
+    WriteLn('Formats: CHOICE [/C[:]choices] [/N] [/S] [/T[:]c,nn]');
     WriteLn;
     WriteLn('/C[:]choices  Specifies allowable keys. Default is YN.');
     WriteLn('/N            Does not display choices and ? at end of prompt string.');
@@ -67,12 +77,16 @@ BEGIN
    Else Begin
     WriteLn('CHOICE : Cette commande permet de faire un choix.');
     WriteLn;
-    WriteLn('Syntaxe : CHOICE [/C[:]choix] [/N] [/S]');
+    WriteLn('Syntaxe : CHOICE [/C[:]choix] [/N] [/S] [/T[:]c,nn]');
+    WriteLn;
+    WriteLn('/C[:]touches  Indique la liste des touches accept‚es comme r‚ponse');
+
    End;
   End;
  End
   Else
  Begin
+  nn:=-1;defaultChar:=#0;
   NoPrompt:=False;
   CheckCase:=False;
   OptionFlag:=_None;
@@ -84,6 +98,27 @@ BEGIN
      _C:ChoiceString:=ParamStr(I);
     End;
     OptionFlag:=_None;
+   End
+    Else
+   If Copy(StrToUpper(ParamStr(I)),1,2)='/T'Then Begin
+    CurrParam:=StrToUpper(ParamStr(I));
+    If CurrParam[3]=':'Then Begin
+     defaultChar:=CurrParam[4];
+     If CurrParam[5]<>','Then Begin
+      Write('Virgule attendu');
+      Halt;
+     End;
+     Val(Copy(CurrParam,6,255),nn,Err);
+    End
+     Else
+    Begin
+     defaultChar:=CurrParam[3];
+     If CurrParam[4]<>','Then Begin
+      Write('Virgule attendu');
+      Halt;
+     End;
+     Val(Copy(CurrParam,5,255),nn,Err);
+    End;
    End
     Else
    If StrToUpper(ParamStr(I))='/S'Then CheckCase:=True Else
@@ -98,7 +133,13 @@ BEGIN
     OptionFlag:=_None;
    End;
   End;
-  If ChoiceString=''Then ChoiceString:='ON';
+  If ChoiceString=''Then Begin
+   Case Language of
+    _English:ChoiceString:='YN';
+    _Germany:ChoiceString:='JN';
+    Else ChoiceString:='ON';
+   End;
+  End;
   If Not(NoPrompt)Then Begin
    Write('[');
    For I:=1 to Length(ChoiceString)do Begin
@@ -109,6 +150,20 @@ BEGIN
   End;
   Found:=False;
   Repeat
+   If nn<>-1 Then Begin
+    StartTime:=GetCurrTime;
+    EndTime:=StartTime+nn*100;
+    C:=DefaultChar;
+    Repeat
+     CurrTime:=GetCurrTime;
+     If(KeyPressed)Then Begin
+      C:=ReadKey;
+      If C=#0 Then ReadKey;
+      Break;
+     End;
+    Until CurrTime>EndTime;
+   End
+    Else
    C:=ReadKey;
    If(CheckCase)Then Begin
     For I:=1 to Length(ChoiceString)do If C=ChoiceString[I]Then Begin
