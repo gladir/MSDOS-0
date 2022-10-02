@@ -38,6 +38,12 @@ BEGIN
  If(ParamStr(1)='/?')or(ParamStr(1)='--help')or(ParamStr(1)='-h')or
    (ParamStr(1)='/h')or(ParamStr(1)='/H')Then Begin
   Case Language of
+   _Germany:Begin
+    WriteLn('Erm”glicht Programmen das Offnen von Datedateien in den angegebenen ');
+    WriteLn('Verzeichnissen, als ob sie im aktuellen Verzichnis w„ren.');
+    WriteLn;
+    WriteLn('APPEND [[Laufwerk:]Pfad[;...]] [/X[:ON|:OFF]] [/PATH:ON|/PATH:OFF] [/E]');
+   End;
    _English:Begin
     WriteLn('APPEND : Allows programs to open data files in specified ',
             'directories as if they were in the current directory.');
