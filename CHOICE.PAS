@@ -28,6 +28,11 @@ Begin
 End;
 
 BEGIN
+ {$IFDEF FPC}
+  {$IFDEF WINDOWS}
+   SetUseACP(False);
+  {$ENDIF}
+ {$ENDIF}
  Language:=_French;
  TmpLanguage:=GetEnv('LANGUAGE');
  If TmpLanguage<>''Then Begin
@@ -39,6 +44,17 @@ BEGIN
  End;
  If(ParamStr(1)='/?')or(ParamStr(1)='--help')or(ParamStr(1)='-h')Then Begin
   Case Language of
+   _Germany:Begin
+    WriteLn('Wartet auf die Answahl des Benutzers der angeigten Optionen.');
+    WriteLn;
+    WriteLn('CHOICE [/C[:]Tasten] [/N] [/S] [/T[:]c,nn] [Text]');
+    WriteLn;
+    WriteLn('/C[:]Tasten  Angabe der zul„ssigen Tasten. Standard ist JN.');
+    WriteLn('/N           Keine Anzeigne eines ?-Zeichens am Ende der Meldung.');
+    WriteLn('/S           Groá-/Kleinschreibung fšr Tasten wird beachtet.');
+    WriteLn('/T[:]c,nn    Nach nn Sekunden wird Standardausahl c ausgefšhrt.');
+    WriteLn('Text         Meldung, die angezeigt wird.');
+   End;
    _English:Begin
     WriteLn('CHOICE : Waits for you to choose one of a set of choices.');
     WriteLn;
