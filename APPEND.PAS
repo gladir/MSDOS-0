@@ -9,6 +9,8 @@ Program _APPEND;
 Uses DOS;
 
 Var
+ Language:(_French,_English,_Germany,_Italian,_Spain);
+ TmpLanguage:String;
  Regs:Registers;
  I:Integer;
  C:Char;
@@ -24,13 +26,54 @@ Begin
 End;
 
 BEGIN
+ Language:=_French;
+ TmpLanguage:=GetEnv('LANGUAGE');
+ If TmpLanguage<>''Then Begin
+  If TmpLanguage[1]='"'Then TmpLanguage:=Copy(TmpLanguage,2,255);
+  If StrToUpper(Copy(TmpLanguage,1,2))='EN'Then Language:=_English Else
+  If StrToUpper(Copy(TmpLanguage,1,2))='GR'Then Language:=_Germany Else
+  If StrToUpper(Copy(TmpLanguage,1,2))='IT'Then Language:=_Italian Else
+  If StrToUpper(Copy(TmpLanguage,1,2))='SP'Then Language:=_Spain;
+ End;
  If(ParamStr(1)='/?')or(ParamStr(1)='--help')or(ParamStr(1)='-h')or
    (ParamStr(1)='/h')or(ParamStr(1)='/H')Then Begin
-  WriteLn('APPEND : Cette commande permet d''ouvrir des fichiers ',
-          'quelques se trouvant dans les r‚pertoires sp‚cifi‚s ',
-          'comme s''il s''agissait du r‚pertoire courant.');
-  WriteLn;
-  WriteLn('Syntaxe : APPEND [/E] [/PATH:ON|OFF] [/X:ON|OFF]');
+  Case Language of
+   _English:Begin
+    WriteLn('APPEND : Allows programs to open data files in specified ',
+            'directories as if they were in the current directory.');
+    WriteLn;
+    WriteLn('Syntax : APPEND [/E] [/PATH:ON|OFF] [/X:ON|OFF]');
+    WriteLn;
+    WriteLn(' /E         Stores a copy of the appended directory list in an environment');
+    WriteLn('            variable named APPEND. /E may by used only the first time');
+    WriteLn('            you use APPEND after starting your system.');
+    WriteLn(' /PATH:ON   Applies appended directories to file requests that already');
+    WriteLn('            specify a path.  /PATH:ON is the default setting.');
+    WriteLn(' /PATH:OFF  Turns off the effect of /PATH:ON.');
+    WriteLn(' /X:OFF     Applies appended directories to file requests to open files.');
+    WriteLn('            /X:OFF is the default setting.');
+    WriteLn(' /X:ON      Applies appended directories to file searches and');
+    WriteLn('            application execution.');
+   End;
+   Else Begin
+    WriteLn('APPEND : Cette commande permet d''ouvrir des fichiers ',
+                 'quelques se trouvant dans les r‚pertoires sp‚cifi‚s ',
+           'comme s''il s''agissait du r‚pertoire courant.');
+    WriteLn;
+    WriteLn('Syntaxe : APPEND [/E] [/PATH:ON|OFF] [/X:ON|OFF]');
+    WriteLn;
+    WriteLn(' /E         Il faut associ‚ la liste des r‚pertoires … une variable');
+    WriteLn('            d''environnement se nommant ®APPEND¯.');
+    WriteLn(' /PATH:OFF  Il ne faut pas rechercher dans la liste des r‚pertoires');
+    WriteLn('            ajout‚s lors de la recherche de fichiers de donn‚es.');
+    WriteLn(' /PATH:ON   Il faut rechercher dans la liste des r‚pertoires ajout‚s');
+    WriteLn('            lors de la recherche de fichiers de donn‚es.');
+    WriteLn(' /X:OFF     Il ne faut pas rechercher dans la liste des r‚pertoires');
+    WriteLn('            ajout‚s lors de l''ex‚cution d''un programme.');
+    WriteLn(' /X:ON      Il faut rechercher dans la liste des r‚pertoires ajout‚s');
+    WriteLn('            lors de l''ex‚cution d''un programme.');
+   End;
+  End;
  End
   Else
  If ParamCount>0 Then Begin
