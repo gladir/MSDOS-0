@@ -110,6 +110,63 @@ Begin
  GetDiskLabel:=''
 End;
 
+Procedure SetEnv(EnvVar,Value:String);
+Var
+ Link,
+ PrevLink,
+ EnvirP:Word;
+ Size,Scan,Where,Dif:Integer;
+ NewVar,OldVar,Test:String;
+
+ Function CheckSpace(Wanted:Integer):Boolean;Begin
+  If Wanted+Scan>Size Then InOutRes:=8;
+  CheckSpace := inoutres = 0;
+ End;
+
+Begin
+ {$IFNDEF FPC}
+  If InOutRes>0 Then Exit;
+  For Scan:=1 TO Length(EnvVar)do EnvVar[Scan]:=UpCase(EnvVar[Scan]);
+  EnvVar:=EnvVar+'=';
+  NewVar:=EnvVar+Value+#0;
+  link:=PrefixSeg;
+  Repeat
+   PrevLink:=Link;
+   Link:=MemW[link:$16];
+  Until Link=prevlink;
+  EnvirP:=MemW[Link:$2C];
+  Size:=MemW[Envirp-1:$03]*16;
+  Scan:=0;
+  Where:=-1;
+  While mem[EnvirP:Scan]<>0 do Begin
+   Move(mem[EnvirP:Scan],Test[1],255);
+   Test[0]:=#255;
+   Test[0]:=Chr(pos(#0,Test));
+   If Pos(EnvVar,Test)=1 Then Begin
+    Where:=Scan;
+    OldVar:=Test;
+   End;
+   Scan:=Scan+Length(Test);
+  End;
+  If Where=-1 Then Begin
+   Where:=Scan;
+   NewVar:=NewVar+#0#0#0;
+   If Not CheckSpace(Length(NewVar)) Then Exit;
+  End
+   Else
+  Begin
+   Dif:=Length(NewVar)-Length(OldVar);
+   If Dif>0 Then Begin
+    If Not CheckSpace(Dif)Then Exit;
+    Move(mem[EnvirP:Where], mem[EnvirP:Where+Dif],Scan-Where+3);
+   End
+    Else
+   If Dif<0 Then Move(mem[EnvirP:Where-Dif],Mem[EnvirP:Where],Size-Where+Dif);
+  End;
+  Move(NewVar[1],Mem[EnvirP:Where],Length(NewVar));
+ {$ENDIF}
+End;
+
 Function CopyFile(Source,Target:String;ShowProgression:Boolean):Boolean;
 Var
  SourceFile,TargetFile:File;
@@ -315,22 +372,32 @@ Begin
  FirstParam:=ExtractParam(1);
  If FirstParam='/?'Then Begin
   Case Language of
+   _Germany:Begin
+    WriteLn('Schaltet (zus„tzliche) šberwachung fr STRG+C ein (ON) oder aus (OFF).');
+    WriteLn;
+    WriteLn('BREAK [/?] [ON|OFF]');
+   End;
    _English:Begin
     WriteLn('Purpose:  Display, enable, or disable Ctrl-C and Ctrl-Break checking.');
     WriteLn;
-    WriteLn('Format:  BREAK [/?]');
+    WriteLn('Format:  BREAK [/?] [ON|OFF]');
    End;
    Else Begin
     WriteLn('BREAK   Cette commande permet de fixer ou de demander l''‚tat du Ctrl+Break.');
     WriteLn;
     WriteLn('Syntaxe:');
     WriteLn;
-    WriteLn('BREAK [/?]');
+    WriteLn('BREAK [/?] [ON|OFF]');
     WriteLn;
     WriteLn('  /?    Ce paramŠtre permet d''afficher l''aide sur cette commande');
+    WriteLn('  OFF   Ce paramŠtre permet de d‚sactiver le Ctrl+C ou Ctrl+Break.');
+    WriteLn('  ON    Ce paramŠtre permet d''activer le Ctrl+C ou Ctrl+Break.');
    End;
   End;
  End
+  Else
+ If StrToUpper(ParamList)='OFF'Then SetCBreak(False) Else
+ If StrToUpper(ParamList)='ON'Then SetCBreak(True)
   Else
  Begin
   GetCBreak(X);
@@ -361,6 +428,12 @@ Begin
  FirstParam:=ExtractParam(1);
  If FirstParam='/?'Then Begin
   Case Language of
+   _Germany:Begin
+    WriteLn('Wechselt das aktuelle Verzeichnis oder zeigt dessen Namen an.');
+    WriteLn;
+    WriteLn('CD [path | -]');
+    WriteLn('CHDIR [path | -]');
+   End;
    _English:Begin
     WriteLn('Purpose:  Display or change the current directory.');
     WriteLn;
@@ -405,14 +478,32 @@ Var
 Begin
  FirstParam:=ExtractParam(1);
  If FirstParam='/?'Then Begin
-  WriteLn('CHCP   Cette commande permet de fixer ou de demander la page de codes.');
-  WriteLn;
-  WriteLn('Syntaxe:');
-  WriteLn;
-  WriteLn('CHCP [/?] [code]');
-  WriteLn;
-  WriteLn('  /?     Ce parametre permet d''afficher l''aide sur cette commande');
-  WriteLn(' code    Ce parametre permet d''indiquer la page de code');
+  Case Language of
+   _Germany:Begin
+    WriteLn('Wechselt die aktuelle Codeseite oder zeigt deren Nummer an.');
+    WriteLn;
+    WriteLn('CHCP [/?] [nnn]');
+    WriteLn;
+    WriteLn('nnn      Die Nummer einer Codeseite.');
+   End;
+   _English:Begin
+    WriteLn('Displays or sets the active code page number.');
+    WriteLn;
+    WriteLn('CHCP [/?] [nnn]');
+    WriteLn;
+    WriteLn('nnn      Specify a code page number.');
+   End;
+   Else Begin
+    WriteLn('CHCP   Cette commande permet de fixer ou de demander la page de codes.');
+    WriteLn;
+    WriteLn('Syntaxe:');
+    WriteLn;
+    WriteLn('CHCP [/?] [code]');
+    WriteLn;
+    WriteLn('  /?     Ce parametre permet d''afficher l''aide sur cette commande');
+    WriteLn(' code    Ce parametre permet d''indiquer la page de code');
+   End;
+  End;
  End
   Else
  If FirstParam<>''Then Begin
@@ -446,6 +537,11 @@ Begin
  FirstParam:=ExtractParam(1);
  If FirstParam='/?'Then Begin
   Case Language of
+   _Germany:Begin
+    WriteLn('L”scht den Bildschirminhalt.');
+    WriteLn;
+    WriteLn('CLS');
+   End;
    _English:Begin
     WriteLn('Purpose:  Clear the video display and move the cursor to the upper left');
     WriteLn;
@@ -491,10 +587,15 @@ Begin
    Else
   If CurrParam='/?'Then Begin
    Case Language of
+    _Germany:Begin
+     WriteLn('Kopiert eine oder mehrere Dateien an eine andere Position.');
+     WriteLn;
+     WriteLn('COPY [/?] [/P] source target');
+    End;
     _English:Begin
      WriteLn('Purpose:  Copy data between disks, directories or files.');
      WriteLn;
-     WriteLn('Format:   COPY [/?] [/P] source destination');
+     WriteLn('Format:   COPY [/?] [/P] source target');
     End;
     Else Begin
      WriteLn('COPY   Cette commande permet d''effacer la copie de fichier vers un autre emplacement.');
@@ -543,6 +644,11 @@ Begin
  FirstParam:=ExtractParam(1);
  If FirstParam='/?'Then Begin
   Case Language of
+   _Germany:Begin
+    WriteLn('Wechselt das eingestellte Datum oder zeigt es an.');
+    WriteLn;
+    WriteLn('DATE [/?]');
+   End;
    _English:Begin
     WriteLn('Purpose:  Display and optionnally change the system date.');
     WriteLn;
@@ -587,6 +693,11 @@ Begin
    Else
   If CurrParam='/?'Then Begin
    Case Language of
+    _Germany:Begin
+     WriteLn('L”scht eine oder mehrere Dateien.');
+     WriteLn;
+     WriteLn('DEL [/?] Datainame');
+    End;
     _English:Begin
      WriteLn('Purpose:  Erase one file');
      WriteLn;
@@ -637,6 +748,11 @@ Begin
   If Length(CurrParam)=0Then Break;
   If CurrParam='/?'Then Begin
    Case Language of
+    _Germany:Begin
+     WriteLn('Listet die Dateien und Unterverzeichnisse eines Verzeichnisses auf.');
+     WriteLn;
+     WriteLn('Format:   DIR [/?] [/2|/W] [/B] [/P] [path]');
+    End;
     _English:Begin
      WriteLn('Purpose:  Display information about files and subdirectories.');
      WriteLn;
@@ -787,6 +903,12 @@ Begin
  FirstParam:=ExtractParam(1);
  If FirstParam='/?'Then Begin
   Case Language of
+   _Germany:Begin
+    WriteLn('Zeigt Meldungen an oder schaltet die Befehlsanzeige ein (ON) oder aus (OFF).');
+    WriteLn;
+    WriteLn('ECHO [ON | OFF]');
+    WriteLN('ECHO [Meldung]');
+   End;
    _English:Begin
     WriteLn('Purpose:  Display a message, enable or disable batch file or command-line');
     WriteLn(' ':10,'echoing, or display the echo status.');
@@ -836,11 +958,15 @@ Begin
    Else
   If CurrParam='/?'Then Begin
    Case Language of
+    _Germany:Begin
+     WriteLn('L”scht eine oder mehrere Dateien.');
+     WriteLn;
+     WriteLn('ERASE Dateiname [/P]');
+    End;
     _English:Begin
      WriteLn('Purpose:  Erase one file');
      WriteLn;
      WriteLn('Format:   ERASE [/?] file');
-     Exit;
     End;
     Else Begin
      WriteLn('ERASE   Cette commande permet d''effectuer la suppression de fichier sur un unit‚ de disque.');
@@ -851,9 +977,9 @@ Begin
      WriteLn;
      WriteLn('      /?    Ce parametre permet d''afficher l''aide sur cette commande');
      WriteLn('  fichier   Ce parametre permet d''indiquer le nom du fichier a supprimer.');
-     Exit;
     End;
    End;
+   Exit;
   End;
   {$I-}Assign(F,CurrParam);
   Erase(F);
@@ -873,6 +999,11 @@ Begin
  FirstParam:=ExtractParam(1);
  If FirstParam='/?'Then Begin
   Case Language of
+   _Germany:Begin
+    WriteLn('Beendet den Befehlsinterpreter COMMAND.COM.');
+    WriteLn;
+    WriteLn('Format:   EXIT [value]');
+   End;
    _English:Begin
     WriteLn('Purpose:  Return from COMMAND.');
     WriteLn;
@@ -932,6 +1063,11 @@ Begin
    Else
   If CurrParam='/?'Then Begin
    Case Language of
+    _Germany:Begin
+     WriteLn('Erstellt ein Verichnis.');
+     WriteLn;
+     WriteLn('MKDIR [Laufwerk:]Pfad');
+    End;
     _English:Begin
      WriteLn('Purpose:  Create a subdirectory.');
      WriteLn;
@@ -968,6 +1104,12 @@ Begin
  FirstParam:=ExtractParam(1);
  If FirstParam='/?'Then Begin
   Case Language of
+   _Germany:Begin
+    Write('H„lt die Ausfhrung einer Stapelverarbeitungsdatei an und zeigh ');
+    WriteLn('folgende Meldung an: ''Eine belige Taste drcken, um fortzsetsen''');
+    WriteLn;
+    WriteLn('PAUSE [/?]');
+   End;
    _English:Begin
     WriteLn('Purpose:  Suspend batch file or alias extension.');
     WriteLn;
@@ -993,7 +1135,11 @@ Begin
  End
   Else
  Begin
-  WriteLn('Presse une touche pour continuer...');
+  Case Language of
+   _Germany:WriteLn('Eine belige Taste drcken, um fortzsetsen');
+   _English:WriteLn('Strike a key when ready...');
+   Else WriteLn('Presse une touche pour continuer...');
+  End;
   ReadKey;
  End;
 End;
@@ -1020,6 +1166,11 @@ Begin
    Else
   If CurrParam='/?'Then Begin
    Case Language of
+    _Germany:Begin
+     WriteLn('Eine belige Taste drcken, um fortzsetsen');
+     WriteLn;
+     WriteLn('RMDIR [Laufwerk:]Pfad');
+    End;
     _English:Begin
      WriteLn('Purpose:  Remove one or more subdirectories.');
      WriteLn;
@@ -1051,14 +1202,24 @@ Var
 Begin
  FirstParam:=ExtractParam(1);
  If FirstParam='/?'Then Begin
-  WriteLn('REM   Cette commande permet d''indiquer une remarque.');
-  WriteLn;
-  WriteLn('Syntaxe:');
-  WriteLn;
-  WriteLn('REM [/?] commentaires');
-  WriteLn;
-  WriteLn('  /?           Ce parametre permet d''afficher l''aide sur cette commande');
-  WriteLn('commentaires   Ce parametre permet d''indiquer une remarque');
+  Case Language of
+   _Germany:Begin
+    WriteLn('Leitet Kommentare in einer Stapelverarbeitungsdatei oder ',
+            'in CONFIG.SYS ein.');
+    WriteLn;
+    WriteLn('REM [Kommentar]');
+   End;
+   Else Begin
+    WriteLn('REM   Cette commande permet d''indiquer une remarque.');
+    WriteLn;
+    WriteLn('Syntaxe:');
+    WriteLn;
+    WriteLn('REM [/?] commentaires');
+    WriteLn;
+    WriteLn('  /?           Ce parametre permet d''afficher l''aide sur cette commande');
+    WriteLn('commentaires   Ce parametre permet d''indiquer une remarque');
+   End;
+  End;
  End;
 End;
 
@@ -1084,6 +1245,12 @@ Begin
    Else
   If CurrParam='/?'Then Begin
    Case Language of
+    _Germany:Begin
+     WriteLn('Benennt eine oder mehrere Dateien um.');
+     WriteLn;
+     WriteLn('REN [Laufwerk:][Pfad]Dateiname1 Dateiname2');
+     WriteLn('RENAME [Laufwerk:][Pfad]Dateiname1 Dateiname2');
+    End;
     _English:Begin
      WriteLn('Purpose:  Rename files.');
      WriteLn;
@@ -1129,12 +1296,17 @@ Procedure SetCommand;
 Var
  Pause:Boolean;
  I,P:Integer;
- FirstParam:String;
+ FirstParam,VarName,VarValue:String;
 Begin
  Pause:=False;
  FirstParam:=ExtractParam(1);
  If FirstParam='/?'Then Begin
   Case Language of
+   _Germany:Begin
+    WriteLn('Setzt oder entfernt DOS-Umgebungsvariablen oder zeigt sie an.');
+    WriteLn;
+    WriteLn('SET [Variable=[Zeichenfolge]]');
+   End;
    _English:Begin
     WriteLn('Purpose:  Display, create, modify, or delete environment variables.');
     WriteLn;
@@ -1155,17 +1327,25 @@ Begin
   Exit;
  End
   Else
- If(FirstParam='/P')or(FirstParam='/p')Then Pause:=True;
- P:=0;
- For I:=0to EnvCount do Begin
-  WriteLn(EnvStr(I));
-  If(Pause)Then Begin
-   Inc(P);
-   If P=Hi(WindMax)Then Begin
-    Write('Presse une touche pour continuer...');
-    ReadKey;
-    WriteLn;
-    P:=0;
+ If Pos('=',FirstParam)>0 Then Begin
+  VarName:=Copy(FirstParam,1,Pos('=',FirstParam)-1);
+  VarValue:=Copy(FirstParam,Pos('=',FirstParam)+1,255);
+  SetEnv(VarName,VarValue);
+ End
+  Else
+ Begin
+  If(FirstParam='/P')or(FirstParam='/p')Then Pause:=True;
+  P:=0;
+  For I:=0to EnvCount do Begin
+   WriteLn(EnvStr(I));
+   If(Pause)Then Begin
+    Inc(P);
+    If P=Hi(WindMax)Then Begin
+     Write('Presse une touche pour continuer...');
+     ReadKey;
+     WriteLn;
+     P:=0;
+    End;
    End;
   End;
  End;
@@ -1601,10 +1781,15 @@ BEGIN
  InCmd:=0;
  If(ParamStr(1)='/?')or(ParamStr(1)='--help')or(ParamStr(1)='-h')Then Begin
   Case Language of
+   _Germany:Begin
+    WriteLn('COMMAND : Startet eine neue Kopie des DOS-Befehlsinterpreters.');
+    WriteLn;
+    WriteLn('COMMAND [/C Befehl]');
+   End;
    _English:Begin
     WriteLn('COMMAND : Start a new copy of the DOS Command Interpreter.');
     WriteLn;
-    WriteLn('Syntax :  COMMAND [/C command]');
+    WriteLn('Syntax : COMMAND [/C command]');
    End;
    Else Begin
     WriteLn('COMMAND : Cette commande permet de lancer l''interpreteur de commande.');
