@@ -1318,6 +1318,7 @@ Begin
     WriteLn;
     WriteLn('Syntaxe:');
     WriteLn;
+    WriteLn('SET [Variable=[Valeur]]');
     WriteLn('SET [/?] [/P]');
     WriteLn;
     WriteLn(' /?   Ce parametre permet d''afficher l''aide sur cette commande');
@@ -1363,6 +1364,11 @@ Begin
  FirstParam:=ExtractParam(1);
  If FirstParam='/?'Then Begin
   Case Language of
+   _Germany:Begin
+    WriteLn('Stellt die Zeit ein oder zeigt sie an.');
+    WriteLn;
+    WriteLn('TIME [/?]');
+   End;
    _English:Begin
     WriteLn('Purpose:  Display or set the current system time.');
     WriteLn;
@@ -1446,6 +1452,11 @@ Begin
   End;
   If CurrParam='/?'Then Begin
    Case Language of
+    _Germany:Begin
+     WriteLn('Zeigt den inhalt einer Textdatei an.');
+     WriteLn;
+     WriteLn('TYPE [/?] [Laufwerk:][Pfad]Dateiname');
+    End;
     _English:Begin
      WriteLn('Purpose:  Display the contents of the specified file(s).');
      WriteLn;
@@ -1492,6 +1503,11 @@ Begin
  FirstParam:=ExtractParam(1);
  If FirstParam='/?'Then Begin
   Case Language of
+   _Germany:Begin
+    WriteLn('Zeigh die Number der verwendeten DOS-Version an.');
+    WriteLn;
+    WriteLn('VER');
+   End;
    _English:Begin
     WriteLn('Purpose:  Display the current command processor and operating system');
     WriteLn(' ':10,'versions.');
@@ -1523,6 +1539,12 @@ Begin
  FirstParam:=ExtractParam(1);
  If FirstParam='/?'Then Begin
   Case Language of
+   _Germany:Begin
+    WriteLn('Legt, fest, ob DOS Åberwachen soll, da· Dateien korrekt auf DataentrÑger ');
+    WriteLn('geschrieben werben.');
+    WriteLn;
+    WriteLn('VERIFY [ON|OFF]');
+   End;
    _English:Begin
     WriteLn('Purpose:  Enable or disable disk write verification or display the');
     WriteLn(' ':10,'verification state.');
@@ -1562,6 +1584,11 @@ Begin
  FirstParam:=ExtractParam(1);
  If FirstParam='/?'Then Begin
   Case Language of
+   _Germany:Begin
+    WriteLn('Zeigt die Bezeichnung und Seriennummer eines DatentrÑgers an (falls vorhanden).');
+    WriteLn;
+    WriteLn('VOL [Laufwerk:]');
+   End;
    _English:Begin
     WriteLn('Purpose:  Display disk volume label(s).');
     WriteLn;
