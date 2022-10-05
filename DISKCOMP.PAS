@@ -33,6 +33,8 @@ Type
  End;
 
 Var
+ Language:(_French,_English,_Germany,_Italian,_Spain);
+ TmpLanguage:String;
  DiskIdentical:Boolean;
  TotSects,CurrPos,I:LongInt;
  CurrSide,CurrSec,CurrTrack,DskSource,DskTarget:Integer;
@@ -45,6 +47,16 @@ Var
  BufferSource,BufferTarget:Array[0..511]of Byte;
  TeleDisk:TeleDiskHeader Absolute BufferSource;
  _CurrTrack:Array[0..3]of Byte;
+
+Function StrToUpper(S:String):String;
+Var
+ I:Byte;
+Begin
+ For I:=1 to Length(S)do Begin
+  If S[I] in['a'..'z']Then S[I]:=Chr(Ord(S[I])-32);
+ End;
+ StrToUpper:=S;
+End;
 
 Function TwoByteToWord(A,B:Byte):Word;Begin
  TwoByteToWord:=B*256+A;
@@ -116,12 +128,33 @@ Function ReadTrack(Lecteur,Face,Piste,Start,Nombre:Byte;Var Buffer):Byte;
 {$ENDIF}
 
 BEGIN
+ Language:=_French;
+ TmpLanguage:=GetEnv('LANGUAGE');
+ If TmpLanguage<>''Then Begin
+  If TmpLanguage[1]='"'Then TmpLanguage:=Copy(TmpLanguage,2,255);
+  If StrToUpper(Copy(TmpLanguage,1,2))='EN'Then Language:=_English Else
+  If StrToUpper(Copy(TmpLanguage,1,2))='GR'Then Language:=_Germany Else
+  If StrToUpper(Copy(TmpLanguage,1,2))='IT'Then Language:=_Italian Else
+  If StrToUpper(Copy(TmpLanguage,1,2))='SP'Then Language:=_Spain;
+ End;
  If(ParamStr(1)='/?')or(ParamStr(1)='--help')or(ParamStr(1)='-h')Then Begin
-  WriteLn('DISKCOMP : Cette commande permet de comparer des disquettes ou des images.');
-  WriteLn;
-  WriteLn('Syntaxe : DISKCOPY disque: fichier');
-  WriteLn('          DISKCOPY fichier fichier');
-  WriteLn('          DISKCOPY fichier disque:');
+  Case Language of
+   _Germany:Begin
+    WriteLn('Vergleicht den Inhalt zwier Disketten.');
+    WriteLn;
+    WriteLn('DISKCOMP Laufwerk1: [Laufwerk2:]');
+    WriteLn('DISKCOMP Dateiname Laufwerk:');
+    WriteLn('DISKCOMP Dateiname Dateiname');
+    WriteLn('DISKCOMP Laufwerk: Dateiname');
+   End;
+   Else Begin
+    WriteLn('DISKCOMP : Cette commande permet de comparer des disquettes ou des images.');
+    WriteLn;
+    WriteLn('Syntaxe : DISKCOMP disque: fichier');
+    WriteLn('          DISKCOMP fichier fichier');
+    WriteLn('          DISKCOMP fichier disque:');
+   End;
+  End;
  End
   Else
  If ParamCount>=2Then Begin
