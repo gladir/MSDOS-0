@@ -107,7 +107,7 @@ Const
   'Colors...'
  );
 
- SubMenuOptionsGermany:Array[0..6]of String[30]=(
+ SubMenuOptionsGermany:Array[0..6]of String[35]=(
   'Best„tigen...',
   'Dateianzeige...',
   'Aus mehreren Verzeichnissen ausw„hlen',
@@ -743,6 +743,7 @@ Procedure SubMenuItem(Y:Integer;Disable:Boolean);Begin
   2:Begin
    Case Language of
     _English:GotoXY(9,4+Y);
+    _Germany:GotoXY(9,4+Y);
     Else GotoXY(12,4+Y);
    End;
    If SubMenuOptions[Y]=''Then Write(DuplicateString('-',39+1))
@@ -756,6 +757,7 @@ Procedure SubMenuItem(Y:Integer;Disable:Boolean);Begin
   3:Begin
    Case Language of
     _English:GotoXY(19,4+Y);
+    _Germany:GotoXY(19,4+Y);
     Else GotoXY(22,4+Y);
    End;
    If SubMenuView[Y]=''Then Write(DuplicateString('-',27+1))
@@ -767,7 +769,11 @@ Procedure SubMenuItem(Y:Integer;Disable:Boolean);Begin
    End;
   End;
   4:Begin
-   GotoXY(34,4+Y);
+   Case Language of
+    _English:GotoXY(26,4+Y);
+    _Germany:GotoXY(28,4+Y);
+    Else GotoXY(34,4+Y);
+   End;
    If SubMenuTree[Y]=''Then Write(DuplicateString('-',27+1))
     Else
    Case Language of
@@ -777,8 +783,21 @@ Procedure SubMenuItem(Y:Integer;Disable:Boolean);Begin
    End;
   End;
   5:Begin
-   If(CurrZone=3)Then GotoXY(34,4+Y)
-                 Else GotoXY(42,4+Y);
+   If(CurrZone=3)Then Begin
+    Case Language of
+     _English:GotoXY(26,4+Y);
+     _Germany:GotoXY(28,4+Y);
+     Else GotoXY(34,4+Y);
+    End;
+   End
+    Else
+   Begin
+    Case Language of
+     _English:GotoXY(33,4+Y);
+     _Germany:GotoXY(41,4+Y);
+     Else GotoXY(42,4+Y);
+    End;
+   End;
    If SubMenuHelp[Y]=''Then Write(DuplicateString('-',27+1))
     Else
    Case Language of
@@ -804,6 +823,7 @@ Begin
   2:Begin
    Case Language of
     _English:FrameEmpty(8,3,49,5+High(SubMenuOptions),$30);
+    _Germany:FrameEmpty(8,3,49,5+High(SubMenuOptions),$30);
     Else FrameEmpty(11,3,52,5+High(SubMenuOptions),$30);
    End;
    For I:=Low(SubMenuOptions)to High(SubMenuOptions)do Begin
@@ -813,6 +833,7 @@ Begin
   3:Begin
    Case Language of
     _English:FrameEmpty(18,3,47,5+High(SubMenuView),$30);
+    _Germany:FrameEmpty(18,3,47,5+High(SubMenuView),$30);
     Else FrameEmpty(21,3,50,5+High(SubMenuView),$30);
    End;
    For I:=Low(SubMenuView)to High(SubMenuView)do Begin
@@ -820,17 +841,31 @@ Begin
    End;
   End;
   4:Begin
-   FrameEmpty(33,3,62,5+High(SubMenuTree),$30);
+   Case Language of
+    _English:FrameEmpty(25,3,54,5+High(SubMenuTree),$30);
+    _Germany:FrameEmpty(27,3,56,5+High(SubMenuTree),$30);
+    Else FrameEmpty(33,3,62,5+High(SubMenuTree),$30);
+   End;
    For I:=Low(SubMenuTree)to High(SubMenuTree)do Begin
     SubMenuItem(I,False);
    End;
   End;
   5:Begin
    If(CurrZone=3)Then Begin
-    FrameEmpty(33,3,62,5+High(SubMenuHelp),$30);
+    Case Language of
+     _English:FrameEmpty(25,3,54,5+High(SubMenuHelp),$30);
+     _Germany:FrameEmpty(27,3,56,5+High(SubMenuHelp),$30);
+     Else FrameEmpty(33,3,62,5+High(SubMenuHelp),$30);
+    End;
    End
     Else
-   FrameEmpty(41,3,70,5+High(SubMenuHelp),$30);
+   Begin
+    Case Language of
+     _English:FrameEmpty(32,3,61,5+High(SubMenuHelp),$30);
+     _Germany:FrameEmpty(40,3,69,5+High(SubMenuHelp),$30);
+     Else FrameEmpty(41,3,70,5+High(SubMenuHelp),$30);
+    End;
+   End;
    For I:=Low(SubMenuHelp)to High(SubMenuHelp)do Begin
     SubMenuItem(I,False);
    End;
@@ -932,7 +967,7 @@ Const
  FunctionKey:Array[0..1]of String[15]=(
   'F10=Actions','Shift+F9=Prompt de commande'
  );
- FunctionKeyEnglish:Array[0..1]of String[15]=(
+ FunctionKeyEnglish:Array[0..1]of String[25]=(
   'F10=Actions','Shift+F9=Command Prompt'
  );
  FunctionKeyGermany:Array[0..1]of String[35]=(
@@ -1233,6 +1268,7 @@ Begin
      Case XMenu of
       1:If YMenu in[6,12,14,17]Then Dec(YMenu);
       3:If YMenu in[5]Then Dec(YMenu);
+      5:If YMenu in[6]Then Dec(YMenu);
      End;
      SubMenuItem(YMenu,False);
     End;
@@ -1261,6 +1297,7 @@ Begin
      Case XMenu of
       1:If YMenu in[6,12,14,17]Then Inc(YMenu);
       3:If YMenu in[5]Then Inc(YMenu);
+      5:If YMenu in[6]Then Inc(YMenu);
      End;
      SubMenuItem(YMenu,False);
     End;
@@ -1343,8 +1380,70 @@ Begin
    #0:Begin
     K:=ReadKey;
     Case K of
+     #20:Begin { Alt+T }
+      XMenu:=4;YMenu:=0;
+      OnMenu:=True;
+      ShowMenu;
+      ShowSubMenu;
+     End;
+     #23:Begin { Alt+I }
+      XMenu:=3;YMenu:=0;
+      OnMenu:=True;
+      ShowMenu;
+      ShowSubMenu;
+     End;
+     #24:Begin { Alt+O }
+      XMenu:=2;YMenu:=0;
+      OnMenu:=True;
+      ShowMenu;
+      ShowSubMenu;
+     End;
+     #30:Begin { Alt+A }
+      Case Language of
+       _English,_Germany:Begin
+        XMenu:=3;YMenu:=0;
+       End;
+       Else Begin
+        XMenu:=5;YMenu:=0;
+       End;
+      End;
+      OnMenu:=True;
+      ShowMenu;
+      ShowSubMenu;
+     End;
+     #32:Begin { Alt+D }
+      XMenu:=1;YMenu:=0;
+      OnMenu:=True;
+      ShowMenu;
+      ShowSubMenu;
+     End;
      #33:Begin { Alt+F }
       XMenu:=1;YMenu:=0;
+      OnMenu:=True;
+      ShowMenu;
+      ShowSubMenu;
+     End;
+     #35:Begin { Alt+H }
+      XMenu:=5;YMenu:=0;
+      OnMenu:=True;
+      ShowMenu;
+      ShowSubMenu;
+     End;
+     #47:Begin { Alt+V }
+      Case Language of
+       _Germany:Begin
+        XMenu:=4;YMenu:=0;
+       End;
+       Else Begin
+        XMenu:=3;YMenu:=0;
+       End;
+      End;
+      OnMenu:=True;
+      ShowMenu;
+      ShowSubMenu;
+     End;
+     #48:Begin { Alt+B }
+      XMenu:=4;YMenu:=0;
       OnMenu:=True;
       ShowMenu;
       ShowSubMenu;
