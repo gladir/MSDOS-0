@@ -1,7 +1,7 @@
 { @author: Sylvain Maltais (support@gladir.com)
   @created: 2022
   @website(https://www.gladir.com/msdos-0)
-  @abstract(Target: Turbo Pascal)
+  @abstract(Target: Turbo Pascal, Free Pascal)
 }
 
 Program Format;
@@ -198,7 +198,7 @@ Const
  ciXOR_=$81;{®XOR ?,?¯,88+}
  ciXOR_AL_=$34;{®XOR AL,??h¯,286+}
  ciXOR_AX_=$35;{®XOR AX,????h¯,286+}
- 
+
 Const
  {Constante de type de disque (Interruption 13h)}
  dtNoDrive=0;{Lecteur introuvable}
@@ -209,7 +209,7 @@ Const
 
  {Officieusement...}
  dTryMax=5;{Nombre d'essais maximal}
- 
+
 Type
  {Structure pour une piste double densit‚}
  DdptType=Array[0..10]of Byte;
@@ -221,7 +221,7 @@ Type
   Sec:Byte;     {Secteurs par Piste}
   DDPT:DdptPtr; {Pointeur sur table paramŠtres du lecteur de disquette}
  End;
- 
+
 Type
  {ParamŠtres de formatage DOS}
  LogDataType=Record
@@ -233,21 +233,31 @@ Type
  TrackBufType=Array[1..18,0..511]of Byte;{Tampon par piste}
 
  (*Fonctions et Procedures:*)
-Procedure DskReset;Assembler;ASM
- MOV AH,00h
- MOV DL,0
- INT 13h
-END;
+{$IFDEF FPC}
+ Procedure DskReset;Begin
+ End;
+{$ELSE}
+ Procedure DskReset;Assembler;ASM
+  MOV AH,00h
+  MOV DL,0
+  INT 13h
+ END;
+{$ENDIF}
 
-Function GetDrvType(Drive:Byte):Byte;Assembler;ASM
- MOV AH,08h
- MOV DL,Drive
- INT 13h
- JNC @Ok
- MOV BL,dtDD525
+{$IFDEF FPC}
+ Function GetDrvType(Drive:Byte):Byte;Begin
+ End;
+{$ELSE}
+ Function GetDrvType(Drive:Byte):Byte;Assembler;ASM
+  MOV AH,08h
+  MOV DL,Drive
+  INT 13h
+  JNC @Ok
+  MOV BL,dtDD525
 @Ok:
- XCHG AX,BX
-END;
+  XCHG AX,BX
+ END;
+{$ENDIF}
 
 Const
   fCarry=$0001;
@@ -301,26 +311,6 @@ Const
        #13#10'Disquette non systeme ou defectueuse!'#13#10+
        'Veuillez changer de disquette et taper une touche'#13#10;
 
-Var AktDrv:Byte;       { Numero de l'unite de disque a formater 0, 1 }
-    AktDrvType:Byte;   { Type du lecteur de disquettes courant }
-    PData:PhysDataType;{ Informations physiques de formatage }
-    LData:LogDataType; { Informations logiques de formatage }
-    AncDDPT:Pointer;   { Pointeur sur ancien DDPT }
-    Ok:Boolean;        { Drapeau pour execution du programme }
-    EndCode:Word;      { Valeur retournee au process appele }
-    Param:String;      { pour evaluation de la ligne de commande }
-
-Function StrToUpper(S:String):String;
-Var
- I:Byte;
- SLen:Byte Absolute S;
-Begin
- For I:=1to(SLen)do S[I]:=UpCase(S[I]);
- StrToUpper:=S;
-End;
-
-Function Get4matParam(S:String;DrvType:Byte;Var PData:PhysDataType;Var LData:LogDataType):Boolean;
-Const
  DDPT360:DdptType=($DF,$02,$25,$02,$09,$2A,$FF,$50,$F6,$0F,$08);
  DDPT1200:DdptType=($DF,$02,$25,$02,$0F,$1B,$FF,$54,$F6,$0F,$08);
  DDPT720:DdptType=($DF,$02,$25,$02,$09,$2A,$FF,$50,$F6,$0F,$08);
@@ -333,6 +323,32 @@ Const
  PHYS1200:PhysDataType=(Faces:2;Tracks:80;Sec:15; DDPT:@DDPT1200);
  PHYS1440:PhysDataType=(Faces:2;Tracks:80;Sec:18; DDPT:@DDPT1440);
  PHYS720:PhysDataType=(Faces:2;Tracks:80;Sec:9;DDPT:@DDPT720);
+
+Var
+ Language:(_French,_English,_Germany,_Italian,_Spain);
+ TmpLanguage:String;
+ AktDrv:Byte;       { Numero de l'unite de disque a formater 0, 1 }
+ AktDrvType:Byte;   { Type du lecteur de disquettes courant }
+ PData:PhysDataType;{ Informations physiques de formatage }
+ LData:LogDataType; { Informations logiques de formatage }
+ AncDDPT:Pointer;   { Pointeur sur ancien DDPT }
+ Ok:Boolean;        { Drapeau pour execution du programme }
+ EndCode:Word;      { Valeur retournee au process appele }
+ Param:String;      { pour evaluation de la ligne de commande }
+ FileImg:File;
+ InFile:Boolean;
+ KS:Word;
+
+Function StrToUpper(S:String):String;
+Var
+ I:Byte;
+ SLen:Byte Absolute S;
+Begin
+ For I:=1to(SLen)do S[I]:=UpCase(S[I]);
+ StrToUpper:=S;
+End;
+
+Function Get4matParam(S:String;DrvType:Byte;Var PData:PhysDataType;Var LData:LogDataType):Boolean;
 Begin
  Get4matParam:=true;
  If S='1200'Then
@@ -373,14 +389,17 @@ Procedure InitDsk(Drive:Byte;PData:PhysDataType);
 Var
  _CH,_CL:Byte;
 Begin
- _CH:=PData.Tracks-1; _CL:=PData.Sec;
- ASM
-  MOV AH,$18;
-  MOV CL,_CL;
-  MOV CH,_CH;
-  MOV DL,Drive;
-  INT $13;
- END;
+ {$IFDEF FPC}
+ {$ELSE}
+  _CH:=PData.Tracks-1; _CL:=PData.Sec;
+  ASM
+   MOV AH,$18;
+   MOV CL,_CL;
+   MOV CH,_CH;
+   MOV DL,Drive;
+   INT $13;
+  END;
+ {$ENDIF}
 End;
 
 Function FormatTrack(Drv,Face,Track,Nm:Byte):Byte;
@@ -499,6 +518,7 @@ Var
  I,AktSec,AktSide,AktTrack:Byte;
  Nm:Integer;
  TrackBuf:TrackBufType;
+ ByteWrited:Word;
 Begin
  FillChar(TrackBuf,Word(PData.Sec)*512,0); { Vide tampon }
   { Secteur de demarrage: Partie fixe }
@@ -525,6 +545,13 @@ Begin
  TrackBuf[LData.FAT+2,1]:=LData.Media;
  TrackBuf[LData.FAT+2,2]:=$FF;
  TrackBuf[LData.FAT+2,3]:=$FF;
+ If(InFile)Then Begin
+  Seek(FileImg,0);
+  BlockWrite(FileImg,TrackBuf,Word(PData.Sec)*512,ByteWrited);
+  If ByteWrited=(Word(PData.Sec)*512)Then Status:=0
+                                     Else Status:=1;
+ End
+  Else
  Status:=WriteTrack(Drive,0,0,1,PData.Sec,TrackBuf);
  If Status<>0Then Logical4mat:=false
   else
@@ -541,6 +568,12 @@ Begin
      Inc(AktTrack);
     End;
    End;
+   If(InFile)Then Begin
+    BlockWrite(FileImg,TrackBuf,512,ByteWrited);
+    If ByteWrited=512 Then Status:=0
+                      Else Status:=1;
+   End
+    Else
    Status:=WriteTrack(Drive,AktSide,AktTrack,AktSec,1,TrackBuf);
    Inc(i);
   Until(i>Nm)or(Status<>0);
@@ -549,56 +582,128 @@ Begin
 End;
 
 BEGIN
+ Language:=_French;
+ TmpLanguage:=GetEnv('LANGUAGE');
+ If TmpLanguage<>''Then Begin
+  If TmpLanguage[1]='"'Then TmpLanguage:=Copy(TmpLanguage,2,255);
+  If StrToUpper(Copy(TmpLanguage,1,2))='EN'Then Language:=_English Else
+  If StrToUpper(Copy(TmpLanguage,1,2))='GR'Then Language:=_Germany Else
+  If StrToUpper(Copy(TmpLanguage,1,2))='IT'Then Language:=_Italian Else
+  If StrToUpper(Copy(TmpLanguage,1,2))='SP'Then Language:=_Spain;
+ End;
  If(ParamStr(1)='/?')or(ParamStr(1)='--help')or(ParamStr(1)='-h')or
    (ParamStr(1)='/h')or(ParamStr(1)='/H')Then Begin
-  WriteLn('FORMAT - Cette commande permet de formater un unite de disquette.');
-  WriteLn;
-  Writeln('Syntaxe: FORMAT [A:|B:] [360|720|1200|1440] [NV] [/F]');
-  WriteLn;
-  Writeln('         NV  Pas de verification');
-  Writeln('         /F  Force a utiliser ce format');
+  Case Language of
+   _Germany:Begin
+    WriteLn('Formate un disque pour une utilisation sous DOS.');
+    WriteLn;
+    WriteLn('FORMAT [A:|B:] [360|720|1200|1440] [NV] [/F]');
+    WriteLn('FORMAT Dateiname');
+   End;
+   _English:Begin
+    WriteLn('Formats a disk for use with DOS.');
+    WriteLn;
+    WriteLn('Syntax: FORMAT [A:|B:] [360|720|1200|1440] [NV] [/F]');
+    WriteLn('        FORMAT file');
+   End;
+   Else Begin
+    WriteLn('FORMAT - Cette commande permet de formater un unit‚ de disquette.');
+    WriteLn;
+    WriteLn('Syntaxe: FORMAT [A:|B:] [360|720|1200|1440] [NV] [/F]');
+    WriteLn('         FORMAT fichier');
+    WriteLn;
+    WriteLn('fichier  Utiliser le fichier sp‚cifi‚ comme disquette');
+    WriteLn('     NV  Pas de v‚rification');
+    WriteLn('     /F  Force a utiliser ce format');
+   End;
+  End;
  End
   Else
  If ParamCount>=1Then Begin
+  InFile:=False;
   Param:=ParamStr(1);
-  AktDrv:=Byte(UpCase(Param[1]))-65;
-  AktDrvType:=GetDrvType(AktDrv);
-  If AktDrvType>0Then Begin
-   If Get4matParam(ParamStr(2),AktDrvType,PData,LData)Then Begin
-    InitDsk(AktDrv,PData);
-    GetIntVec($1E,AncDDPT);
-    SetIntVec($1E,PData.DDPT);
-    Param:=ParamStr(3);
-    Ok:=Phys4mat(AktDrv,PData,UpCase(Param[1])<>'N');
-    If(Ok)Then Begin
-     WriteLn;
-     Writeln('Ecriture du secteur de demarrage et des FAT ');
-     Ok:=Logical4mat(AktDrv,PData,LData)
-    End;
-    If(Ok)Then Begin
-     WriteLn;
-     WriteLn('Formatage S.V.P.');
+  If(Length(Param)=2)and(Param[2]=':')Then Begin
+   AktDrv:=Byte(UpCase(Param[1]))-65;
+   AktDrvType:=GetDrvType(AktDrv);
+   If AktDrvType>0Then Begin
+    If Get4matParam(ParamStr(2),AktDrvType,PData,LData)Then Begin
+     InitDsk(AktDrv,PData);
+     GetIntVec($1E,AncDDPT);
+     SetIntVec($1E,PData.DDPT);
+     Param:=ParamStr(3);
+     Ok:=Phys4mat(AktDrv,PData,UpCase(Param[1])<>'N');
+     If(Ok)Then Begin
+      WriteLn;
+      Writeln('Ecriture du secteur de demarrage et des FAT ');
+      Ok:=Logical4mat(AktDrv,PData,LData)
+     End;
+     If(Ok)Then Begin
+      WriteLn;
+      WriteLn('Formatage S.V.P.');
+     End
+      else
+     Begin
+      WriteLn;
+      WriteLn('Une erreur a interrompu le formatage');
+      Halt(1);
+     End;
+     SetIntVec($1E,AncDDPT);
     End
      else
     Begin
-     WriteLn;
-     WriteLn('Une erreur a interrompu le formatage');
-     Halt(1);
+     WriteLn('Le format demande ne peut etre utilise sur cette unite de disque !');
+     Halt(2);
     End;
-    SetIntVec($1E,AncDDPT);
    End
-    else
+    Else
    Begin
-    WriteLn('Le format demande ne peut etre utilise sur cette unite de disque !');
-    Halt(2);
+    WriteLn('Le lecteur de disquettes demande n''existe pas');
+    Halt(3);
    End
   End
-   else
+   Else
   Begin
-   WriteLn('Le lecteur de disquettes demande n''existe pas');
-   Halt(3);
-  End
+   InFile:=True;
+   KS:=1440;
+   WriteLn('Formatage du fichier d''image : ',Param);
+   {$I-}Assign(FileImg,Param);
+   Rewrite(FileImg,1);{$I+}
+   PData:=PHYS1440;
+   LData:=LOG1440;
+   Param:=ParamStr(2);
+   If Param<>''Then Begin
+    If Param='360'Then Begin
+     PData:=PHYS360;
+     LData:=LOG360;
+     KS:=360;
+    End
+     Else
+    If Param='720'Then Begin
+     PData:=PHYS720;
+     LData:=LOG720;
+     KS:=720;
+    End
+     Else
+    If Param='1200'Then Begin
+     PData:=PHYS1200;
+     LData:=LOG1200;
+     KS:=1200;
+    End
+     Else
+    If Param='1440'Then Begin
+     PData:=PHYS1440;
+     LData:=LOG1440;
+     KS:=1200;
+    End
+   End;
+   Seek(FileImg,0);
+   WriteLn('Ecriture du secteur de d‚marrage et des FAT');
+   Ok:=Logical4mat(AktDrv,PData,LData);
+   Seek(FileImg,KS*1024);
+   Truncate(FileImg);
+   Close(FileImg);
+  End;
  End
-  else
+  Else
  WriteLn('Parametre requis !')
 END.
