@@ -6,7 +6,7 @@
 
 Program EDLIN;
 
-Uses Crt,Strings;
+Uses Crt,DOS,Strings;
 
 Const
  CommandList:Array[0..12]of String[16]=(
@@ -598,6 +598,8 @@ Begin
 End;
 
 Var
+ Language:(_French,_English,_Germany,_Italian,_Spain);
+ TmpLanguage:String;
  CommandFound,Terminated:Boolean;
  CmdStr:String;
  CurrCommand,ParamList:String;
@@ -832,10 +834,33 @@ Procedure UnknownCommand;Begin
 End;
 
 BEGIN
+ {$IFDEF FPC}
+  {$IFDEF WINDOWS}
+   SetUseACP(False);
+  {$ENDIF}
+ {$ENDIF}
+ Language:=_French;
+ TmpLanguage:=GetEnv('LANGUAGE');
+ If TmpLanguage<>''Then Begin
+  If TmpLanguage[1]='"'Then TmpLanguage:=Copy(TmpLanguage,2,255);
+  If StrToUpper(Copy(TmpLanguage,1,2))='EN'Then Language:=_English Else
+  If StrToUpper(Copy(TmpLanguage,1,2))='GR'Then Language:=_Germany Else
+  If StrToUpper(Copy(TmpLanguage,1,2))='IT'Then Language:=_Italian Else
+  If StrToUpper(Copy(TmpLanguage,1,2))='SP'Then Language:=_Spain;
+ End;
  If(ParamStr(1)='/?')or(ParamStr(1)='--help')or(ParamStr(1)='-h')Then Begin
-  WriteLn('EDLIN : Cette commande permet d''editer un fichier texte ASCII.');
-  WriteLn;
-  WriteLn('Syntaxe : EDLIN [nomdufichier]');
+  Case Language of
+   _Germany:Begin
+    WriteLn('Startet den EDLIN, der ASCII-Dateien erzeugt und ver„ndert.');
+    WriteLn;
+    WriteLn('EDLIN');
+   End;
+   Else Begin
+    WriteLn('EDLIN : Cette commande permet d''editer un fichier texte ASCII.');
+    WriteLn;
+    WriteLn('Syntaxe : EDLIN [nomdufichier]');
+   End;
+  End;
  End
   Else
  Begin
