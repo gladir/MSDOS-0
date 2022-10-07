@@ -9,6 +9,8 @@ Program FIND(Input,Output);
 Uses DOS;
 
 Var
+ Language:(_French,_English,_Germany,_Italian,_Spain);
+ TmpLanguage:String;
  Option:Set of (NoCaseSensitive,NotInLine,ShowLine);
  I:Integer;
  LineNumber:LongInt;
@@ -28,11 +30,49 @@ Begin
 End;
 
 BEGIN
+ Language:=_French;
+ TmpLanguage:=GetEnv('LANGUAGE');
+ If TmpLanguage<>''Then Begin
+  If TmpLanguage[1]='"'Then TmpLanguage:=Copy(TmpLanguage,2,255);
+  If StrToUpper(Copy(TmpLanguage,1,2))='EN'Then Language:=_English Else
+  If StrToUpper(Copy(TmpLanguage,1,2))='GR'Then Language:=_Germany Else
+  If StrToUpper(Copy(TmpLanguage,1,2))='IT'Then Language:=_Italian Else
+  If StrToUpper(Copy(TmpLanguage,1,2))='SP'Then Language:=_Spain;
+ End;
  If(ParamStr(1)='/?')or(ParamStr(1)='--help')or(ParamStr(1)='-h')or
    (ParamStr(1)='/h')or(ParamStr(1)='/H')Then Begin
-  WriteLn('FIND : Cette commande permet de rechercher une chaine de caractŠres dans des fichiers.');
-  WriteLn;
-  WriteLn('Syntaxe : FIND "chaine" [fichier] [/I] [/N] [/V]');
+  Case Language of
+   _Germany:Begin
+    WriteLn('Sucht in einer oder mehreren Dateien nach einer Zeichenfolge.');
+    WriteLn;
+    WriteLn('FIND [/V] [/N] [/I] "Zeichenfolge" [[Laufwerk:][Pad]Dateiname[...]]');
+    WriteLn;
+    WriteLn('Zeichenfolge Die zu suchende Zeichenfolge.');
+    WriteLn(' /I          Ignoriert Groá-/Kleinschreibung bei der Suche.');
+    WriteLn(' /N          Zeigt die Zeilen mit ihren Zeilennummern an.');
+    WriteLn(' /V          Zeigt alle Zeilen an, die die Zeichenfolge NICHT enthalten.');
+   End;
+   _English:Begin
+    WriteLn('Searches for a text string in a file or files.');
+    WriteLn;
+    WriteLn('FIND [/V] [/N] [/I] "string" [[drive:][[path]filename[...]]');
+    WriteLn;
+    WriteLn('"string" Specifies the text string to find.');
+    WriteLn('/I       Ignores the case of characters when searching for the string.');
+    WriteLn('/N       Displays line numbers with the displayed lines.');
+    WriteLn('/V       Display all lines NOT containing the specified string.');
+   End;
+   Else Begin
+    WriteLn('FIND : Cette commande permet de rechercher une chaine de caractŠres dans des fichiers.');
+    WriteLn;
+    WriteLn('Syntaxe : FIND "chaine" [fichier] [/I] [/N] [/V]');
+    WriteLn;
+    WriteLn('"chaine"  Indique la chaŒne de caractŠres … rechercher dans les fichiers.');
+    WriteLn('/I        Il ne faut pas effectuer de distinction entre les majuscules et minuscules.');
+    WriteLn('/N        Affiche le num‚ro contenant la chaŒne de caractŠres trouv‚s.');
+    WriteLn('/V        Affiche toutes les lignes ne contenant pas la chaŒne de caractŠres recherch‚s.');
+   End;
+  End;
  End
   Else
  If ParamCount>0Then Begin
