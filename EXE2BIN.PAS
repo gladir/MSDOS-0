@@ -30,6 +30,8 @@ Type
  End;
 
 Var
+ Language:(_French,_English,_Germany,_Italian,_Spain);
+ TmpLanguage:String;
  Head:HeadExeType;
  Fexe,Fbin:File;
  ExeLN:LongInt;
@@ -44,11 +46,39 @@ Var
  c:Array[1..4] of Byte;
  Ok:Boolean;
 
+Function StrToUpper(S:String):String;
+Var
+ I:Byte;
+Begin
+ For I:=1 to Length(S)do Begin
+  If S[I] in['a'..'z']Then S[I]:=Chr(Ord(S[I])-32);
+ End;
+ StrToUpper:=S;
+End;
+
 BEGIN
+ Language:=_French;
+ TmpLanguage:=GetEnv('LANGUAGE');
+ If TmpLanguage<>''Then Begin
+  If TmpLanguage[1]='"'Then TmpLanguage:=Copy(TmpLanguage,2,255);
+  If StrToUpper(Copy(TmpLanguage,1,2))='EN'Then Language:=_English Else
+  If StrToUpper(Copy(TmpLanguage,1,2))='GR'Then Language:=_Germany Else
+  If StrToUpper(Copy(TmpLanguage,1,2))='IT'Then Language:=_Italian Else
+  If StrToUpper(Copy(TmpLanguage,1,2))='SP'Then Language:=_Spain;
+ End;
  If(ParamStr(1)='/?')or(ParamStr(1)='--help')or(ParamStr(1)='-h')Then Begin
-  WriteLn('EXE2BIN : Cette commande permet de convertir un fichier EXE en binaire (COM).');
-  WriteLn;
-  WriteLn('Syntaxe : EXE2BIN fichier.exe [fichier.bin]');
+  Case Language of
+   _English:Begin
+    WriteLn('Converts .EXE (executable) files to binary format.');
+    WriteLn;
+    WriteLn('EXE2BIN [drive1:][path1]input-file [[drive2:][path2]output-file]');
+   End;
+   Else Begin
+    WriteLn('EXE2BIN : Cette commande permet de convertir un fichier EXE en binaire (COM).');
+    WriteLn;
+    WriteLn('Syntaxe : EXE2BIN fichier.exe [fichier.bin]');
+   End;
+  End;
  End
   Else
  If ParamCount>0Then Begin
