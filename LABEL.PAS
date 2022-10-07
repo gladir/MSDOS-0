@@ -7,7 +7,7 @@
 Program _Label;
 
 {$IFDEF FPC}
- Uses SysUtils;
+ Uses DOS,SysUtils;
 
  Var
   NewName:String;
@@ -270,6 +270,16 @@ Xit:
 
 {$ENDIF}
 
+Function StrToUpper(S:String):String;
+Var
+ I:Byte;
+Begin
+ For I:=1 to Length(S)do Begin
+  If S[I] in['a'..'z']Then S[I]:=Chr(Ord(S[I])-32);
+ End;
+ StrToUpper:=S;
+End;
+
 Function StringToChar(S:String;Index:Byte):Char;Begin
  If Length(S)<=Index Then StringToChar:=S[Index]
                      Else StringToChar:=#0;
@@ -278,21 +288,47 @@ End;
 Var
  I:Byte;
  IsUnit:Array[0..255]of Boolean;
+ Language:(_French,_English,_Germany,_Italian,_Spain);
+ TmpLanguage:String;
 
 Function IsRomanLetter(C:Char):Boolean;Begin
  IsRomanLetter := C in ['A'..'Z','a'..'z'];
 End;
 
 BEGIN
- If(ParamStr(1) = 'HELP')or(ParamStr(1) = '/?')Then Begin
-  WriteLn('LABEL : Cette commande permet de changer le nom du volume');
-  WriteLn;
-  WriteLn('Syntaxe: LABEL [unite: [nouveaunom]]');
-  WriteLn;
-  WriteLn(' unite:      Indique l''unit‚ que vous souhaitez trait‚');
-  WriteLn(' nouveaunom  Indique le nouveau du volume');
-  WriteLn;
-  WriteLn('NB: Si le nouveaunom n''est pas d‚finit, il retournera le nom courant');
+ Language:=_French;
+ TmpLanguage:=GetEnv('LANGUAGE');
+ If TmpLanguage<>''Then Begin
+  If TmpLanguage[1]='"'Then TmpLanguage:=Copy(TmpLanguage,2,255);
+  If StrToUpper(Copy(TmpLanguage,1,2))='EN'Then Language:=_English Else
+  If StrToUpper(Copy(TmpLanguage,1,2))='GR'Then Language:=_Germany Else
+  If StrToUpper(Copy(TmpLanguage,1,2))='IT'Then Language:=_Italian Else
+  If StrToUpper(Copy(TmpLanguage,1,2))='SP'Then Language:=_Spain;
+ End;
+ If(ParamStr(1)='/?')or(ParamStr(1)='--help')or(ParamStr(1)='-h')or
+   (ParamStr(1)='/h')or(ParamStr(1)='/H')or(ParamStr(1)='HELP')Then Begin
+  Case Language of
+   _Germany:Begin
+    WriteLn('Erstellt, „ndert oder l”scht die Bezeichnung eines Datentr„gers.');
+    WriteLn;
+    WriteLn('LABEL [Laufwerk:][Bezeichnung]');
+   End;
+   _English:Begin
+    WriteLn('Creates, changes, or deletes the volume label of a disk.');
+    WriteLn;
+    WriteLn('LABEL [drive:] [label]');
+   End;
+   Else Begin
+    WriteLn('LABEL : Cette commande permet de changer le nom du volume');
+    WriteLn;
+    WriteLn('Syntaxe: LABEL [unite: [nouveaunom]]');
+    WriteLn;
+    WriteLn(' unite:      Indique l''unit‚ que vous souhaitez trait‚');
+    WriteLn(' nouveaunom  Indique le nouveau du volume');
+    WriteLn;
+    WriteLn('NB: Si le nouveaunom n''est pas d‚finit, il retournera le nom courant');
+   End;
+  End;
  End
   Else
  If ParamCount=0Then Begin
