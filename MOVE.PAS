@@ -8,6 +8,18 @@ Program Move;
 
 Uses DOS;
 
+Var
+ Language:(_French,_English,_Germany,_Italian,_Spain);
+ TmpLanguage:String;
+
+Function StrToUpper(S:String):String;
+Var
+ I:Byte; { Compteur de boucle attribue a la chaine de caracteres }
+Begin
+ For I:=1to Length(S)do S[I]:=UpCase(S[I]);
+ StrToUpper:=S;
+End;
+
 Function SplitFileName(s:String):String;
 Var
  D:DirStr;
@@ -74,10 +86,33 @@ Begin
 End;
 
 BEGIN
+ Language:=_French;
+ TmpLanguage:=GetEnv('LANGUAGE');
+ If TmpLanguage<>''Then Begin
+  If TmpLanguage[1]='"'Then TmpLanguage:=Copy(TmpLanguage,2,255);
+  If StrToUpper(Copy(TmpLanguage,1,2))='EN'Then Language:=_English Else
+  If StrToUpper(Copy(TmpLanguage,1,2))='GR'Then Language:=_Germany Else
+  If StrToUpper(Copy(TmpLanguage,1,2))='IT'Then Language:=_Italian Else
+  If StrToUpper(Copy(TmpLanguage,1,2))='SP'Then Language:=_Spain;
+ End;
  If(ParamStr(1)='/?')or(ParamStr(1)='--help')or(ParamStr(1)='-h')Then Begin
-  WriteLn('MOVE : Cette commande permet de deplacer un fichier.');
-  WriteLn;
-  WriteLn('Syntaxe : MOVE source destination');
+  Case Language of
+   _Germany:Begin
+    WriteLn('Verschiebt Dateien und benennt Dateien und Verzeichnisse um.');
+    WriteLn;
+    WriteLn('MOVE [Laufwerk:][Pfad]Dateiname[,...] Ziel');
+   End;
+   _English:Begin
+    WriteLn('Moves files and renames files and directories.');
+    WriteLn;
+    WriteLn('MOVE [drive:][path]filename1[,...] destination');
+   End;
+   Else Begin
+    WriteLn('MOVE : Cette commande permet de deplacer un fichier.');
+    WriteLn;
+    WriteLn('Syntaxe : MOVE source destination');
+   End;
+  End;
  End
   Else
  If ParamCount=2Then Begin
