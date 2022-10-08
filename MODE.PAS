@@ -14,6 +14,8 @@ Const
  RegColGS:Array[0..11]of Byte=($71,$50,$5A,$0A,$1F,$06,$19,$1C,$02,$07,$06,$07);
 
 Var
+ Language:(_French,_English,_Germany,_Italian,_Spain);
+ TmpLanguage:String;
  _Rate,_Delay,I:Integer;      { Compteur de boucle }
  {$IFDEF Windows}
   SmallRate,SmallDelay:SmallInt;
@@ -51,21 +53,48 @@ Procedure EnableInterrupt;
 {$ENDIF}
 
 BEGIN
+ Language:=_French;
+ TmpLanguage:=GetEnv('LANGUAGE');
+ If TmpLanguage<>''Then Begin
+  If TmpLanguage[1]='"'Then TmpLanguage:=Copy(TmpLanguage,2,255);
+  If StrToUpper(Copy(TmpLanguage,1,2))='EN'Then Language:=_English Else
+  If StrToUpper(Copy(TmpLanguage,1,2))='GR'Then Language:=_Germany Else
+  If StrToUpper(Copy(TmpLanguage,1,2))='IT'Then Language:=_Italian Else
+  If StrToUpper(Copy(TmpLanguage,1,2))='SP'Then Language:=_Spain;
+ End;
  If(ParamCount=0)or(ParamStr(1)='/?')or(ParamStr(1)='-?')Then Begin
-  WriteLn('MODE - Cette commande permet d''effectuer la gestion des parametres d''un peripherique');
-  WriteLn;
-  WriteLn('MODE [/?]');
-  WriteLn('MODE [MONO|BW40|CO40|BW80|CO80] [/GS]');
-  WriteLn('MODE CON[:] RATE=taux DELAY=delai');
-  WriteLn;
-  WriteLn(' MONO         Mode texte monochrome 80x25');
-  WriteLn(' BW40         Mode texte noir et blanc 40x25');
-  WriteLn(' CO40         Mode texte couleur 40x25');
-  WriteLn(' BW80         Mode texte noir et blanc 80x25');
-  WriteLn(' CO80         Mode texte couleur 80x25');
-  WriteLn(' RATE=taux    Taux de repetition du clavier (1 a 32)');
-  WriteLn(' DELAY=delai  Delai entre les repetitions (1 a 4)');
-  WriteLn(' /GS          Force a s''appliquer en fonction d''une Graphics Solution d''ATI');
+  Case Language of
+   _Germany:Begin
+    WriteLn('Konfiguriert Ger„te im System.');
+    WriteLn;
+    WriteLn('MODE [/?]');
+    WriteLn('MODE [MONO|BW40|CO40|BW80|CO80] [/GS]');
+    WriteLn('MODE CON[:] RATE=r DELAY=d');
+   End;
+   _English:Begin
+    WriteLn('Configures system devices.');
+    WriteLn;
+    WriteLn('MODE [/?]');
+    WriteLn('MODE [MONO|BW40|CO40|BW80|CO80] [/GS]');
+    WriteLn('MODE CON[:] RATE=rate DELAY=delay');
+   End;
+   Else Begin
+    WriteLn('MODE - Cette commande permet d''effectuer la gestion des parametres d''un peripherique');
+    WriteLn;
+    WriteLn('MODE [/?]');
+    WriteLn('MODE [MONO|BW40|CO40|BW80|CO80] [/GS]');
+    WriteLn('MODE CON[:] RATE=taux DELAY=delai');
+    WriteLn;
+    WriteLn(' MONO         Mode texte monochrome 80x25');
+    WriteLn(' BW40         Mode texte noir et blanc 40x25');
+    WriteLn(' CO40         Mode texte couleur 40x25');
+    WriteLn(' BW80         Mode texte noir et blanc 80x25');
+    WriteLn(' CO80         Mode texte couleur 80x25');
+    WriteLn(' RATE=taux    Taux de repetition du clavier (1 a 32)');
+    WriteLn(' DELAY=delai  Delai entre les repetitions (1 a 4)');
+    WriteLn(' /GS          Force a s''appliquer en fonction d''une Graphics Solution d''ATI');
+   End;
+  End;
   Halt;
  End
   Else
