@@ -8,16 +8,28 @@ Program MEM;
 
 Uses DOS;
 
-Type 
- XMSRegs=Record                    
+Type
+ XMSRegs=Record
   AX,BX,DX,SI,Segment:Word;
  End;
- 
-Var 
+
+Var
+ Language:(_French,_English,_Germany,_Italian,_Spain);
+ TmpLanguage:String;
  XMSPtr:Pointer;
  XMSErr:Byte;
  Used:Integer;
  TotalSize,TotalUsed,TotalFree:LongInt;
+
+Function StrToUpper(S:String):String;
+Var
+ I:Byte;
+Begin
+ For I:=1 to Length(S)do Begin
+  If S[I] in['a'..'z']Then S[I]:=Chr(Ord(S[I])-32);
+ End;
+ StrToUpper:=S;
+End;
 
 Function GetConvMemory:Word;
 Var
@@ -29,20 +41,20 @@ Begin
 End;
 
 Function XMSInit:Boolean;
-Var 
+Var
  Regs:Registers;
  xr:XMSRegs;
 Begin
- Regs.AX:=$4300;             
+ Regs.AX:=$4300;
  Intr($2F,Regs);
- If(Regs.AL=$80)Then Begin 
-  Regs.AX:=$4310;               
+ If(Regs.AL=$80)Then Begin
+  Regs.AX:=$4310;
   Intr($2F,Regs);
-  XMSPtr:=Ptr(Regs.ES,Regs.BX);  
+  XMSPtr:=Ptr(Regs.ES,Regs.BX);
   XMSErr:=0;
-  XMSInit:=True;             
+  XMSInit:=True;
  End
-  Else                               
+  Else
  XMSInit:=False;
 End;
 
@@ -67,7 +79,7 @@ Procedure XMSCall(NumFonc:Byte;Var XRegs:XMSRegs);Begin
            $1F                                  { pop    ds           *}
         );
  If(XRegs.AX = 0)and(XRegs.BX >= 128)Then Begin
-  XMSErr:=Lo(XRegs.BX)             
+  XMSErr:=Lo(XRegs.BX)
  End
   else
  XMSErr:=0;
@@ -77,7 +89,7 @@ Function XMSUsed:Integer;
 Var
  Used:Integer;
  Handle:Word;
- Xr:XMSRegs;                  
+ Xr:XMSRegs;
 Begin
  Used:=0;
  For Handle:=0 to 65520 do Begin
@@ -90,18 +102,41 @@ Begin
 End;
 
 Function XMSFree:Integer;
-Var 
- Xr:XMSRegs;                 
+Var
+ Xr:XMSRegs;
 Begin
- XmsCall(8,Xr);                            
+ XmsCall(8,Xr);
  XMSFree:=Xr.AX;
 End;
 
 BEGIN
+ Language:=_French;
+ TmpLanguage:=GetEnv('LANGUAGE');
+ If TmpLanguage<>''Then Begin
+  If TmpLanguage[1]='"'Then TmpLanguage:=Copy(TmpLanguage,2,255);
+  If StrToUpper(Copy(TmpLanguage,1,2))='EN'Then Language:=_English Else
+  If StrToUpper(Copy(TmpLanguage,1,2))='GR'Then Language:=_Germany Else
+  If StrToUpper(Copy(TmpLanguage,1,2))='IT'Then Language:=_Italian Else
+  If StrToUpper(Copy(TmpLanguage,1,2))='SP'Then Language:=_Spain;
+ End;
  If(ParamStr(1)='/?')or(ParamStr(1)='--help')or(ParamStr(1)='-h')Then Begin
-  WriteLn('MEM : Cette commande permet d''afficher les informations sur la mémoire.');
-  WriteLn;
-  WriteLn('Syntaxe : MEM');
+  Case Language of
+   _Germany:Begin
+    WriteLn('Zeigh die Gr”áe des belegten und noch freinen Arbeitsspeichers im System an.');
+    WriteLn;
+    WriteLn('MEM');
+   End;
+   _English:Begin
+    WriteLn('Displays the amount of used and free memory in your system.');
+    WriteLn;
+    WriteLn('MEM');
+   End;
+   Else Begin
+    WriteLn('MEM : Cette commande permet d''afficher les informations sur la mémoire.');
+    WriteLn;
+    WriteLn('Syntaxe : MEM');
+   End;
+  End;
  End
   Else
  Begin
@@ -116,11 +151,11 @@ BEGIN
     Used:=XMSUsed;
     Inc(TotalSize,Used+XMSFree);
     Inc(TotalUsed,Used);
-    Inc(TotalFree,XMSFree);	
+    Inc(TotalFree,XMSFree);
     WriteLn('Etendue (XMS)          ',Used+XMSFree:5,'K',Used:9,'K',XMSFree:11,'K');
    End;
    WriteLn('------------------- ---------   -------   --------- ');
    WriteLn('Memoire total          ',TotalSize:5,'K',TotalUsed:9,'K',TotalFree:11,'K');
-  
+
  End;
 END.
