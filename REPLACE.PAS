@@ -9,6 +9,8 @@ Program Replace;
 Uses Crt,DOS;
 
 Var
+ Language:(_French,_English,_Germany,_Italian,_Spain);
+ TmpLanguage:String;
  Option:Set Of (_P);
  YesReplace:Boolean;
  I:Integer;
@@ -108,12 +110,41 @@ Begin
 End;
 
 BEGIN
+ Language:=_French;
+ TmpLanguage:=GetEnv('LANGUAGE');
+ If TmpLanguage<>''Then Begin
+  If TmpLanguage[1]='"'Then TmpLanguage:=Copy(TmpLanguage,2,255);
+  If StrToUpper(Copy(TmpLanguage,1,2))='EN'Then Language:=_English Else
+  If StrToUpper(Copy(TmpLanguage,1,2))='GR'Then Language:=_Germany Else
+  If StrToUpper(Copy(TmpLanguage,1,2))='IT'Then Language:=_Italian Else
+  If StrToUpper(Copy(TmpLanguage,1,2))='SP'Then Language:=_Spain;
+ End;
  If(ParamStr(1)='/?')or(ParamStr(1)='--help')or(ParamStr(1)='-h')Then Begin
-  WriteLn('REPLACE : Cette commande permet de remplacer un fichier.');
-  WriteLn;
-  WriteLn('Syntaxe : REPLACE source destination [/P]');
-  WriteLn;
-  WriteLn('  /P   Demande une confirmation avant de remplacer');
+  Case Language of
+   _Germany:Begin
+    WriteLn('Ersetzt Dateien');
+    WriteLn;
+    WriteLn('REPLACE [Laufwerk1:][Pfad1]Datname [Laufwerk2:][Pfad2] [/P]');
+    WriteLn;
+    WriteLn('/P  Fordert vor dem Ersetzen einer Datei oder Hinzufgen ');
+    WriteLn('    einer neuen Datei zur Best„tigung auf.');
+   End;
+   _English:Begin
+    WriteLn('Replaces files.');
+    WriteLn;
+    WriteLn('REPLACE [drive1:][[path1]filename [drive2:][path2] [/P]');
+    WriteLn;
+    WriteLn('/P  Prompt for confirmation before replacing a file or adding');
+    WriteLn('    a source files.');
+   End;
+   Else Begin
+    WriteLn('REPLACE : Cette commande permet de remplacer un fichier.');
+    WriteLn;
+    WriteLn('Syntaxe : REPLACE source destination [/P]');
+    WriteLn;
+    WriteLn('  /P   Demande une confirmation avant de remplacer');
+   End;
+  End;
  End
   Else
  If ParamCount>=2Then Begin
