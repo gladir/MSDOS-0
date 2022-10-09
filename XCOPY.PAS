@@ -9,6 +9,8 @@ Program XCopy;
 Uses Crt,DOS;
 
 Var
+ Language:(_French,_English,_Germany,_Italian,_Spain);
+ TmpLanguage:String;
  Option:Set Of (_A,_P,_W);
  I:Integer;
  Source,Target:String;
@@ -234,14 +236,51 @@ Begin
 End;
 
 BEGIN
+ Language:=_French;
+ TmpLanguage:=GetEnv('LANGUAGE');
+ If TmpLanguage<>''Then Begin
+  If TmpLanguage[1]='"'Then TmpLanguage:=Copy(TmpLanguage,2,255);
+  If StrToUpper(Copy(TmpLanguage,1,2))='EN'Then Language:=_English Else
+  If StrToUpper(Copy(TmpLanguage,1,2))='GR'Then Language:=_Germany Else
+  If StrToUpper(Copy(TmpLanguage,1,2))='IT'Then Language:=_Italian Else
+  If StrToUpper(Copy(TmpLanguage,1,2))='SP'Then Language:=_Spain;
+ End;
  If(ParamStr(1)='/?')or(ParamStr(1)='--help')or(ParamStr(1)='-h')Then Begin
-  WriteLn('XCOPY : Cette commande permet de copier des fichiers.');
-  WriteLn;
-  WriteLn('Syntaxe : XCOPY source destination [/P] [/W]');
-  WriteLn;
-  WriteLn('    /A     Copie uniquement les fichiers d''attribut archive');
-  WriteLn('    /P     Demande une confirmation avant chaque fichier');
-  WriteLn('    /W     Affiche un message avant de commencer la copie');
+  Case Language of
+   _Germany:Begin
+    WriteLn('Kopiert Dataien (auáer versteckten u. Systemdateien) und Verzeichnisstrukturen.');
+    WriteLn;
+    WriteLn('XCOPY Quelle [Ziel] [/A] [/P] [/W]');
+    WriteLn;
+    WriteLn('Quelle      Zu kopierende Dateien.');
+    WriteLn('Ziel        Position und/oder Name der neuen Dateien.');
+    WriteLn('/A          Kopiert Dateien mit gesetztem Archivattribut, ');
+    WriteLn('            „ndert das Attribut nicht.');
+    WriteLn('/P          Fragt vor dem Erstellen jeder Zeildatei nach.');
+    WriteLn('/W          Fordert vor dem Beginn des Kopierens zu einum Tastendruck auf.');
+   End;
+   _English:Begin
+    WriteLn('Copies files (except hidden and system files) and directory trees.');
+    WriteLn;
+    WriteLn('XCOPY source [destination] [/A] [/P] [/W]');
+    WriteLn;
+    WriteLn('source       Specifies the file(s) to copy.');
+    WriteLn('destination  Specifies the location and/or name of new files.');
+    WriteLn('/A           Copies files with the archive attribute set,');
+    WriteLn('             doesn''t change the attribute.');
+    WriteLn('/P           Prompts you before creating each destination file.');
+    WriteLn('/W           Prompts you to press a key before copying.');
+   End;
+   Else Begin
+    WriteLn('XCOPY : Cette commande permet de copier des fichiers.');
+    WriteLn;
+    WriteLn('Syntaxe : XCOPY source destination [/P] [/W]');
+    WriteLn;
+    WriteLn('    /A     Copie uniquement les fichiers d''attribut archive');
+    WriteLn('    /P     Demande une confirmation avant chaque fichier');
+    WriteLn('    /W     Affiche un message avant de commencer la copie');
+   End;
+  End;
  End
   Else
  If ParamCount>=2Then Begin
