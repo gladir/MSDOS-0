@@ -9,8 +9,18 @@ Program Tree;
 Uses DOS;
 
 Var
+ Language:(_French,_English,_Germany,_Italian,_Spain);
+ TmpLanguage:String;
  LevelState:Array[0..255]of Boolean;
  I:Byte;
+
+Function StrToUpper(S:String):String;
+Var
+ I:Byte; { Compteur de boucle attribue a la chaine de caracteres }
+Begin
+ For I:=1to Length(S)do S[I]:=UpCase(S[I]);
+ StrToUpper:=S;
+End;
 
 Function SetPath4AddFile(Path:String):String;Begin
  If Path=''Then GetDir(0,Path);
@@ -82,11 +92,34 @@ Begin
 End;
 
 BEGIN
+ Language:=_French;
+ TmpLanguage:=GetEnv('LANGUAGE');
+ If TmpLanguage<>''Then Begin
+  If TmpLanguage[1]='"'Then TmpLanguage:=Copy(TmpLanguage,2,255);
+  If StrToUpper(Copy(TmpLanguage,1,2))='EN'Then Language:=_English Else
+  If StrToUpper(Copy(TmpLanguage,1,2))='GR'Then Language:=_Germany Else
+  If StrToUpper(Copy(TmpLanguage,1,2))='IT'Then Language:=_Italian Else
+  If StrToUpper(Copy(TmpLanguage,1,2))='SP'Then Language:=_Spain;
+ End;
  If(ParamStr(1)='/?')or(ParamStr(1)='--help')or(ParamStr(1)='-h')Then Begin
-  WriteLn('TREE : Cette commande permet d''afficher un arbre de repertoire.');
-  WriteLn;
-  WriteLn('Syntaxe : TREE [repertoire]');
-  WriteLn;
+  Case Language of
+   _Germany:Begin
+    WriteLn('Zeigt die Verzeichnisstruktur eines Laufwerks oder Pfads grafisch an.');
+    WriteLn;
+    WriteLn('TREE [Laufwerk:][Pfad]');
+   End;
+   _English:Begin
+    WriteLn('Grahpically displays the directory structure of a drive or path.');
+    WriteLn;
+    WriteLn('TREE [drive:][path]');
+   End;
+   Else Begin
+    WriteLn('TREE : Cette commande permet d''afficher un arbre de repertoire.');
+    WriteLn;
+    WriteLn('Syntaxe : TREE [repertoire]');
+    WriteLn;
+   End;
+  End;
  End
   Else
  Begin
