@@ -1,5 +1,5 @@
 # MSDOS-0
-Clone de MS-DOS en langage de programmation Pascal avec un support de langage française, allemande et anglaise.
+Clone de MS-DOS en langage de programmation Pascal avec un support de la langue française, allemande et anglaise.
 
 ![image](https://user-images.githubusercontent.com/11842176/146283572-9ec412c9-cee5-4ba3-ba5d-d9ddfda47e4e.png)
 
