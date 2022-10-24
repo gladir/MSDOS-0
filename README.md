@@ -30,6 +30,10 @@ Voici la liste des différents fichiers proposés dans MSDOS-0 :
 			<td><b>BASIC.PAS</b></td>
 			<td>Cette commande permet de lancer l'interpréteur de langage de programmation BASIC.</td>
 		</tr>
+		<tr>
+			<td><b>CHKDSK.PAS</b></td>
+			<td>Cette commande permet de vérifier le disque. Cette commande est inspiré du DOS.</td>
+		</tr>			
 	        <tr>
 			<td><b>CHOICE.PAS</b></td>
 			<td>Cette commande permet de faire une choix.</td>
