@@ -10,6 +10,29 @@ Program CHKDSK;
 
 Uses DOS;
 
+Type
+ {Structure de lecture pour le disque }
+ SecPosType=Record
+  Head:Byte;
+  Sector:Byte;
+  Track:Byte;
+ End;
+
+ {Structure de partition}
+ PartEntry=Record
+  Status:Byte;
+  StartSec:SecPosType;
+  PartType:Byte;
+  EndSec:SecPosType;
+  SecOfs,NumSec:LongInt;
+ End;
+
+ PartSec=Record { dÇcrit le secteur de partition }
+  BootCode:Array[0..$1BD]of Byte;    { Code de dÇmarrage du disque dur }
+  PartTable:Array[0..3]of PartEntry; { Table des partitions de disque dur }
+  IdCode:Word;                       { Signature: AA55h }
+ End;
+
 Var
  Language:(_French,_English,_Germany,_Italian,_Spain);
  TmpLanguage,CurrParam,FileName:String;
@@ -20,7 +43,7 @@ Var
  CurrDisk:Byte;
  I:Integer;
  Erreur:Word;
- NumberHiddenFile:LongInt;
+ StartPos,NumberHiddenFile:LongInt;
  BufferLoaded:Boolean;
  BufferSector0,Buffer:Array[0..511]of Byte;
 
@@ -158,6 +181,22 @@ End;
 
 Function FourByteToLongInt(A,B,C,D:Byte):LongInt;Begin
  FourByteToLongInt:=D*16777216+C*65536+B*256+A;
+End;
+
+Procedure FindStartSector;
+Var
+ ByteReaded:Integer;
+ Partition:PartSec;
+Begin
+ Seek(FileSource,0);
+ BlockRead(FileSource,Partition,512,ByteReaded);
+ If Partition.IdCode=$AA55 Then Begin
+  If Partition.PartTable[0].SecOfs<>-1 Then Begin
+   If FileSize(FileSource)>Partition.PartTable[0].SecOfs Then Begin
+    StartPos:=Partition.PartTable[0].SecOfs*512;
+   End;
+  End;
+ End;
 End;
 
 {$IFDEF Windows}
@@ -301,7 +340,7 @@ Begin
     {$I-}Assign(FileSource,FileName);
     Reset(FileSource,1);{$I+}
     If IoResult=0Then Begin
-     Seek(FileSource,(FatPOS+J)*512);
+     Seek(FileSource,StartPos+(FatPOS+J)*512);
      BlockRead(FileSource,Buffer,SizeOf(Buffer),ByteReaded);
      Close(FileSource);
     End
@@ -355,6 +394,12 @@ BEGIN
  If(ParamStr(1)='/?')or(ParamStr(1)='--help')or(ParamStr(1)='-h')or
    (ParamStr(1)='/h')or(ParamStr(1)='/H')Then Begin
   Case Language of
+   _Germany:Begin
+    WriteLn('öberprÅft einen DatentrÑger und zeigt einen Statusbericht an.');
+    WriteLn;
+    WriteLn('CHKDSK [Laufwerk:]');
+    WriteLn('CHKDSK [/IMAGE:Dateiname]');
+   End;
    _English:Begin
     WriteLn('Checks a disk and displays a status report.');
     WriteLn;
@@ -374,6 +419,7 @@ BEGIN
  End
   Else
  Begin
+  StartPos:=0;
   BufferLoaded:=False;
   CurrDisk:=0;
   FileName:='';
@@ -398,6 +444,8 @@ BEGIN
    {$I-}Assign(FileSource,FileName);
    Reset(FileSource,1);{$I+}
    If IoResult=0Then Begin
+    FindStartSector;
+    Seek(FileSource,StartPos);
     BlockRead(FileSource,BufferSector0,SizeOf(BufferSector0),ByteReaded);
     BufferLoaded:=True;
     Close(FileSource);
@@ -422,7 +470,10 @@ BEGIN
     BufferLoaded:=True;
    {$ENDIF}
   End;
-  Write('Volume ');
+  Case Language of
+   _Germany:Write('DataentrÑger ');
+   Else Write('Volume ');
+  End;
   If(BufferLoaded)Then Begin
    If Trim(GetDirectDiskLabel)=''Then Write('Pas d''Çtiquette')
                                  Else Write(GetDirectDiskLabel)
@@ -431,6 +482,7 @@ BEGIN
   If GetDiskLabel(CurrDisk)=''Then Write('Pas d''Çtiquette')
                               Else Write(GetDiskLabel(CurrDisk));
   Case Language of
+   _Germany:Write(' erzeugt ');
    _English:Write(' created ');
    Else Write(' crÇe le ');
   End;
@@ -439,6 +491,7 @@ BEGIN
         PadZeroLeft(DateLabel.Day,2));
   WriteLn(' ',DateLabel.Hour:2,':',PadZeroLeft(DateLabel.Min,2));
   Case Language of
+   _Germany:Write('DatentrÑgernummer: ');
    _English:Write('Volume Serial Number is ');
    Else Write('Le numÇro de sÇrie du volume est ');
   End;
@@ -448,11 +501,15 @@ BEGIN
   If(BufferLoaded)Then Write(GetDiskSize:13)
                   Else Write(DiskSize(CurrDisk):13);
   Case Language of
+   _Germany:WriteLn(' Byte Speicherplatz auf dem DatentrÑger insgesamt');
    _English:WriteLn(' bytes total disk space');
    Else WriteLn(' octets d''espace disque total');
   End;
   If(BufferLoaded)Then Begin
    Case Language of
+    _Germany:Begin
+     WriteLn(0:13,' Byte in ',NumberHiddenFile,' versteckten Dateien');
+    End;
     _English:Begin
      WriteLn(0:13,' bytes in ',NumberHiddenFile,
                   ' file(s) hidden(s)');
@@ -464,46 +521,65 @@ BEGIN
    End;
   End
    Else
-  WriteLn(SizeHiddenFile(CurrDisk):13,' octets dans ',NumberHiddenFile,
-          ' fichier(s) cachÇ(s)');
   Case Language of
+   _Germany:Begin
+    WriteLn(SizeHiddenFile(CurrDisk):13,'Byte in ',NumberHiddenFile,' versteckten Dateien');
+   End;
+   _English:Begin
+    WriteLn(SizeHiddenFile(CurrDisk):13,' bytes in ',NumberHiddenFile,
+                 ' file(s) hidden(s)');
+   End;
+   Else Begin
+    WriteLn(SizeHiddenFile(CurrDisk):13,' octets dans ',NumberHiddenFile,
+          ' fichier(s) cachÇ(s)');
+   End;
+  End;
+  Case Language of
+   _Germany:WriteLn(0:13,' byte in n Verzeichnissen');
    _English:WriteLn(0:13,' bytes n directories');
    Else WriteLn(0:13,' octets n rÇpertoire(s)');
   End;
   Case Language of
+   _Germany:WriteLn(0:13,' Byte in x Benutzerdateien');
    _English:WriteLn(0:13,' bytes in x user files');
    Else WriteLn(0:13,' octets dans x fichier(s) utilisateur');
   End;
   If(BufferLoaded)Then Write(GetDiskFree:13)
                   Else Write(DiskFree(CurrDisk):13);
   Case Language of
+   _Germany:WriteLn(' Byte auf dem DatentrÑger verfÅgbar');
    _English:WriteLn(' bytes available on disk');
    Else WriteLn(' octets disponibles sur le disque');
   End;
   WriteLn;
   Write(GetClusterSize:13);
   Case Language of
+   _Germany:WriteLn(' Byte in jeder Zuordnungseinheit');
    _English:WriteLn(' bytes in each allocation units');
    Else WriteLn(' octets dans chaque unitÇ d''allocation');
   End;
   Write(GetNumberCluster:13);
   Case Language of
+   _Germany:WriteLn(' Zuordnungseinheiten auf dem DatentrÑger insgesamt');
    _English:WriteLn(' total allocation units on disk');
    Else WriteLn(' unitÇs d''allocation sur le disque');
   End;
   Write(0:13);
   Case Language of
+   _Germany:WriteLn(' Zuordnungseinheiten auf dem DatentrÑger verfÅgbar');
    _English:WriteLn(' available allocation units on disk');
    Else WriteLn(' unitÇs d''allocation disponible sur le disque');
   End;
   WriteLn;
   Write(GetConvMemory shl 9:13);
   Case Language of
+   _Germany:WriteLn(' Byte konventioneller Arbeitsspeicher');
    _English:WriteLn(' total bytes memory');
    Else WriteLn(' octets de mÇmoire totale');
   End;
   Write(GetFreeMemory:13);
   Case Language of
+   _Germany:WriteLn(' Byte frei');
    _English:WriteLn(' bytes free');
    Else WriteLn(' octets libres');
   End;
