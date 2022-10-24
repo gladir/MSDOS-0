@@ -1,5 +1,5 @@
 # MSDOS-0
-Clone de MS-DOS en Pascal
+Clone de MS-DOS en langage de programmation Pascal avec un support de la langue française, allemande et anglaise.
 
 ![image](https://user-images.githubusercontent.com/11842176/146283572-9ec412c9-cee5-4ba3-ba5d-d9ddfda47e4e.png)
 
@@ -145,6 +145,11 @@ Voici la liste des différents fichiers proposés dans MSDOS-0 :
 Pour changer la langue des commandes, vous devez fixer la valeur de la variable d'environnement LANGUAGE, par exemple, pour passer à l'allemand :
 
 SET LANGUAGE=GR
+
+<h2>Remarque</h3>
+<ul>
+	<li>Les commandes DISKCOMP, DISKCOPY, FDISK et FORMAT on été amélioré par rapport à la version originale de Microsoft en proposant d'appliquer les changements sur un fichier d'image disque plutôt que directement sur un unité de disque.</li>
+</ul>
 
 <h2>Compilation</h2>
 	
