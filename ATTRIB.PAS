@@ -142,6 +142,8 @@ BEGIN
    _Germany:Begin
     WriteLn('ATTRIB - Zeigt Dateiattribute an oder Ñndert sie.');
     WriteLn;
+    WriteLn('ATTRIB [+R|-R] [+A|-A] [+S|-S] [+H|-H] [[Laufwerk:][Pfad]Dateiname] [/S]');
+    WriteLn;
     WriteLn(' +  Setzt ein Attribut.');
     WriteLn(' -  Lîscht ein Attribut.');
     WriteLn(' R  Attribut fÅr ''SchreibgeschÅtzte Datei''');
@@ -158,6 +160,8 @@ BEGIN
     WriteLn;
     WriteLn(' -A   Enleve de l''attribut d''archive');
     WriteLn(' +A   Ajout de l''attribut d''archive');
+    WriteLn(' -H   Enläve de l''attribut cachÇ');
+    WriteLn(' +H   Ajout de l''attribut cachÇ');
     WriteLn(' -R   Enleve de l''attribut de lecture seulement');
     WriteLn(' +R   Ajout de l''attribut de lecture seulement');
     WriteLn(' -S   Enleve de l''attribut de systeme');
