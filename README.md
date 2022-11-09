@@ -83,6 +83,10 @@ Voici la liste des différents fichiers proposés dans MSDOS-0 :
 			<td>Cette commande permet de convertir un fichier EXE en binaire (COM).</td>
 		</tr>
 		<tr>
+			<td><b>FC.PAS</b></td>
+			<td>Cette commande permet de comparer deux fichiers.</td>
+		</tr>
+		<tr>
 			<td><b>FDISK.PAS</b></td>
 			<td>Cette commande permet d'effectuer la gestion des partitions d'un disque dur.</td>
 		</tr>
