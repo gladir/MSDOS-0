@@ -31,6 +31,8 @@ Var
  CurrCommand,ParamList,PipeCommand:String;
  I,J:Byte;
 
+Procedure RunCommand;Forward;
+
 Function PadRight(S:String;Space:Byte):String;
 Var
  I:Byte;
@@ -59,6 +61,20 @@ Begin
   End;
  End;
  TrimL:=S;
+End;
+
+Function TrimR(s:String):String;
+Var
+ i:Integer;
+Begin
+ i:=Length(s);
+ While (i>0)and(s[i]in[#9,' '])do Dec(i);
+ s[0]:=Chr(i);
+ TrimR:=S;
+End;
+
+Function Trim(s:String):String;Begin
+ Trim:=TrimL(TrimR(s));
 End;
 
 Function StrToUpper(S:String):String;
@@ -1033,8 +1049,116 @@ Begin
  ExitCommand:=True;
 End;
 
-Procedure ForCommand;Begin
- WriteLn('Cette commande n''est pas mise en oeuvre');
+Procedure ForCommand;
+Var
+ PList,VarName,CurrMask,Mask,ForCmd:String;
+ J,I:Byte;
+Begin
+ If ExtractParam(1)='/?'Then Begin
+  WriteLn('FOR : Cette commande permet d''effectuer le traitement d''un group de fichier');
+  WriteLn;
+  WriteLn('FOR %variable IN (ensemble) DO commande');
+  WriteLn('FOR %%variable IN (ensemble) DO commande');
+ End
+  Else
+ Begin
+  PList:=Trim(ParamList);
+  VarName:='';
+  I:=1;
+  If Copy(PList,1,2)='%%'Then Begin
+   VarName:='%%';
+   I:=3;
+   While(I<=Length(PList))and(UpCase(PList[I])in['A'..'Z'])do Begin
+    VarName:=VarName+PList[I];
+    Inc(I);
+   End;
+  End
+   Else
+  If Copy(PList,1,1)='%'Then Begin
+   VarName:='%';
+   I:=2;
+   While(I<=Length(PList))and(UpCase(PList[I])in['A'..'Z'])do Begin
+    VarName:=VarName+PList[I];
+    Inc(I);
+   End;
+  End
+   Else
+  Begin
+   WriteLn('Nom de variable attendu !');
+   Exit;
+  End;
+  While (I<=Length(PList))and(PList[I]in[#9,' '])do Inc(I);
+  If StrToUpper(Copy(PList,I,3))='IN 'Then Begin
+   Inc(I,3);
+   While (I<=Length(PList))and(PList[I]in[#9,' '])do Inc(I);
+   If PList[I]<>'('Then Begin
+    WriteLn('''('' attendu !');
+    Exit;
+   End;
+   Inc(I);
+   Mask:='';
+   While(I<=Length(PList))and(PList[I]<>')')do Begin
+    Mask:=Mask+PList[I];
+    Inc(I);
+   End;
+   If PList[I]<>')'Then Begin
+    WriteLn(''')'' attendu !');
+    Exit;
+   End;
+   Inc(I);
+   While (I<=Length(PList))and(PList[I]in[#9,' '])do Inc(I);
+   If StrToUpper(Copy(PList,I,3))='DO 'Then Begin
+    Inc(I,3);
+    ForCmd:=Trim(Copy(PList,I,255));
+    CmdStr:='';
+    CurrMask:='';
+    J:=1;
+    While J<=Length(Mask)do Begin
+     If Mask[J]=' 'Then Begin
+      If Trim(CurrMask)<>''Then Begin
+       I:=1;
+       While I<=Length(ForCmd)do Begin
+        If Copy(ForCmd,I,Length(VarName))=VarName Then Begin
+         CmdStr:=CmdStr+CurrMask;
+         Inc(I,Length(VarName));
+        End
+         Else
+        Begin
+         CmdStr:=CmdStr+ForCmd[I];
+         Inc(I);
+        End;
+       End;
+       RunCommand;
+       CmdStr:='';
+       CurrMask:='';
+      End;
+     End
+      Else
+     CurrMask:=CurrMask+Mask[J];
+     Inc(J);
+    End;
+    If Trim(CurrMask)<>''Then  Begin
+     I:=1;
+     While I<=Length(ForCmd)do Begin
+      If Copy(ForCmd,I,Length(VarName))=VarName Then Begin
+       CmdStr:=CmdStr+CurrMask;
+       Inc(I,Length(VarName));
+      End
+       Else
+      Begin
+       CmdStr:=CmdStr+ForCmd[I];
+       Inc(I);
+      End;
+     End;
+     If CmdStr<>''Then RunCommand;
+    End;
+   End
+    Else
+   WriteLn('Mot r‚serv‚ DO attendu');
+  End
+   Else
+  WriteLn('Mot r‚serv‚ IN attendu');
+ End;
 End;
 
 Procedure IfCommand;Begin
