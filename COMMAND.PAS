@@ -1055,10 +1055,35 @@ Var
  J,I:Byte;
 Begin
  If ExtractParam(1)='/?'Then Begin
-  WriteLn('FOR : Cette commande permet d''effectuer le traitement d''un group de fichier');
-  WriteLn;
-  WriteLn('FOR %variable IN (ensemble) DO commande');
-  WriteLn('FOR %%variable IN (ensemble) DO commande');
+  Case Language of
+   _Germany:Begin
+    WriteLn('FÅhrt einen Befehl fÅr jede einzelne Datei eines Satzes von Dateien aus.');
+    WriteLn;
+    WriteLn('FOR %Variable IN (Satz) DO Befehl [Parameter]');
+    WriteLn;
+    WriteLn(' %Variable  Ein ersetzbarer Parameter (bestehend aus einem einzelnen Zeichen).');
+    WriteLn(' (Satz)     Ein Satz von mindestens einer Datei. Platzhalter sind zulÑssig.');
+    WriteLn(' Befehl     Befehl, der fÅr jede Datei ausgefÅhrt werden soll.');
+    WriteLn(' Parameter  Parameter und Optionen fÅr den angebenen Befehl.');
+   End;
+   _English:Begin
+    WriteLn('Run a specified command for each file in a set of files');
+    WriteLn;
+    WriteLn('FOR %variable IN (set) DO [command-parameters]');
+    WriteLn;
+    WriteLn(' %variable  Specifies a replaceable parameter.');
+    WriteLn(' (set)      Specifies a set of one more files. Wildcards may be used.');
+    WriteLn(' command    Specifies the command to carry out for each file.');
+    WriteLn(' command-parameters');
+    WriteLn(' ':12,'Specifies parameters or switches for the specified commad.');
+   End;
+   Else Begin
+    WriteLn('FOR : Cette commande permet d''effectuer le traitement d''un group de fichier');
+    WriteLn;
+    WriteLn('FOR %variable IN (ensemble) DO commande');
+    WriteLn('FOR %%variable IN (ensemble) DO commande');
+   End;
+  End;
  End
   Else
  Begin
