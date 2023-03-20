@@ -201,6 +201,11 @@ Var
 Begin
  ExtractCommand:=255;
  CurrCommand:='';
+ If(CurrPos<=Length(CurrLine))and(CurrLine[CurrPos]='?')Then Begin
+  CurrCommand:='PRINT';
+  Inc(CurrPos);
+ End
+  Else
  For I:=CurrPos to Length(CurrLine)do Begin
   If Not(CurrLine[I]in['A'..'Z','a'..'z','$','%','!','#'])Then Begin
    CurrCommand:=StrToUpper(Copy(CurrLine,CurrPos,I-CurrPos));
