@@ -9,7 +9,7 @@ Program _APPEND;
 Uses DOS;
 
 Var
- Language:(_French,_English,_Germany,_Italian,_Spain);
+ Language:(_Albanian,_French,_English,_Germany,_Italian,_Spain);
  TmpLanguage:String;
  Regs:Registers;
  I:Integer;
@@ -33,11 +33,30 @@ BEGIN
   If StrToUpper(Copy(TmpLanguage,1,2))='EN'Then Language:=_English Else
   If StrToUpper(Copy(TmpLanguage,1,2))='GR'Then Language:=_Germany Else
   If StrToUpper(Copy(TmpLanguage,1,2))='IT'Then Language:=_Italian Else
-  If StrToUpper(Copy(TmpLanguage,1,2))='SP'Then Language:=_Spain;
+  If StrToUpper(Copy(TmpLanguage,1,2))='SP'Then Language:=_Spain Else
+  If(StrToUpper(Copy(TmpLanguage,1,2))='SQ')or
+    (StrToUpper(Copy(TmpLanguage,1,3))='ALB')Then Language:=_Albanian;
  End;
  If(ParamStr(1)='/?')or(ParamStr(1)='--help')or(ParamStr(1)='-h')or
    (ParamStr(1)='/h')or(ParamStr(1)='/H')Then Begin
   Case Language of
+   _Albanian:Begin
+    WriteLn('APPEND : Kjo komand‰ ju lejon t‰ hapni dosje t‰ vendosura n‰ repertor‰ te ',
+                     'specifikuar sikur t‰ ishte repertori aktual.');
+    WriteLn;
+    WriteLn('Sintaksa: APPEND [/E] [/PATH:ON|OFF] [/X:ON|OFF]');
+    WriteLn;
+    WriteLn(' /E         Duhet t‰ lidhni list‰n e repertor‰ve me nj‰ variab‰l t‰ ',
+                         'quajtur "APPEND"');
+    WriteLn(' /PATH:OFF  Mos k‰rkoni n‰ list‰n e repertor‰ve t‰ shtuara kur k‰rkoni ',
+                         'dosje t‰ dh‰nash.');
+    WriteLn(' /PATH:ON   Duhet t‰ k‰rkoni n‰p‰r list‰n e repertor‰ve t‰ shtuara ',
+                         'kur k‰rkoni dosje t‰ dh‰nash.');
+    WriteLn(' /X:OFF     Mos k‰rkoni n‰ list‰n e repertor‰ve t‰ shtuara kur ',
+                         'ekzekutoni nj‰ program.');
+    WriteLn(' /X:ON      Duhet t‰ k‰rkoni t‰ k‰rkoni n‰ list‰n e repertor‰ve ',
+                         't‰ shtuara gjat‰ ekzekutimit t‰ nj‰ programi.');
+   End;
    _Germany:Begin
     WriteLn('Erm”glicht Programmen das Offnen von Datedateien in den angegebenen ');
     WriteLn('Verzeichnissen, als ob sie im aktuellen Verzichnis w„ren.');
