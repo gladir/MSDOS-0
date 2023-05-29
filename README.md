@@ -154,6 +154,10 @@ Pour changer la langue des commandes, vous devez fixer la valeur de la variable 
 
 SET LANGUAGE=GR
 
+Un autre exemple, pour supporter l'albanais :
+
+SET LANGUAGE=SQ
+
 <h2>Remarque</h3>
 <ul>
 	<li>Les commandes DISKCOMP, DISKCOPY, FDISK et FORMAT on été amélioré par rapport à la version originale de Microsoft en proposant d'appliquer les changements sur un fichier d'image disque plutôt que directement sur un unité de disque.</li>
