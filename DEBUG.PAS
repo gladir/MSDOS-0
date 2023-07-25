@@ -1567,7 +1567,7 @@ End;
 
 Procedure LCommand;
 Var
- Source:File{$IFDEF FPC}of Byte{$ENDIF};
+ Source:File;
  ProgSize:LongInt;
  ByteReaded:Integer;
 Begin
@@ -1576,12 +1576,17 @@ Begin
  End
   Else
  Begin
-  Assign(Source,CurrProgName);
-  Reset(Source);
-  ProgSize:=FileSize(Source);
-  If(ProgSize>SizeSector)Then ProgSize:=SizeSector;
-  BlockRead(Source,Sector^,ProgSize,ByteReaded);
-  Close(Source);
+  {$I-}Assign(Source,CurrProgName);
+  Reset(Source,1);{$I+}
+  If IoResult=0 Then Begin
+   ProgSize:=FileSize(Source);
+   If(ProgSize>SizeSector-StartPointer)Then ProgSize:=SizeSector-StartPointer;
+   FillChar(Sector^,SizeSector,0);
+   BlockRead(Source,Sector^[StartPointer],ProgSize,ByteReaded);
+   Close(Source);
+  End
+   Else
+  WriteLn('Erreur de lecture du fichier binaire');
  End;
 End;
 
