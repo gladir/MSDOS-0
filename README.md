@@ -83,6 +83,10 @@ Voici la liste des différents fichiers proposés dans MSDOS-0 :
 			<td>Cette commande permet de convertir un fichier EXE en binaire (COM).</td>
 		</tr>
 		<tr>
+			<td><b>FASTHELP.PAS</b></td>
+			<td>Cette commande permet d'afficher une aide rapide sur une commande spécifié.</td>
+		</tr>
+		<tr>
 			<td><b>FC.PAS</b></td>
 			<td>Cette commande permet de comparer deux fichiers.</td>
 		</tr>
