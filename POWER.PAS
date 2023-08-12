@@ -55,7 +55,17 @@ BEGIN
   WriteLn;
   WriteLn('Syntaxe: POWER ADV:MAX|MIN|OFF|REG|STD');
   WriteLn;
+  WriteLn('MAX  Ce paramŠtre permet d''utiliser au maximum ',
+                 'l''alimentation en courant sans jamais tenter d''‚conomiser le courant.');
+  WriteLn('MIN  Ce paramŠtre permet d''utiliser au minimum ',
+                 'l''alimentation en courant.');
   WriteLn('OFF  Ce paramŠtre permet d''‚teindre l''ordinateur.');
+  WriteLn('REG  Ce paramŠtre permet d''utiliser l''alimentation en ',
+                'courant selon les demandes des applications. ',
+                'Valeur par d‚faut.');
+  WriteLn('STD  Ce paramŠtre permet d''effectuer la gestion propre ',
+                'au mat‚riel si compatible avec APM (Gestionnaire ',
+                'am‚liorer de courant).');
  End
   Else
  If ParamCount>0 Then Begin
