@@ -135,6 +135,10 @@ Voici la liste des différents fichiers proposés dans MSDOS-0 :
 			<td>Cette commande permet de fournir des informations techniques à propos de votre ordinateur.</td>
 		</tr>
 		<tr>
+			<td><b>POWER.PAS</b></td>
+			<td>Cette commande permet de fixer ou de demander les paramètres d'économiseur d'énergie du système d'exploitation.</td>
+		</tr>
+		<tr>
 			<td><b>PRINT.PAS</b></td>
 			<td>Cette commande permet d'effectuer la gestion des traitements d'impressions du système d'exploitation.</td>
 		</tr>
