@@ -292,6 +292,35 @@ BEGIN
    WriteLn(' /ASCII128   Ce parametre permet de lancer en mode compatibilite 128 caracteres seulement.');
   End
    Else
+  IF StrToUpper(ParamStr(I))='POWER'Then Begin
+   WriteLn('POWER: Cette commande permet de fixer ou de ',
+                  'demander les paramätres d''Çconomiseur ',
+                  'd''Çnergie du systäme d''exploitation.');
+   WriteLn;
+   WriteLn('Syntaxe: POWER ADV:MAX|MIN|OFF|REG|STD');
+   WriteLn;
+   WriteLn('MAX  Ce paramätre permet d''utiliser au maximum ',
+                  'l''alimentation en courant sans jamais tenter d''Çconomiser le courant.');
+   WriteLn('MIN  Ce paramätre permet d''utiliser au minimum ',
+                  'l''alimentation en courant.');
+   WriteLn('OFF  Ce paramätre permet d''Çteindre l''ordinateur.');
+   WriteLn('REG  Ce paramätre permet d''utiliser l''alimentation en ',
+                 'courant selon les demandes des applications. ',
+                 'Valeur par dÇfaut.');
+   WriteLn('STD  Ce paramätre permet d''effectuer la gestion propre ',
+                 'au matÇriel si compatible avec APM (Gestionnaire ',
+                 'amÇliorer de courant).');
+  End
+   Else
+  If StrToUpper(ParamStr(I))='PRINT'Then Begin
+   WriteLn('PRINT: Cette commande permet d''effectuer la gestion des ',
+                  'traitements d''impressions du systäme d''exploitation.');
+   WriteLn;
+   WriteLn('Syntaxe: PRINT [/C] [/T] [fichier]');
+   WriteLn;
+   WriteLn('/T  Ce paramätre permet d''annuler toutes les impressions.');
+  End
+   Else
   If StrToUpper(ParamStr(I))='REPLACE'Then Begin
    WriteLn('REPLACE : Cette commande permet de remplacer un fichier.');
    WriteLn;
