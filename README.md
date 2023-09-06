@@ -23,6 +23,10 @@ Voici la liste des différents fichiers proposés dans MSDOS-0 :
 			<td>Cette commande permet d'ouvrir des fichiers quelconque se trouvant dans les répertoires spécifiés comme s'il s'agissait du répertoire courant.</td>
 		</tr>
 		<tr>
+			<td><b>ASSIGN.PAS</b></td>
+			<td>Cette commande permet de créer un disque virtuel à partir d'un autre disque.</td>
+		</tr>
+		<tr>
 			<td><b>ATTRIB.PAS</b></td>
 			<td>Cette commande permet de demander ou de changer les attributs d'un fichier.</td>
 		</tr>
