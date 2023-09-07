@@ -153,8 +153,12 @@ Voici la liste des différents fichiers proposés dans MSDOS-0 :
 		<tr>
 			<td><b>SORT.PAS</b></td>
 			<td>Cette commande permet de trier une fichier texte ASCII et de retourner le résultat. Cette commande est un équivalent de la commande du DOS.</td>
-		</tr>	
-	        <tr>
+		</tr>
+		<tr>
+			<td><b>SUBST.PAS</b></td>
+			<td>Cette commande permet de créer un disque virtuel à partir d'un répertoire.</td>
+		</tr>
+		<tr>
 			<td><b>TREE.PAS</b></td>
 			<td>Cette commande permet d'afficher un arbre de répertoire.</td>
 		</tr>
