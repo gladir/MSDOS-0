@@ -154,20 +154,20 @@ BEGIN
     WriteLn('/S  Verarbeitet Dateien in allen Verzeichnissen des angegebenen Pfads.');
    End;
    Else Begin
-    WriteLn('ATTRIB - Cette commande permet de demander ou changer l''attribut d''un fichier');
+    WriteLn('ATTRIB - Cette commande permet de demander ou changer l''attribut d''un fichier.');
     WriteLn;
-    WriteLn('Syntaxe : ATTRIB nomdufichier [+R|-R] [+A|-A] [+S|-S] [+H|-H]');
+    WriteLn('Syntaxe : ATTRIB nomdufichier [+R|-R] [+A|-A] [+S|-S] [+H|-H] [/S]');
     WriteLn;
-    WriteLn(' -A   Enleve de l''attribut d''archive');
-    WriteLn(' +A   Ajout de l''attribut d''archive');
-    WriteLn(' -H   EnlŠve de l''attribut cach‚');
-    WriteLn(' +H   Ajout de l''attribut cach‚');
-    WriteLn(' -R   Enleve de l''attribut de lecture seulement');
-    WriteLn(' +R   Ajout de l''attribut de lecture seulement');
-    WriteLn(' -S   Enleve de l''attribut de systeme');
-    WriteLn(' +S   Ajout de l''attribut de systeme');
+    WriteLn(' -A   Enleve l''attribut d''archive');
+    WriteLn(' +A   Ajout l''attribut d''archive');
+    WriteLn(' -H   EnlŠve l''attribut cach‚');
+    WriteLn(' +H   Ajout l''attribut cach‚');
+    WriteLn(' -R   Enleve l''attribut de lecture seulement');
+    WriteLn(' +R   Ajout l''attribut de lecture seulement');
+    WriteLn(' -S   Enleve l''attribut de systŠme');
+    WriteLn(' +S   Ajout l''attribut de systŠme');
     WriteLn;
-    WriteLn(' /S   Applique le changement dans les sous-repertoires recursivement');
+    WriteLn(' /S   Applique le changement dans les sous-r‚pertoires r‚cursivement.');
    End;
   End;
  End
