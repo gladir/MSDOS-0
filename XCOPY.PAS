@@ -274,7 +274,7 @@ BEGIN
    Else Begin
     WriteLn('XCOPY : Cette commande permet de copier des fichiers.');
     WriteLn;
-    WriteLn('Syntaxe : XCOPY source destination [/P] [/W]');
+    WriteLn('Syntaxe : XCOPY source destination [/A] [/P] [/W]');
     WriteLn;
     WriteLn('    /A     Copie uniquement les fichiers d''attribut archive');
     WriteLn('    /P     Demande une confirmation avant chaque fichier');
