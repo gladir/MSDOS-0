@@ -71,6 +71,7 @@ BEGIN
   WriteLn;
   WriteLn('Syntaxe: PRINT [/C] [/T] [fichier]');
   WriteLn;
+  WriteLn('/C  Ce paramätre permet d''annuler une impression.');
   WriteLn('/T  Ce paramätre permet d''annuler toutes les impressions.');
  End
   Else
