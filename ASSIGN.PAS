@@ -67,14 +67,28 @@ BEGIN
  End;
  If(ParamStr(1)='/?')or(ParamStr(1)='--help')or(ParamStr(1)='-h')or
    (ParamStr(1)='/h')or(ParamStr(1)='/H')Then Begin
-  WriteLn('ASSIGN : Cette commande permet de cr‚er un disque virtuel ',
-                    '… partir d''un autre disque.');
-  WriteLn;
-  WriteLn('Syntaxe : ASSIGN [/STATUS|/A] [x=y] [x:=y:]');
-  WriteLn;
-  WriteLn(' x        Unit‚ de disque virtuelle');
-  WriteLn(' y        Unit‚ de disque r‚el');
-  WriteLn(' /STATUS  Affiche la liste des affectations d''unit‚s de disque');
+  Case Language of
+   _Albanian:Begin
+    WriteLn('ASSIGN : Kjo komand‰ ju lejon t‰ krijoni nj‰ disk virtual ',
+                      'nga nj‰ disk tjet‰r.');
+    WriteLn;
+    WriteLn('Sintaksa: ASSIGN [/STATUS|/A] [x=y] [x:=y:]');
+    WriteLn;
+    WriteLn(' x         Disku virtual');
+    WriteLn(' y         Disk i v‰rtet‰');
+    WriteLn(' /STATUS   Shfaq list‰n e detyrave t‰ disqeve');
+   End;
+   Else Begin
+    WriteLn('ASSIGN : Cette commande permet de cr‚er un disque virtuel ',
+                      '… partir d''un autre disque.');
+    WriteLn;
+    WriteLn('Syntaxe : ASSIGN [/STATUS|/A] [x=y] [x:=y:]');
+    WriteLn;
+    WriteLn(' x        Unit‚ de disque virtuelle');
+    WriteLn(' y        Unit‚ de disque r‚el');
+    WriteLn(' /STATUS  Affiche la liste des affectations d''unit‚s de disque');
+   End;
+  End;
  End
   Else
  If ParamCount>0 Then Begin
