@@ -8,6 +8,9 @@ Program SUBST;
 
 Uses DOS;
 
+Var
+ CurrentDrive:String;
+
 Function ResolvePath(Var S:String):Boolean;
 Var
  Regs:Registers;
@@ -28,6 +31,38 @@ Begin
  S[0]:=Chr(X);
 End;
 
+Procedure SubstituteDrive(Drive:Char;Path:String);
+Const
+ SUBST_FUNC=$4B;
+ IOCTL_DISK=$06;
+ IOCTL_DISK_SUBST=$00;
+Var
+ Regs:Registers;
+ DriveLetter:Byte;
+ SubstPath:String;
+Begin
+ If Not(Drive in ['A'..'Z'])Then Begin
+  Writeln('Lettre d''unit‚ invalide.');
+  Halt(2);
+ End;
+ Path:=Path+'\';
+ SubstPath:=Path;
+ DriveLetter:=Ord(drive)-Ord('A');
+ Regs.AX:=SUBST_FUNC;
+ Regs.BX:=IOCTL_DISK;
+ Regs.CX:=IOCTL_DISK_SUBST;
+ Regs.DX:=(driveLetter and $0F) or ((ord('C') and $0F) shl 4);
+ Regs.SI:=$0000;
+ Regs.DI:=$0000;
+ Regs.DS:=Seg(SubstPath[1]);
+ Regs.ES:=0;
+  { Appeler l'interruption }
+ Intr($21,Regs);
+  { V‚rifier le r‚sultat }
+ If(Regs.AX and $FF00)=0 Then Writeln('Substitution r‚ussie: ',Drive,': -> ',Path)
+                         Else Writeln('Erreur lors de la substitution.');
+End;
+
 Var
  DriveName:String;
  C:Char;
@@ -39,8 +74,20 @@ BEGIN
                     '… partir d''un r‚pertoire.');
   WriteLn;
   WriteLn('Syntaxe : SUBST [/?]');
+  WriteLn('          SUBST drive1: [drive2:]path');
   WriteLn;
-  WriteLn('/?  Affiche l''aide sur cette commande.');
+  WriteLn('  /?            Affiche l''aide sur cette commande.');
+  WriteLn(' drive1:        Unit‚ de disque … associ‚');
+  WriteLn(' drive2:[path]  Chemin … associ‚');
+ End
+  Else
+ If ParamCount=2 Then Begin
+  CurrentDrive:=ParamStr(1);
+  If(Length(CurrentDrive)>2)or(Copy(CurrentDrive,2,1)<>':')Then Begin
+   WriteLn('Unit‚ de disque de format invalide !');
+   Halt(1);
+  End;
+  SubstituteDrive(UpCase(CurrentDrive[1]),ParamStr(2));
  End
   Else
  Begin
