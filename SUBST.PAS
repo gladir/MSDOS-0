@@ -10,6 +10,8 @@ Uses DOS;
 
 Var
  CurrentDrive:String;
+ DriveName:String;
+ C:Char;
 
 Function ResolvePath(Var S:String):Boolean;
 Var
@@ -32,40 +34,22 @@ Begin
 End;
 
 Procedure SubstituteDrive(Drive:Char;Path:String);
-Const
- SUBST_FUNC=$4B;
- IOCTL_DISK=$06;
- IOCTL_DISK_SUBST=$00;
 Var
  Regs:Registers;
- DriveLetter:Byte;
- SubstPath:String;
+ DriveNum:Byte;
 Begin
- If Not(Drive in ['A'..'Z'])Then Begin
-  Writeln('Lettre d''unit‚ invalide.');
-  Halt(2);
- End;
- Path:=Path+'\';
- SubstPath:=Path;
- DriveLetter:=Ord(drive)-Ord('A');
- Regs.AX:=SUBST_FUNC;
- Regs.BX:=IOCTL_DISK;
- Regs.CX:=IOCTL_DISK_SUBST;
- Regs.DX:=(driveLetter and $0F) or ((ord('C') and $0F) shl 4);
- Regs.SI:=$0000;
- Regs.DI:=$0000;
- Regs.DS:=Seg(SubstPath[1]);
- Regs.ES:=0;
-  { Appeler l'interruption }
+ Path:=Path+#0;
+ DriveNum:=Ord(UpCase(Drive))-Ord('A');
+ Regs.AX:=$71AA;
+ Regs.BX:=DriveNum;
+ Regs.DS:=Seg(Path[1]);
+ Regs.SI:=Ofs(Path[1]);
+ Regs.CX:=Length(Path);
+ Regs.DL:=0;
  Intr($21,Regs);
-  { V‚rifier le r‚sultat }
- If(Regs.AX and $FF00)=0 Then Writeln('Substitution r‚ussie: ',Drive,': -> ',Path)
-                         Else Writeln('Erreur lors de la substitution.');
+ If Regs.Flags and FCarry<>0Then WriteLn('Erreur lors de la substitution de lecteur.')
+                            Else WriteLn('Substitution de l''unit‚ de disque r‚ussie : ',Drive,' -> ',Path);
 End;
-
-Var
- DriveName:String;
- C:Char;
 
 BEGIN
  If(ParamStr(1)='/?')or(ParamStr(1)='--help')or(ParamStr(1)='-h')or
