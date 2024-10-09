@@ -115,6 +115,10 @@ Voici la liste des différents fichiers proposés dans MSDOS-0 :
 			<td>Cette commande permet de lancer un interpréteur BASIC étant un clone du GWBASIC.</td>
 		</tr>
 		<tr>
+			<td><b>JOIN.PAS</b></td>
+			<td>Cette commande permet de créer un disque virtuel à partir d'un répertoire.</td>
+		</tr>
+		<tr>
 			<td><b>LABEL.PAS</b></td>
 			<td>Cette commande permet de changer le nom d'un volume.</td>
 		</tr>
