@@ -186,9 +186,10 @@ Un autre exemple, pour supporter l'albanais :
 
 SET LANGUAGE=SQ
 
-<h2>Remarque</h3>
+<h2>Remarques</h3>
 <ul>
 	<li>Les commandes DISKCOMP, DISKCOPY, FDISK et FORMAT on été amélioré par rapport à la version originale de Microsoft en proposant d'appliquer les changements sur un fichier d'image disque plutôt que directement sur un unité de disque.</li>
+	<li>Une commande externe TYPE (mais pas la commande dans COMMAND.COM) a été bonifié du paramètre /GWBASIC afin de permettre l'affichage des fichiers compressés sauvegarder par le GWBASIC.</li>
 </ul>
 
 <h2>Compilation</h2>
