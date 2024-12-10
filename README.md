@@ -7,7 +7,8 @@ Clone de MS-DOS en langage de programmation Pascal (Turbo Pascal ou Free Pascal)
 
 ![image](https://user-images.githubusercontent.com/11842176/178615847-519f70fe-ed5a-44ff-aeb1-eb1a1c55933e.png)
 
-![image](https://user-images.githubusercontent.com/11842176/178855949-f77527a5-caf9-44aa-96a4-54e4a46b25c6.png)
+![image](https://github.com/user-attachments/assets/6391ac0e-afd7-48e0-afea-cd560ba4b231)
+
 
 <h2>Liste des fichiers</h2>
 
@@ -166,6 +167,10 @@ Voici la liste des différents fichiers proposés dans MSDOS-0 :
 			<td><b>TREE.PAS</b></td>
 			<td>Cette commande permet d'afficher un arbre de répertoire.</td>
 		</tr>
+		<tr>
+			<td><b>TYPE.PAS</b></td>
+			<td>Cette commande permet d'afficher le contenu d'un fichier.</td>
+		</tr>				
 		 <tr>
 			<td><b>XCOPY.PAS</b></td>
 			<td>Cette commande permet d'effectuer la copie étendue avec sous-répertoire de fichier(s) vers un nouvel emplacement.</td>
@@ -182,9 +187,10 @@ Un autre exemple, pour supporter l'albanais :
 
 SET LANGUAGE=SQ
 
-<h2>Remarque</h3>
+<h2>Remarques</h3>
 <ul>
 	<li>Les commandes DISKCOMP, DISKCOPY, FDISK et FORMAT on été amélioré par rapport à la version originale de Microsoft en proposant d'appliquer les changements sur un fichier d'image disque plutôt que directement sur un unité de disque.</li>
+	<li>Une commande externe TYPE (mais pas la commande dans COMMAND.COM) a été bonifié du paramètre /GWBASIC afin de permettre l'affichage des fichiers compressés sauvegarder par le GWBASIC.</li>
 </ul>
 
 <h2>Compilation</h2>
