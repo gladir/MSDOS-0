@@ -1,14 +1,20 @@
 { @author: Sylvain Maltais (support@gladir.com)
   @created: 2022
-  @website(https://www.gladir.com/msdos0)
+  @website(https://www.gladir.com/msdos-0)
   @abstract(Target: Turbo Pascal, Free Pascal)
 }
 
 Program GWBASIC;
 
-Uses Crt,DOS,Printer;
+Uses {$IFDEF FPC}
+      Crt,DOS,PtcGraph,PtcCrt,PtcMouse,Printer
+     {$ELSE}
+      Crt,DOS,Graph,Printer
+     {$ENDIF};
 
 Const
+ Version='0.70';
+
  CommandList:Array[0..91]of String[12]=(
   'AND','AUTO','BEEP','BLOAD','BSAVE','CALL','CAT','CHAIN','CHDIR',
   'CIRCLE','CLEAR','CLOSE','CLR','CLS','COLOR','COM','COMMON','CONT',
@@ -74,6 +80,7 @@ Var
  GosubPos:Byte;
  ForStack:Array[1..10]of ForStackRec;
  ForPos:Byte;
+ LineEmpty,InGraph:Boolean;
 
 Function RunBasic(InList:Boolean):Boolean;Forward;
 Procedure NewCommand;Forward;
@@ -81,6 +88,27 @@ Procedure NewCommand;Forward;
 Function TAN(X:Real):Real;Begin
  If Cos(X)=0.0Then Tan:=0.0
               Else Tan:=SIN(X)/COS(X);
+End;
+
+Function IsNumberWord(S:String):Boolean;
+Var
+ I:Integer;
+Begin
+ IsNumberWord:=True;
+ For I:=1 to Length(S)do Begin
+  If Not(S[I]in['0'..'9'])Then Begin
+   IsNumberWord:=False;
+   Exit;
+  End;
+ End;
+End;
+
+Function IntToStr(I:Integer):String;
+Var
+ S:String;
+Begin
+ Str(I,S);
+ IntToStr:=S;
 End;
 
 Function LTrim(S:String):String;
@@ -91,6 +119,20 @@ Begin
  While(I<=Length(s)) and (S[I] in [#9,' ']) do Inc(I);
  Delete(S,1,I-1);
  LTrim:=S;
+End;
+
+Function RTrim(s:String):String;
+Var
+ i:Integer;
+Begin
+ i:=Length(s);
+ While (i>0)and(s[i]in[#9,' '])do Dec(i);
+ s[0]:=Chr(i);
+ RTrim:=S;
+End;
+
+Function Trim(s:String):String;Begin
+ Trim:=LTrim(RTrim(s));
 End;
 
 Function PadRight(S:String;Space:Byte):String;
@@ -191,8 +233,8 @@ Procedure HomeMessage;Begin
  ClrScr;
  ShowFunctionKey;
  Window(1,1,80,24);
- WriteLn('GWBASIC 2022');
- WriteLn('Tous droits reserves Gladir.com 2021, 2022');
+ WriteLn('GW-BASIC Clone ',Version);
+ WriteLn('Licence libre et open source MIT 2021, 2022, 2024');
 End;
 
 Function ExtractCommand:Byte;
@@ -464,6 +506,23 @@ Procedure ResortList;Begin
  If NumberLine>1 Then QuickSort(1,NumberLine);
 End;
 
+Procedure DeleteLineNumber(Number:Word);
+Var
+ ThisNumber:LongInt;
+ I:Integer;
+Begin
+ For I:=1 to NumberLine do Begin
+  ThisNumber:=FirstNumberInStr(PA[I]^);
+  If ThisNumber>0 Then Begin
+   If(ThisNumber=Number)Then Begin
+    PA[I]^:='';
+    ResortList;
+    Exit;
+   End;
+  End;
+ End;
+End;
+
  { Evaluation d'expression (Infix to PostFix ) }
 Var
  Stack:Array[0..100]of Char;
@@ -577,6 +636,27 @@ Begin
   End;
  End;
  GetVariableName:=StrToUpper(S);
+End;
+
+Function ReadInteger:Integer;
+Var
+ S:String;
+ Number:Integer;
+ Err:Word;
+Begin
+ S:='';
+ If CurrLine[CurrPos]in['0'..'9']Then Begin
+  S:=S+CurrLine[CurrPos];
+  Inc(CurrPos);
+  While CurrPos<=Length(CurrLine)do Begin
+   If Not(CurrLine[CurrPos]in['0'..'9'])Then Break;
+   S:=S+CurrLine[CurrPos];
+   Inc(CurrPos);
+  End;
+ End;
+ Val(S,Number,Err);
+ If Err>0 Then Number:=-1;
+ ReadInteger:=Number;
 End;
 
 Function ReadWord:String;
@@ -1161,17 +1241,36 @@ Procedure BeepCommand;Begin
  NoSound;
 End;
 
-Procedure ColorCommand;
+Function CircleCommand:Boolean;
 Var
- Foreground,Background:Real;
+ X,Y,R:Real;
 Begin
- Foreground:=GetNumberValue(1);
- TextColor(Trunc(Foreground));
+ CircleCommand:=False;
+ If GetSeparator='('Then Begin
+  Inc(CurrPos);
+ End
+  Else
+ Exit;
+ X:=GetNumberValue(1);
  If GetSeparator=','Then Begin
   Inc(CurrPos);
-  Background:=GetNumberValue(1);
-  TextBackground(Trunc(Background));
- End;
+ End
+  Else
+ Exit;
+ Y:=GetNumberValue(1);
+ If GetSeparator=')'Then Begin
+  Inc(CurrPos);
+ End
+  Else
+ Exit;
+ If GetSeparator=','Then Begin
+  Inc(CurrPos);
+ End
+  Else
+ Exit;
+ R:=GetNumberValue(1);
+ Circle(Trunc(X),Trunc(Y),Trunc(R));
+ CircleCommand:=True;
 End;
 
 Procedure ChDirCommand;
@@ -1183,6 +1282,19 @@ Begin
  {$I-} ChDir(GetStringValue);{$I+}
  Error:=IoResult;
  If Error<>0Then WriteLn(GetErrorMessage(Error));
+End;
+
+Procedure ColorCommand;
+Var
+ Foreground,Background:Real;
+Begin
+ Foreground:=GetNumberValue(1);
+ TextColor(Trunc(Foreground));
+ If GetSeparator=','Then Begin
+  Inc(CurrPos);
+  Background:=GetNumberValue(1);
+  TextBackground(Trunc(Background));
+ End;
 End;
 
 Procedure FilesCommand;
@@ -1401,7 +1513,7 @@ Begin
   If Compare='='Then ResultCmp:=R1=R2
    Else
   Begin
-   WriteLn('Erreur d''operateur de comparaison');
+   WriteLn('Erreur d''opÇrateur de comparaison');
    Exit;
   End;
  End;
@@ -1416,7 +1528,7 @@ Begin
   Inc(CurrPos);
  End;
  If StrToUpper(S)<>'THEN'Then Begin
-  WriteLn('Mot reserve THEN introuvable');
+  WriteLn('Mot resÇrvÇ THEN introuvable');
   Exit;
  End;
  While CurrPos<Length(CurrLine) do Begin
@@ -1457,21 +1569,190 @@ Begin
  WriteLn('Mot non reconnu');
 End;
 
+Function LineCommand:Boolean;
+Var
+ Mode:(_Line,_B,_BF);
+ X1,Y1,X2,Y2,C:Real;
+ S:String;
+Begin
+ LineCommand:=False;
+ If GetSeparator='('Then Begin
+  Inc(CurrPos);
+ End
+  Else
+ Exit;
+ X1:=GetNumberValue(1);
+ If GetSeparator=','Then Begin
+  Inc(CurrPos);
+ End
+  Else
+ Exit;
+ Y1:=GetNumberValue(1);
+ If GetSeparator=')'Then Begin
+  Inc(CurrPos);
+ End
+  Else
+ Exit;
+ If GetSeparator='-'Then Begin
+  Inc(CurrPos);
+ End
+  Else
+ Exit;
+ If GetSeparator='('Then Begin
+  Inc(CurrPos);
+ End
+  Else
+ Exit;
+ X2:=GetNumberValue(1);
+ If GetSeparator=','Then Begin
+  Inc(CurrPos);
+ End
+  Else
+ Exit;
+ Y2:=GetNumberValue(1);
+ If GetSeparator=')'Then Begin
+  Inc(CurrPos);
+ End
+  Else
+ Exit;
+ If GetSeparator=','Then Begin
+  Inc(CurrPos);
+ End
+  Else
+ Exit;
+ C:=GetNumberValue(1);
+ SetColor(Trunc(C));
+ Mode:=_Line;
+ If GetSeparator=','Then Begin
+  Inc(CurrPos);
+  SkipSpace;
+  S:='';
+  While CurrPos<=Length(CurrLine) do Begin
+   If Not(CurrLine[CurrPos]in['A'..'Z','a'..'z'])Then Break;
+   S:=S+UpCase(CurrLine[CurrPos]);
+   Inc(CurrPos);
+  End;
+  If S='B'Then Mode:=_B Else
+  If S='BF'Then Mode:=_BF;
+ End;
+ Case Mode of
+  _B:Rectangle(Trunc(X1),Trunc(Y1),Trunc(X2),Trunc(Y2));
+  _BF:Begin
+   SetFillStyle(SolidFill,Trunc(C));
+   Bar(Trunc(X1),Trunc(Y1),Trunc(X2),Trunc(Y2));
+  End;
+  Else Line(Trunc(X1),Trunc(Y1),Trunc(X2),Trunc(Y2));
+ End;
+ LineCommand:=True;
+End;
+
 Procedure ListCommand;
 Var
- I:Integer;
+ I,Start,Finish:Integer;
+ Err:Word;
+ Number:Word;
 Begin
  If NumberLine>0Then Begin
-  For I:=1 to NumberLine do WriteLn(PA[I]^);
+  Start:=-1;
+  Finish:=-1;
+  SkipSpace;
+  If GetSeparator='-'Then Begin
+   Inc(CurrPos);
+   Finish:=ReadInteger;
+  End
+   Else
+  Begin
+   Start:=ReadInteger;
+   If GetSeparator='-'Then Begin
+    Inc(CurrPos);
+    Finish:=ReadInteger;
+   End
+    Else
+   Finish:=Start;
+  End;
+  If(Start=-1)and(Finish=-1)Then Begin
+   For I:=1 to NumberLine do Begin
+    If PA[I]^<>''Then WriteLn(PA[I]^);
+   End;
+  End
+   Else
+  If(Start<>-1)and(Finish=-1)Then Begin
+   For I:=1 to NumberLine do Begin
+    Number:=FirstNumberInStr(PA[I]^);
+    If(Number>=Start)Then Begin
+     If PA[I]^<>''Then WriteLn(PA[I]^);
+    End;
+   End;
+  End
+   Else
+  If(Start=-1)and(Finish<>-1)Then Begin
+   For I:=1 to NumberLine do Begin
+    Number:=FirstNumberInStr(PA[I]^);
+    If(Number<=Finish)Then Begin
+     If PA[I]^<>''Then WriteLn(PA[I]^);
+    End;
+   End;
+  End
+   Else
+  Begin
+   For I:=1 to NumberLine do Begin
+    Number:=FirstNumberInStr(PA[I]^);
+    If(Number>=Start)and(Number<=Finish)Then Begin
+     If PA[I]^<>''Then WriteLn(PA[I]^);
+    End;
+   End;
+  End;
  End;
 End;
 
 Procedure LListCommand;
 Var
- I:Integer;
+ I,Start,Finish:Integer;
+ Err:Word;
+ Number:Word;
 Begin
  If NumberLine>0Then Begin
-  For I:=1 to NumberLine do WriteLn(Lst,PA[I]^);
+  Start:=-1;
+  Finish:=-1;
+  SkipSpace;
+  If GetSeparator='-'Then Begin
+   Inc(CurrPos);
+   Finish:=ReadInteger;
+  End
+   Else
+  Begin
+   Start:=ReadInteger;
+   If GetSeparator='-'Then Begin
+    Inc(CurrPos);
+    Finish:=ReadInteger;
+   End
+    Else
+   Finish:=Start;
+  End;
+  If(Start=-1)and(Finish=-1)Then Begin
+   For I:=1 to NumberLine do WriteLn(Lst,PA[I]^);
+  End
+   Else
+  If(Start<>-1)and(Finish=-1)Then Begin
+   For I:=1 to NumberLine do Begin
+    Number:=FirstNumberInStr(PA[I]^);
+    If(Number>=Start)Then WriteLn(Lst,PA[I]^);
+   End;
+  End
+   Else
+  If(Start=-1)and(Finish<>-1)Then Begin
+   For I:=1 to NumberLine do Begin
+    Number:=FirstNumberInStr(PA[I]^);
+    If(Number<=Finish)Then WriteLn(Lst,PA[I]^);
+   End;
+  End
+   Else
+  Begin
+   For I:=1 to NumberLine do Begin
+    Number:=FirstNumberInStr(PA[I]^);
+    If(Number>=Start)and(Number<=Finish)Then WriteLn(Lst,PA[I]^);
+   End;
+  End;
  End;
 End;
 
@@ -1479,26 +1760,380 @@ Procedure LoadCommand;
 Var
  FileLoad:Text;
  S:String;
+
+ Function LoadBASIC(SourceName:String):Boolean;
+ Label RFGW,RF0,RF1;
+ Var
+  Mode:(None,CocoFileBAS,Coco1FileBAS,GWBASIC);
+  Source:File;
+  Pos:Word;
+  ByteReaded:Word;
+  LastB,B:Byte;
+  NewLine:Boolean;
+  Buffer:Array[0..4]of Byte;
+  BufSingle:Single;
+  BufDouble:Double;
+ Begin
+  LoadBASIC:=True;
+  S:='';
+  {$I-}Assign(Source,SourceName);
+  Reset(Source,1);{$I+}
+  If IoResult<>0Then Begin
+   WriteLn('Fichier source introuvable');
+   Exit;
+  End;
+  BlockRead(Source,Buffer,3,ByteReaded);
+  Mode:=None;
+  If(Buffer[0]=$55)Then Begin
+   Seek(Source,$119);
+   BlockRead(Source,Buffer,3,ByteReaded);
+  End;
+  If(Buffer[0]=$9D)Then Begin
+   Mode:=CocoFileBAS;
+  End
+   Else
+  If(Buffer[0]=$FF)Then Begin
+   If Buffer[1]=$7AThen Mode:=GWBASIC
+                   Else Mode:=Coco1FileBAS;
+  End;
+  Case Mode of
+   GWBASIC:Begin
+    NewCommand;
+    BlockRead(Source,Buffer,1,ByteReaded);
+    Pos:=Buffer[0];
+    BlockRead(Source,Buffer,1,ByteReaded);
+    Pos:=Pos+Buffer[0]*256;
+    S:=S+IntToStr(Pos)+' ';
+    NewLine:=True;
+    LastB:=0;
+    Repeat
+     BlockRead(Source,Buffer,1,ByteReaded);
+     B:=Buffer[0];
+ RFGW:
+     Case B of
+      0:Begin
+       If Not AddLine(LTrim(S))Then Begin
+        WriteLn('Manque de mÇmoire');
+        Break;
+       End;
+       S:='';
+       BlockRead(Source,Buffer,1,ByteReaded);
+       Pos:=Buffer[0];
+       BlockRead(Source,Buffer,1,ByteReaded);
+       Pos:=Pos+Buffer[0]*256;
+       BlockRead(Source,Buffer,1,ByteReaded);
+       If(Pos=0)and(Buffer[0]=26)Then Break;
+       Pos:=Buffer[0];
+       BlockRead(Source,Buffer,1,ByteReaded);
+       Pos:=Pos+Buffer[0]*256;
+       S:=S+IntToStr(Pos)+' ';
+       NewLine:=True;
+      End;
+      $0C:S:=S+'&H';
+      $0F:Begin
+       BlockRead(Source,Buffer,1,ByteReaded);
+       S:=S+IntToStr(Buffer[0]);
+      End;
+      $11..$1A:Begin
+       S:=S+Char(Buffer[0]+31);
+      End;
+      $1C:Begin
+       BlockRead(Source,Buffer,2,ByteReaded);
+       S:=S+IntToStr(Buffer[0]+Buffer[1]*256);
+      End;
+      $1D:Begin
+       BlockRead(Source,BufSingle,4,ByteReaded);
+       {Write(BufSingle);}
+      End;
+      $1F:Begin
+       BlockRead(Source,BufDouble,4,ByteReaded);
+       {Write(BufDouble);}
+      End;
+      $3A:Begin
+       BlockRead(Source,Buffer,1,ByteReaded);
+       Case Buffer[0]of
+        $20:Begin
+         BlockRead(Source,Buffer,1,ByteReaded);
+         If Buffer[0]=32Then S:=S+'GOSUB'
+                        Else S:=S+#$3A+#32+IntToStr(Buffer[0]);
+        End;
+        $8F:Begin
+         LastB:=B;
+         B:=Buffer[0];
+         Goto RFGW;
+        ENd;
+        $A1:S:=S+'ELSE';
+        Else Begin
+         S:=S+Char(B);
+         LastB:=B;
+         B:=Buffer[0];
+         Goto RFGW;
+        End;
+       End;
+      End;
+      $81:S:=S+'END';
+      $82:S:=S+'FOR';
+      $83:S:=S+'NEXT';
+      $84:S:=S+'DATA';
+      $85:S:=S+'INPUT';
+      $86:S:=S+'DIM';
+      $87:S:=S+'READ';
+      $88:S:=S+'LET';
+      $89:S:=S+'GOTO';
+      $8A:S:=S+'RUN';
+      $8B:S:=S+'IF';
+      $8C:S:=S+'RESTORE';
+      $8D:S:=S+'GOSUB';
+      $8E:S:=S+'RETURN';
+      $8F:Begin
+       BlockRead(Source,Buffer,1,ByteReaded);
+       Case Buffer[0]of
+        $D9:Begin
+         S:=S+'''';
+         While Not EOF(Source)do Begin
+          BlockRead(Source,Buffer,1,ByteReaded);
+          If Buffer[0]=0Then Begin
+           B:=Buffer[0];
+           Goto RFGW;
+          End;
+          S:=S+Char(Buffer[0]);
+         End;
+        End;
+        Else Begin
+         S:=S+'REM';
+         While Not EOF(Source)do Begin
+          BlockRead(Source,Buffer,1,ByteReaded);
+          If Buffer[0]=0Then Begin
+          B:=Buffer[0];
+           Goto RFGW;
+          End;
+          S:=S+Char(Buffer[0]);
+         End;
+        End;
+       End;
+      End;
+      $90:S:=S+'STOP';
+      $91:S:=S+'PRINT';
+      $92:S:=S+'CLEAR';
+      $93:S:=S+'LIST';
+      $94:S:=S+'NEW';
+      $95:S:=S+'ON';
+      $96:S:=S+'WAIT';
+      $97:S:=S+'DEF';
+      $98:S:=S+'POKE';
+      $99:S:=S+'CONT';
+      $9C:S:=S+'OUT';
+      $9D:S:=S+'LPRINT';
+      $9E:S:=S+'LLIST';
+      $A0:S:=S+'WIDTH';
+      $A1:S:=S+'ELSE';
+      $A2:S:=S+'TRON';
+      $A3:S:=S+'TROFF';
+      $A4:S:=S+'SWAP';
+      $A5:S:=S+'ERASE';
+      $A6:S:=S+'EDIT';
+      $A7:S:=S+'ERROR';
+      $A8:S:=S+'RESUME';
+      $A9:S:=S+'DELETE';
+      $AA:S:=S+'AUTO';
+      $AB:S:=S+'RENUM';
+      $AC:S:=S+'DEFSTR';
+      $AD:S:=S+'DEFINT';
+      $AE:S:=S+'DEFSNG';
+      $AF:S:=S+'DEFDBL';
+      $B0:S:=S+'LINE';
+      $B1:S:=S+'WHILE';
+      $B2:S:=S+'WEND';
+      $B3:S:=S+'CALL';
+      $B7:S:=S+'WRITE';
+      $B8:S:=S+'OPTION';
+      $B9:S:=S+'RANDOMIZE';
+      $BA:S:=S+'OPEN';
+      $BB:S:=S+'CLOSE';
+      $BC:S:=S+'LOAD';
+      $BD:S:=S+'MERGE';
+      $BE:S:=S+'SAVE';
+      $BF:S:=S+'COLOR';
+      $C0:S:=S+'CLS';
+      $C1:S:=S+'MOTOR';
+      $C2:S:=S+'BSAVE';
+      $C3:S:=S+'BLOAD';
+      $C4:S:=S+'SOUND';
+      $C5:S:=S+'BEEP';
+      $C6:S:=S+'PSET';
+      $C7:S:=S+'PRESET';
+      $C8:S:=S+'SCREEN';
+      $C9:S:=S+'KEY';
+      $CA:S:=S+'LOCATE';
+      $CC:S:=S+'TO';
+      $CD:S:=S+'THEN';
+      $CE:S:=S+'TAB(';
+      $CF:S:=S+'STEP';
+      $D0:S:=S+'USR';
+      $D1:S:=S+'FN';
+      $D2:S:=S+'SPC(';
+      $D3:S:=S+'NOT';
+      $D4:S:=S+'ERL';
+      $D5:S:=S+'ERR';
+      $D6:S:=S+'STRING$';
+      $D7:S:=S+'USING';
+      $D8:S:=S+'INSTR';
+      $D9:S:=S+'''';
+      $DA:S:=S+'VARPTR';
+      $DB:S:=S+'CSRLIN';
+      $DC:S:=S+'POINT';
+      $DD:S:=S+'OFF';
+      $DE:S:=S+'INKEY$';
+      $E6:S:=S+'>';
+      $E7:S:=S+'=';
+      $E8:S:=S+'<';
+      $E9:S:=S+'+';
+      $EA:S:=S+'-';
+      $EB:S:=S+'*';
+      $EC:S:=S+'/';
+      $EE:S:=S+'AND';
+      $EF:S:=S+'OR';
+      $F0:S:=S+'XOR';
+      $F1:S:=S+'EQV';
+      $F2:S:=S+'IMP';
+      $F3:S:=S+'MOD';
+      $F4:S:=S+'\';
+      $FD:Begin
+       BlockRead(Source,Buffer,1,ByteReaded);
+       Case Buffer[0]of
+        $81:S:=S+'CVI';
+        $82:S:=S+'CVS';
+        $83:S:=S+'CVD';
+        $84:S:=S+'MKI$';
+        $85:S:=S+'MKS$';
+        $86:S:=S+'MKD$';
+        $87..$8A:S:=S+'---';
+        $8B:S:=S+'EXTERR';
+        Else S:=S+Char(Buffer[0]);
+       End;
+      End;
+      $FE:Begin
+       BlockRead(Source,Buffer,1,ByteReaded);
+       Case Buffer[0]of
+        $81:S:=S+'FILES';
+        $82:S:=S+'FIELD';
+        $83:S:=S+'SYSTEM';
+        $84:S:=S+'NAME';
+        $85:S:=S+'LSET';
+        $86:S:=S+'RSET';
+        $87:S:=S+'KILL';
+        $88:S:=S+'PUT';
+        $89:S:=S+'GET';
+        $8A:S:=S+'RESET';
+        $8B:S:=S+'COMMON';
+        $8C:S:=S+'CHAIN';
+        $8D:S:=S+'DATE$';
+        $8E:S:=S+'TIME$';
+        $8F:S:=S+'PAINT';
+        $90:S:=S+'COM';
+        $91:S:=S+'CIRCLE';
+        $92:S:=S+'DRAW';
+        $93:S:=S+'PLAY';
+        $94:S:=S+'TIMER';
+        $95:S:=S+'ERDEV';
+        $96:S:=S+'IOCTL';
+        $97:S:=S+'CHDIR';
+        $98:S:=S+'MKDIR';
+        $99:S:=S+'RMDIR';
+        $9A:S:=S+'SHELL';
+        $9B:S:=S+'ENVIRON';
+        $9C:S:=S+'VIEW';
+        $9D:S:=S+'WINDOW';
+        $9E:S:=S+'PMAP';
+        $9F:S:=S+'PALETTE';
+        $A0:S:=S+'LCOPY';
+        $A1:S:=S+'CALLS';
+        $A2,$A3,$A4,$A6:S:=S+'---';
+        $A5:S:=S+'PCOPY';
+        $A7:S:=S+'LOCK';
+        $A8:S:=S+'UNLOCK';
+        Else S:=S+Char(Buffer[0]);
+       End;
+      End;
+      $FF:Begin
+       BlockRead(Source,Buffer,1,ByteReaded);
+       Case Buffer[0]of
+        $81:S:=S+'LEFT$';
+        $82:S:=S+'RIGHT$';
+        $83:S:=S+'MID$';
+        $84:S:=S+'SGN';
+        $85:S:=S+'INT';
+        $86:S:=S+'ABS';
+        $87:S:=S+'SQR';
+        $88:S:=S+'RND';
+        $89:S:=S+'SIN';
+        $8A:S:=S+'LOG';
+        $8B:S:=S+'EXP';
+        $8C:S:=S+'COS';
+        $8D:S:=S+'TAN';
+        $8E:S:=S+'ATN';
+        $8F:S:=S+'FRE';
+        $90:S:=S+'INP';
+        $91:S:=S+'POS';
+        $92:S:=S+'LEN';
+        $93:S:=S+'STR$';
+        $94:S:=S+'VAL';
+        $95:S:=S+'ASC';
+        $96:S:=S+'CHR$';
+        $97:S:=S+'PEEK';
+        $98:S:=S+'SPACE$';
+        $99:S:=S+'OCT$';
+        $9A:S:=S+'HEX$';
+        $9B:S:=S+'LPOS';
+        $9C:S:=S+'CINT';
+        $9D:S:=S+'CSNG';
+        $9E:S:=S+'CDBL';
+        $9F:S:=S+'FIX';
+        $A0:S:=S+'PEN';
+        $A1:S:=S+'STICK';
+        $A2:S:=S+'STRIG';
+        $A3:S:=S+'EOF';
+        $A4:S:=S+'LOC';
+        $A5:S:=S+'LOF';
+        Else S:=S+Char(Buffer[0]);
+       End;
+      End;
+      Else S:=S+Char(Buffer[0]);
+     End;
+     If B<>0Then NewLine:=False;
+     LastB:=B;
+    Until EOF(Source);
+    Close(Source);
+   End;
+   Else Begin
+    Close(Source);
+    LoadBASIC:=False;
+   End;
+  End;
+ End;
+
 Begin
  If GetSeparator='"'Then Begin
   FileName:=GetStringValue;
   If FileName<>''Then Begin
    If StrToUpper(Copy(FileName,Length(FileName)-3,4))<>'.BAS'Then FileName:=FileName+'.BAS';
-   {$I-}Assign(FileLoad,FileName);
-   Reset(FileLoad);{$I+}
-   If IoResult<>0Then Begin
-    WriteLn('Fichier introuvable');
-    Exit;
-   End;
-   NewCommand;
-   While Not EOF(FileLoad) do Begin
-    ReadLn(FileLoad,S);
-    If Not AddLine(LTrim(S))Then Begin
-     WriteLn('Manque de mÇmoire');
-     Break;
+   If Not LoadBASIC(FileName)Then Begin
+    {$I-}Assign(FileLoad,FileName);
+    Reset(FileLoad);{$I+}
+    If IoResult<>0Then Begin
+     WriteLn('Fichier introuvable');
+     Exit;
     End;
+     NewCommand;
+    While Not EOF(FileLoad) do Begin
+     ReadLn(FileLoad,S);
+     If Not AddLine(LTrim(S))Then Begin
+      WriteLn('Manque de mÇmoire');
+      Break;
+     End;
+    End;
+    Close(FileLoad);
    End;
-   Close(FileLoad);
    ResortList;
   End
    Else
@@ -1643,7 +2278,9 @@ Begin
                             Else Break;
    End;
    CurrPos:=J;
-   If Not RunBasic(True)Then Break;
+   If CurrLine<>''Then Begin
+    If Not RunBasic(True)Then Break;
+   End;
    Inc(CurrLinePtr);
   End;
  End;
@@ -1687,6 +2324,42 @@ Begin
   End
    Else
   WriteLn('Sauvegarde sans nom impossible');
+ End;
+End;
+
+Procedure ScreenCommand;
+Var
+ Screen:Real;
+ Driver,Mode:Integer;
+ ErrCode:Integer;
+Begin
+ Screen:=GetNumberValue(1);
+ Case Trunc(Screen)of
+  0:Begin
+   CloseGraph;
+   InGraph:=False;
+  End;
+  Else Begin
+   InGraph:=True;
+   {$IFDEF FPC}
+    Driver:=VGA;
+    Mode:=VGAHi;
+   {$ELSE}
+    Driver:=Detect;
+    Mode:=VGAHi;
+   {$ENDIF}
+    InitGraph(Driver,Mode,'');
+    ErrCode:=GraphResult;
+    If ErrCode=grOk Then Begin
+    SetColor(White);
+    SetLineStyle(0, 0, 1);
+   End
+    Else
+   Begin
+    WriteLn('Erreur graphique : ',GraphErrorMsg(ErrCode));
+    Halt;
+   End;
+  End;
  End;
 End;
 
@@ -1786,6 +2459,11 @@ Begin
    Exit;
   End;
  End;
+ SkipSpace;
+ If CurrLine[CurrPos]=''''Then Begin
+  { C'est un commentaire, on est fait rien }
+ End
+  Else
  Repeat
   NoImplementation:=False;
   UnknownCommand:=False;
@@ -1799,7 +2477,7 @@ Begin
    6: NoImplementation:=True;{CAT}
    7: NoImplementation:=True;{CHAIN}
    8: ChDirCommand;{CHDIR}
-   9: NoImplementation:=True;{CIRCLE}
+   9: CircleCommand;{CIRCLE}
    10: NoImplementation:=True;{CLEAR}
    11: NoImplementation:=True;{CLOSE}
    12: NoImplementation:=True;{CLR}
@@ -1830,7 +2508,7 @@ Begin
    37: KeyCommand;{KEY}
    38: NoImplementation:=True;{KILL}
    39: NoImplementation:=True;{LET}
-   40: NoImplementation:=True;{LINE}
+   40: LineCommand;{LINE}
    41: ListCommand;{LIST}
    42: LListCommand;{LLIST}
    43: LoadCommand;{LOAD}
@@ -1870,7 +2548,7 @@ Begin
    74: NoImplementation:=True;{RSET}
    75: RunCommand;{RUN}
    76: SaveCommand;{SAVE}
-   77: NoImplementation:=True;{SCREEN}
+   77: ScreenCommand;{SCREEN}
    78: NoImplementation:=True;{SHELL}
    79: SleepCommand;{SLEEP}
    80: Exit;{STOP}
@@ -1926,18 +2604,19 @@ Begin
     End;
    End
     Else
-   WriteLn('Commande non reconnu');
+   If(InList)Then WriteLn('Commande non reconnu Ö la ligne ',CurrNumberLine,': ',CurrCommand)
+             Else WriteLn('Commande non reconnu');
    Exit;
   End;
   If(NoImplementation)Then Begin
-   WriteLn('Cette commande n''a pas ete implemente');
+   WriteLn('Cette commande n''a pas ÇtÇ implÇmentÇ : ',CurrCommand);
    Exit;
   End;
   While(CurrLine[CurrPos]in[' ',':'])and(CurrPos<=Length(CurrLine)) do Inc(CurrPos);
   If CurrPos>=Length(CurrLine)Then Break;
   If Not(CurrLine[CurrPos]in['A'..'Z','a'..'z','_'])Then Begin
-   If(InList)Then WriteLn('Erreur de syntaxe a la position ',CurrPos,' de la ligne ',CurrNumberLine)
-             ELse WriteLn('Erreur de syntaxe a la position ',CurrPos);
+   If(InList)Then WriteLn('Erreur de syntaxe Ö la position ',CurrPos,' de la ligne ',CurrNumberLine)
+             Else WriteLn('Erreur de syntaxe Ö la position ',CurrPos);
    Exit;
   End;
  Until CurrPos>Length(CurrLine);
@@ -1954,6 +2633,15 @@ BEGIN
   WriteLn('GWBASIC : Cette commande permet de lancer l''interpreteur de GWBASIC.');
   WriteLn;
   WriteLn('Syntaxe : GWBASIC [fichier]');
+  WriteLn;
+  WriteLn(' fichier   Ce paramätre permet d''indiquer le nom du fichier BASIC.');
+ End
+  Else
+ If ParamStr(1)='--version'Then Begin
+  WriteLn('GWBASIC ',Version,' - Clone Pascal de corail, MS-DOS-0, GWBASIC-0');
+  WriteLn('Licence MIT');
+  WriteLn;
+  WriteLn('êcrit par Sylvain Maltais');
  End
   Else
  Begin
@@ -1968,6 +2656,7 @@ BEGIN
   FunctionKeyList[8]:='TROFF'#13;
   FunctionKeyList[9]:='KEY ';
   FunctionKeyList[10]:='SCREEN';
+  InGraph:=False;
   Tron:=False;KeyFunction:=True;
   NumberLine:=0;CurrNumberLine:=0;
   NumberVariable:=0;GosubPos:=0;ForPos:=0;
@@ -1980,12 +2669,24 @@ BEGIN
    RunBasic(False);
   End;
   Terminated:=False;
+  LineEmpty:=False;
   Repeat
-   WriteLn('Ok');
+   If Not(LineEmpty)Then WriteLn('Ok');
    ReadLine(CurrLine);
-   CurrLine:=LTrim(CurrLine);
-   RunBasic(False);
+   LineEmpty:=CurrLine='';
+   If CurrLine=''Then LineEmpty:=True Else
+   If(IsNumberWord(Trim(CurrLine)))Then Begin { Supprime un numÇro de ligne ? }
+    CurrPos:=1;
+    CurrLine:=Trim(CurrLine);
+    DeleteLineNumber(ReadInteger);
+   End
+    Else
+   Begin
+    CurrLine:=LTrim(CurrLine);
+    RunBasic(False);
+   End;
   Until Terminated;
+  If(InGraph)Then CloseGraph;
   Window(1,1,80,25);
   ClrScr;
  End;
