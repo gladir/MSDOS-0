@@ -7,7 +7,8 @@ Clone de MS-DOS en langage de programmation Pascal (Turbo Pascal ou Free Pascal)
 
 ![image](https://user-images.githubusercontent.com/11842176/178615847-519f70fe-ed5a-44ff-aeb1-eb1a1c55933e.png)
 
-![image](https://user-images.githubusercontent.com/11842176/178855949-f77527a5-caf9-44aa-96a4-54e4a46b25c6.png)
+![image](https://github.com/user-attachments/assets/6391ac0e-afd7-48e0-afea-cd560ba4b231)
+
 
 <h2>Liste des fichiers</h2>
 
