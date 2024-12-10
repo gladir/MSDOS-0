@@ -13,7 +13,7 @@ Uses {$IFDEF FPC}
      {$ENDIF};
 
 Const
- Version='0.70';
+ Version='0.71';
 
  CommandList:Array[0..91]of String[12]=(
   'AND','AUTO','BEEP','BLOAD','BSAVE','CALL','CAT','CHAIN','CHDIR',
@@ -80,6 +80,8 @@ Var
  GosubPos:Byte;
  ForStack:Array[1..10]of ForStackRec;
  ForPos:Byte;
+ AutoLines,IncrAuto:Word;
+ IsAuto:Boolean;
  LineEmpty,InGraph:Boolean;
 
 Function RunBasic(InList:Boolean):Boolean;Forward;
@@ -443,6 +445,18 @@ Begin
   VarList[I]^.Variant.S^:=Value;
   Exit;
  End;
+End;
+
+Procedure ClearVariable;
+Var
+ I:Integer;
+Begin
+ If NumberVariable>0 Then Begin
+  For I:=1 to NumberVariable do Begin
+   FreeMem(VarList[I],SizeOf(VarRec));
+  End;
+ End;
+ NumberVariable:=0;
 End;
 
  { Traitement de la liste }
@@ -1235,6 +1249,20 @@ Begin
 End;
 
  { Traitement des commandes }
+Procedure AutoCommand;Begin
+ SkipSpace;
+ If GetSeparator in['0'..'9']Then Begin
+  AutoLines:=ReadInteger;
+ End;
+ SkipSpace;
+ If GetSeparator=','Then Begin
+  Inc(CurrPos);
+  IncrAuto:=ReadInteger;
+ End;
+ IsAuto:=True;
+ LineEmpty:=True;
+End;
+
 Procedure BeepCommand;Begin
  Sound(1550);
  Delay(182);
@@ -1282,6 +1310,16 @@ Begin
  {$I-} ChDir(GetStringValue);{$I+}
  Error:=IoResult;
  If Error<>0Then WriteLn(GetErrorMessage(Error));
+End;
+
+Procedure ClearCommand;Begin
+ ClearVariable;
+End;
+
+Procedure ClsCommand;Begin
+ If(InGraph)Then ClearDevice
+            Else ClrScr;
+ If(KeyFunction)Then ShowFunctionKey;
 End;
 
 Procedure ColorCommand;
@@ -1567,6 +1605,19 @@ Begin
  End
   Else
  WriteLn('Mot non reconnu');
+End;
+
+Procedure KillCommand;
+Var
+ Error:Word;
+ F:File;
+Begin
+ SkipSpace;
+ {$I-}Assign(F,GetStringValue);
+ Erase(F);
+ {$I+}
+ Error:=IoResult;
+ If Error<>0Then WriteLn(GetErrorMessage(Error));
 End;
 
 Function LineCommand:Boolean;
@@ -2161,6 +2212,28 @@ Begin
  GotoXY(1,Trunc(Y));
 End;
 
+Procedure LPrintCommand;
+Var
+ R:Real;
+Begin
+ SkipSpace;
+ Begin
+  If IsStringValue Then Begin
+   WriteLn(Lst,GetStringValue);
+  End
+   Else
+  Begin
+   If CurrPos>Length(CurrLine)Then WriteLn
+    Else
+   Begin
+    R:=GetNumberValue(1);
+    If Frac(R)=0.0Then WriteLn(Lst,R:0:0)
+                  Else WriteLn(Lst,R);
+   End;
+  End;
+ End;
+End;
+
 Procedure MkDirCommand;
 Var
  Error:Word;
@@ -2172,12 +2245,43 @@ Begin
  If Error<>0Then WriteLn(GetErrorMessage(Error));
 End;
 
+Function NameCommand:Boolean;
+Var
+ F:File;
+ Err:Word;
+ SourceName,TargetName,S:String;
+Begin
+ NameCommand:=False;
+ SourceName:=GetStringValue;
+ SkipSpace;
+ S:='';
+ While CurrPos<=Length(CurrLine) do Begin
+  If Not(CurrLine[CurrPos]in['A'..'Z','a'..'z'])Then Break;
+  S:=S+CurrLine[CurrPos];
+  Inc(CurrPos);
+ End;
+ If StrToUpper(S)<>'AS'Then Begin
+  NameCommand:=False;
+  Exit;
+ End;
+ TargetName:=GetStringValue;
+ {$I-}Assign(F,SourceName);
+ Rename(F,TargetName);
+ {$I+}
+ Err:=IoResult;
+ If Err>0Then WriteLn(GetErrorMessage(Err));
+ NameCommand:=True;
+End;
+
 Procedure NewCommand;
 Var
  I:Integer;
 Begin
  For I:=1 to NumberLine do FreeMem(PA[I],Length(PA[I]^)+1);
  NumberLine:=0;
+ AutoLines:=10;
+ IncrAuto:=10;
+ IsAuto:=False;
 End;
 
 Function NextCommand:Boolean;
@@ -2259,6 +2363,7 @@ Var
  J:Integer;
  Err:Integer;
 Begin
+ ClearVariable;
  If NumberLine>0Then Begin
   CurrLinePtr:=1;
   While(CurrLinePtr<=NumberLine) do Begin
@@ -2402,6 +2507,10 @@ Var
 Begin
  Y:=WhereY;
  S:='';
+ If(IsAuto)Then Begin
+  S:=IntToStr(AutoLines)+' ';
+  Inc(AutoLines,10);
+ End;
  Repeat
   GotoXY(1,Y);
   Write(S);
@@ -2419,6 +2528,11 @@ Begin
     #66:S:=S+FunctionKeyList[8]; { F8 }
     #67:S:=S+FunctionKeyList[9]; { F9 }
     #68:S:=S+FunctionKeyList[10]; { F10 }
+   End;
+   ^C:Begin
+    IsAuto:=False;
+    K:=#13;
+    Break;
    End;
    #8:Begin
     If S<>''Then S:=Copy(S,1,Length(S)-1);
@@ -2454,6 +2568,7 @@ Begin
    Inc(J);
   End;
   If CurrNumberLine<>0Then Begin
+   LineEmpty:=True;
    AddLine(CurrLine);
    ResortList;
    Exit;
@@ -2469,7 +2584,7 @@ Begin
   UnknownCommand:=False;
   Case ExtractCommand of
    0: NoImplementation:=True;{AND}
-   1: NoImplementation:=True;{AUTO}
+   1: AutoCommand;{AUTO}
    2: BeepCommand;{BEEP}
    3: NoImplementation:=True;{BLOAD}
    4: NoImplementation:=True;{BSAVE}
@@ -2478,10 +2593,10 @@ Begin
    7: NoImplementation:=True;{CHAIN}
    8: ChDirCommand;{CHDIR}
    9: CircleCommand;{CIRCLE}
-   10: NoImplementation:=True;{CLEAR}
+   10: ClearCommand;{CLEAR}
    11: NoImplementation:=True;{CLOSE}
    12: NoImplementation:=True;{CLR}
-   13: ClrScr;{CLS}
+   13: ClsCommand;{CLS}
    14: ColorCommand;{COLOR}
    15: NoImplementation:=True;{COM}
    16: NoImplementation:=True;{COMMON}
@@ -2506,18 +2621,18 @@ Begin
    35: IfCommand;{IF}
    36: NoImplementation:=True;{INPUT}
    37: KeyCommand;{KEY}
-   38: NoImplementation:=True;{KILL}
+   38: KillCommand;{KILL}
    39: NoImplementation:=True;{LET}
    40: LineCommand;{LINE}
    41: ListCommand;{LIST}
    42: LListCommand;{LLIST}
    43: LoadCommand;{LOAD}
    44: LocateCommand;{LOCATE}
-   45: NoImplementation:=True;{LPRINT}
+   45: LPrintCommand;{LPRINT}
    46: NoImplementation:=True;{LSET}
    47: NoImplementation:=True;{MERGE}
    48: MkDirCommand;{MKDIR}
-   49: NoImplementation:=True;{NAME}
+   49: If Not(NameCommand)Then Exit;{NAME}
    50: NewCommand;{NEW}
    51: If Not(NextCommand)Then Exit;{NEXT}
    52: NoImplementation:=True;{ON}
@@ -2670,6 +2785,9 @@ BEGIN
   End;
   Terminated:=False;
   LineEmpty:=False;
+  AutoLines:=10;
+  IncrAuto:=10;
+  IsAuto:=False;
   Repeat
    If Not(LineEmpty)Then WriteLn('Ok');
    ReadLine(CurrLine);
