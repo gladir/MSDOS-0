@@ -13,7 +13,7 @@ Uses {$IFDEF FPC}
      {$ENDIF};
 
 Const
- Version='0.71';
+ Version='0.72';
 
  CommandList:Array[0..91]of String[12]=(
   'AND','AUTO','BEEP','BLOAD','BSAVE','CALL','CAT','CHAIN','CHDIR',
@@ -90,6 +90,56 @@ Procedure NewCommand;Forward;
 Function TAN(X:Real):Real;Begin
  If Cos(X)=0.0Then Tan:=0.0
               Else Tan:=SIN(X)/COS(X);
+End;
+
+Function Log(x:Real):Real;
+Var
+ negatif:Boolean;
+ fois,i:Integer;
+ ajout,savx,xp,quotient,dl:Real;
+Begin
+ negatif := False;
+ fois := 1;
+ ajout := 0;
+ If x <= 0.0 Then Begin
+  Log:=0;
+  Exit;
+ End;
+ If x < 1.0 Then Begin
+  negatif := True;
+  x := 1.0 / x;
+ End;
+ While x >= 10.0 do Begin
+  x := x / 10.0;
+  ajout := ajout + 2.302585092994046;
+ End;
+ While x >= 1.1 do Begin
+  x := Sqrt(x);
+  fois := fois * 2;
+ End;
+ x := x - 1;
+ savx := x;
+ i := 2;
+ xp := x * x;
+ quotient := (xp / i);
+ dl := x - quotient;
+ While 1.0E-15 < quotient do Begin
+  i := i + 1;
+  xp := xp * x;
+  dl := dl + (xp / i);
+  i := i + 1;
+  xp := xp * x;
+  quotient := (xp / i);
+  dl := dl - quotient;
+ End;
+ dl := dl * fois;
+ dl := dl + ajout;
+ If(negatif)Then dl := - dl;
+ Log:=dl;
+End;
+
+Function Power(base,p:Real):Real;Begin
+ Power:=Exp(P*Log(Base))
 End;
 
 Function IsNumberWord(S:String):Boolean;
@@ -326,6 +376,7 @@ Var
 Begin
  For I:=1 to NumberVariable do If(S=VarList[I]^.VarName)Then Begin
   VarList[I]^.Variant.I:=Value;
+  VarList[I]^.VarType:=_Integer;
   Exit;
  End;
 End;
@@ -364,6 +415,7 @@ Var
 Begin
  For I:=1 to NumberVariable do If(S=VarList[I]^.VarName)Then Begin
   VarList[I]^.Variant.L:=Value;
+  VarList[I]^.VarType:=_LongInt;
   Exit;
  End;
 End;
@@ -402,6 +454,7 @@ Var
 Begin
  For I:=1 to NumberVariable do If(S=VarList[I]^.VarName)Then Begin
   VarList[I]^.Variant.R:=Value;
+  VarList[I]^.VarType:=_Real;
   Exit;
  End;
 End;
@@ -443,6 +496,7 @@ Var
 Begin
  For I:=1 to NumberVariable do If(S=VarList[I]^.VarName)Then Begin
   VarList[I]^.Variant.S^:=Value;
+  VarList[I]^.VarType:=_String;
   Exit;
  End;
 End;
@@ -1170,13 +1224,13 @@ Begin
    Inc(I);
   End
    Else
-  If Infix[I]in['*','+','-','/']Then Begin
+  If Infix[I]in['*','+','-','/','^']Then Begin
    While(TopOfStack>MinTopOfStack)and(StackPeek <> '(')do Begin
     Top:=StackPeek;
     P_2:=Infix[I];
     AppendOk:=True;
-    If(Top='+')and(P_2='*')Then AppendOk:=False
-    Else If(Top='*')and(P_2='-')Then AppendOk:=True
+    If(Top='+')and(P_2 in['*','^'])Then AppendOk:=False
+    Else If(Top in ['*','^'])and(P_2='-')Then AppendOk:=True
     Else If(Top='+')and(P_2='-')Then AppendOk:=True;
     If(AppendOk)Then PostFix:=PostFix+StackPop
                 Else Break;
@@ -1203,13 +1257,14 @@ Begin
   { Transformation en POSTFIX }
  I:=1;
  Repeat
-  If PostFix[I]in['*','+','-','/']Then Begin
+  If PostFix[I]in['*','+','-','/','^']Then Begin
    P:=ResultStackPop;
    P2:=ResultStackPop;
    Case PostFix[I]of
     '+':_Result:=P2+P;
     '-':_Result:=P2-P;
     '*':_Result:=P2*P;
+    '^':_Result:=Power(P2,P);
     '/':_Result:=P2/P;
     Else _Result:=-1;
    End;
@@ -1246,6 +1301,152 @@ Begin
   Inc(I);
  Until I>Length(Postfix);
  GetNumberValue:=ResultStackPop;
+End;
+
+ { DRAW }
+
+Procedure BasicDraw(S:String);
+Const
+ DrawS:Integer=4;
+ XL:Integer=160;
+ YL:Integer=100;
+Var
+ I:Byte;
+ N:String;
+ Mode:(_None_,_NoTrace_,_UnMove_);
+ a,b:Integer;
+ xc,yc:(NoMove,Add,Sub);
+
+ Function ExtractNm(S:String):Integer;
+ Var
+  N:String;
+  a,b:Integer;
+ Begin
+  N:='';
+  While(I<=Length(S))and(S[I] in ['0'..'9'])do Begin
+   N:=N+S[I];
+   Inc(I);
+  End;
+  If N=''Then a:=1
+ Else Val(N,a,b);
+  ExtractNm:=a;
+ End;
+
+ Function ExtractNmV(S:String):Integer;Begin
+  ExtractNmV:=ExtractNm(S)*(DrawS shr 2)
+ End;
+
+ Procedure Line2(X,Y:Integer);Begin
+  If(Mode<>_NoTrace_)Then Begin
+   Case(xc)of
+    Add:Inc(X,XL);
+    Sub:X:=XL-X;
+   End;
+   Case(yc)of
+    Add:Inc(Y,YL);
+    Sub:Y:=YL-Y;
+   End;
+   If(YL=Y)and(X<XL)Then Begin
+    MoveTo(X,YL);
+    LineTo(XL,Y);
+   End
+    Else
+   Begin
+    MoveTo(XL,YL);
+    LineTo(X,Y);
+   End;
+  End;
+ End;
+
+ Procedure SetPos(X,Y:Integer);Begin
+  Case(xc)of
+   Add:Inc(X,XL);
+   Sub:X:=XL-X;
+  End;
+  Case(yc)of
+   Add:Inc(Y,YL);
+   Sub:Y:=YL-Y;
+  End;
+  If(Mode<>_UnMove_)Then Begin
+   XL:=X;
+   YL:=Y;
+  End;
+  Mode:=_None_;
+  xc:=NoMove;
+  yc:=NoMove;
+ End;
+
+Begin
+ I:=1;Mode:=_None_;
+ While I<=Length(S)do Begin
+  Inc(I);
+  Case S[I-1]of
+   'B':Mode:=_NoTrace_;
+   'C':SetColor(ExtractNm(S));
+   'D':Begin
+    a:=ExtractNmV(S);
+    Line2(XL,YL+a);
+    SetPos(XL,YL+a);
+   End;
+   'E':Begin
+    a:=ExtractNmV(S);
+    Line2(XL+a,YL-a);
+    SetPos(XL+a,YL-a);
+   End;
+   'F':Begin
+    a:=ExtractNmV(S);
+    Line2(XL+a,YL+a);
+    SetPos(XL+a,YL+a);
+   End;
+   'G':Begin
+    a:=ExtractNmV(S);
+    Line2(XL-a,YL+a);
+    SetPos(XL-a,YL+a);
+   End;
+   'H':Begin
+    a:=ExtractNmV(S);
+    Line2(XL-a,YL-a);
+    SetPos(XL-a,YL-a);
+   End;
+   'L':Begin
+    a:=ExtractNmV(S);
+    Line2(XL-a,YL);
+    SetPos(XL-a,YL);
+   End;
+   'M':Begin
+    If S[I]in['+','-']Then Begin
+     If S[I]='+'Then xc:=Add else xc:=Sub;
+     Inc(I);
+    End;
+    a:=ExtractNm(S);
+    If S[I]=','Then Begin
+     Inc(I);
+     If S[I]in['+','-']Then Begin
+      If S[I]='+'Then yc:=Add else yc:=Sub;
+      Inc(I);
+     End;
+     b:=ExtractNm(S);
+    End
+     Else
+    b:=YL;
+    Line2(a,b);
+    SetPos(a,b);
+   End;
+   'N':Mode:=_UnMove_;
+   'R':Begin
+    a:=ExtractNmV(S);
+    Line2(XL+a,YL);
+    SetPos(XL+a,YL)
+   End;
+   'U':Begin
+    a:=ExtractNmV(S);
+    Line2(XL,YL-a);
+    SetPos(XL,YL-a)
+   End;
+' ',';':;{C'est 2 caractSres ne change rien en soit, donc...pas d'arr^t!}
+   Else Exit;
+  End
+ End
 End;
 
  { Traitement des commandes }
@@ -1333,6 +1534,11 @@ Begin
   Background:=GetNumberValue(1);
   TextBackground(Trunc(Background));
  End;
+End;
+
+Procedure DrawCommand;Begin
+ SkipSpace;
+ BasicDRAW(GetStringValue);
 End;
 
 Procedure FilesCommand;
@@ -2605,7 +2811,7 @@ Begin
    19: NoImplementation:=True;{DEF}
    20: NoImplementation:=True;{DELETE}
    21: NoImplementation:=True;{DIM}
-   22: NoImplementation:=True;{DRAW}
+   22: DrawCommand;{DRAW}
    23: NoImplementation:=True;{EDIT}
    24: NoImplementation:=True;{ELSE}
    25: Exit;{END}
@@ -2697,9 +2903,9 @@ Begin
      '#','!':Begin
       R1:=GetNumberValue(1);
       If VariableExist(CurrCommand)Then
-       SetVariableReal(CurrCommand,Trunc(R1))
+       SetVariableReal(CurrCommand,R1)
       Else
-       AddVariableReal(CurrCommand,Trunc(R1));
+       AddVariableReal(CurrCommand,R1);
      End;
      '$':Begin
       Inc(CurrPos);
@@ -2711,10 +2917,19 @@ Begin
      End;
      Else Begin
       R1:=GetNumberValue(1);
-      If VariableExist(CurrCommand)Then
-       SetVariableLongInt(CurrCommand,Trunc(R1))
-      Else
-       AddVariableLongInt(CurrCommand,Trunc(R1));
+      If Frac(R1)<>0.0 Then Begin
+       If VariableExist(CurrCommand)Then
+        SetVariableReal(CurrCommand,R1)
+       Else
+        AddVariableReal(CurrCommand,R1);
+      End
+       Else
+      Begin
+       If VariableExist(CurrCommand)Then
+        SetVariableLongInt(CurrCommand,Trunc(R1))
+       Else
+        AddVariableLongInt(CurrCommand,Trunc(R1));
+      End;
      End;
     End;
    End
