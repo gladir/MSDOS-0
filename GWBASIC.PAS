@@ -13,7 +13,7 @@ Uses {$IFDEF FPC}
      {$ENDIF};
 
 Const
- Version='0.72';
+ Version='0.73';
 
  CommandList:Array[0..91]of String[12]=(
   'AND','AUTO','BEEP','BLOAD','BSAVE','CALL','CAT','CHAIN','CHDIR',
@@ -81,7 +81,7 @@ Var
  ForStack:Array[1..10]of ForStackRec;
  ForPos:Byte;
  AutoLines,IncrAuto:Word;
- IsAuto:Boolean;
+ IsAuto,IsEdit:Boolean;
  LineEmpty,InGraph:Boolean;
 
 Function RunBasic(InList:Boolean):Boolean;Forward;
@@ -1541,6 +1541,21 @@ Procedure DrawCommand;Begin
  BasicDRAW(GetStringValue);
 End;
 
+Procedure EditCommand;
+Var
+ JumpLine:Integer;
+ I,J,Err:Integer;
+Begin
+ JumpLine:=Trunc(GetNumberValue(1));
+ If NumberLine>0Then Begin
+  For I:=1 to NumberLine do If(FirstNumberInStr(PA[I]^)=JumpLine)Then Begin
+   CurrLine:=PA[I]^;
+   IsEdit:=True;
+   Break;
+  End;
+ End;
+End;
+
 Procedure FilesCommand;
 Var
  Info:SearchRec;
@@ -2712,7 +2727,8 @@ Var
  Y:Byte;
 Begin
  Y:=WhereY;
- S:='';
+ If(IsEdit)Then IsEdit:=False
+           Else S:='';
  If(IsAuto)Then Begin
   S:=IntToStr(AutoLines)+' ';
   Inc(AutoLines,10);
@@ -2724,6 +2740,27 @@ Begin
   K:=ReadKey;
   Case K of
    #0:Case ReadKey of
+    #17:S:=S+'WIDTH ';           { Alt+W }
+    #18:S:=S+'ELSE ';            { Alt+E }
+    #19:S:=S+'RUN ';             { Alt+R }
+    #20:S:=S+'THEN ';            { Alt+T }
+    #22:S:=S+'USING ';           { Alt+U }
+    #23:S:=S+'INPUT ';           { Alt+I }
+    #24:S:=S+'OPEN ';            { Alt+C }
+    #25:S:=S+'PRINT ';           { Alt+P }
+    #30:S:=S+'AUTO ';            { Alt+A }
+    #31:S:=S+'SCREEN ';          { Alt+S }
+    #32:S:=S+'DELETE ';          { Alt+D }
+    #33:S:=S+'FOR ';             { Alt+F }
+    #34:S:=S+'GOTO ';            { Alt+G }
+    #35:S:=S+'HEX$ ';            { Alt+H }
+    #37:S:=S+'KEY ';             { Alt+C }
+    #38:S:=S+'LOCATE ';          { Alt+L }
+    #45:S:=S+'XOR ';             { Alt+X }
+    #46:S:=S+'COLOR ';           { Alt+C }
+    #47:S:=S+'VAL ';             { Alt+V }
+    #48,#49:S:=S+'NEXT ';        { Alt+B, Alt+N }
+    #50:S:=S+'MOTOR ';           { Alt+M }
     #59:S:=S+FunctionKeyList[1]; { F1 }
     #60:S:=S+FunctionKeyList[2]; { F2 }
     #61:S:=S+FunctionKeyList[3]; { F3 }
@@ -2758,7 +2795,7 @@ Function RunBasic(InList:Boolean):Boolean;
 Var
  UnknownCommand:Boolean;
  NoImplementation:Boolean;
- J,Err:Integer;
+ J,Err,ThisNumber:Integer;
  R1:Real;
  S1:String;
 Begin
@@ -2774,6 +2811,16 @@ Begin
    Inc(J);
   End;
   If CurrNumberLine<>0Then Begin
+   For J:=1 to NumberLine do Begin
+    ThisNumber:=FirstNumberInStr(PA[J]^);
+    If ThisNumber>0 Then Begin
+     If(ThisNumber=CurrNumberLine)Then Begin
+      PA[J]^:=CurrLine;
+      LineEmpty:=True;
+      Exit;
+     End;
+    End;
+   End;
    LineEmpty:=True;
    AddLine(CurrLine);
    ResortList;
@@ -2812,7 +2859,10 @@ Begin
    20: NoImplementation:=True;{DELETE}
    21: NoImplementation:=True;{DIM}
    22: DrawCommand;{DRAW}
-   23: NoImplementation:=True;{EDIT}
+   23: Begin {EDIT}
+    EditCommand;
+    Exit;
+   End;
    24: NoImplementation:=True;{ELSE}
    25: Exit;{END}
    26: NoImplementation:=True;{ERASE}
@@ -3003,6 +3053,7 @@ BEGIN
   AutoLines:=10;
   IncrAuto:=10;
   IsAuto:=False;
+  IsEdit:=False;
   Repeat
    If Not(LineEmpty)Then WriteLn('Ok');
    ReadLine(CurrLine);
