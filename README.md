@@ -128,6 +128,10 @@ Voici la liste des différents fichiers proposés dans MSDOS-0 :
 			<td>Cette commande permet d'afficher les informations sur la mémoire. Cette commande est un clone de la commande MS-DOS ou PC-DOS.</td>
 		</tr>
 		<tr>
+			<td><b>MIRROR.PAS</b></td>
+			<td>Cette commande permet de sauvegarder ou de restaurer le secteur de démarrage.</td>
+		</tr>
+		<tr>
 			<td><b>MODE.PAS</b></td>
 			<td>Cette commande permet d'effectuer la gestion des paramètres d'un périphérique.</td>
 		</tr>	
