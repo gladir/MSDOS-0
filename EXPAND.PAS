@@ -13,7 +13,7 @@ Uses
  DOS;
 
 Const
- BUFFER_SIZE=16384;
+ BUFFER_SIZE=16384;  { AugmentÃ© pour plus de sÃ©curitÃ© }
  DICT_SIZE=4096;
  MAX_DICT_SIZE=DICT_SIZE-1;
  SZDD_SIGNATURE:Array[0..3]of Char='SZDD';
@@ -23,22 +23,22 @@ Const
  KWAJ_METHOD_LZ77 = 1;
  KWAJ_METHOD_LZ77_RLE = 2;
  KWAJ_METHOD_HUFFMAN = 3;
- KWAJ_METHOD_MSCOMP = $88;
+ KWAJ_METHOD_MSCOMP = $88;  { Ajout de la mÃ©thode 136 }
 
 Type
- TDictBuffer=Array[0..MAX_DICT_SIZE] of Byte;
-
  TDictEntry=Record
   Prefix:Word;
   Suffix:Byte;
  End;
 
+ TDictBuffer = array[0..MAX_DICT_SIZE] of Byte;
+
  TKWAJHeader=Record
   Signature:Array[0..3] of Char;  { 'KWAJ' }
-  Method:Byte;                    { M‚thode de compression }
+  Method:Byte;                    { Mï¿½thode de compression }
   DictionarySize:Byte;            { Taille du dictionaire }
   Flags:Word;                     { Drapeaux de compression }
-  OriginalSize:LongInt;           { Taille des donn‚es d‚compress‚s }
+  OriginalSize:LongInt;           { Taille des donnï¿½es dï¿½compressï¿½s }
  End;
 
  TSZDDHeader=Record
@@ -132,7 +132,7 @@ Begin
    End;
   End;
   If OldCode <> $FFFF Then Begin
-    { Ajout d'une entr‚e dans le dictionnaire }
+    { Ajout d'une entrï¿½e dans le dictionnaire }
    Dictionary[DictCount].prefix:=OldCode;
    Dictionary[DictCount].suffix:=Char;
    Inc(DictCount);
@@ -178,19 +178,19 @@ Begin
    If Control and $80<>0 Then Begin
     Len:=((Control and $7F) shr 4) + 3;
     Offset:=((Control and $0F) shl 8);
-    If InPos>=InSize Then Break;  { V‚rification de s‚curit‚ }
+    If InPos>=InSize Then Break;  { Vï¿½rification de sï¿½curitï¿½ }
      Offset:=Offset+InBuf[InPos];
      Inc(InPos);
-      { Protection contre les d‚bordements }
+      { Protection contre les dï¿½bordements }
      If(Offset>DictPos)or(Offset>MAX_DICT_SIZE)Then Offset:=DictPos;
      For i:=0 to Len-1 do Begin
       If OutPos >= BUFFER_SIZE then Break;  { Protection de tampon de sortie }
-       { S‚curisation de l'accŠs au dictionnaire }
+       { Sï¿½curisation de l'accï¿½s au dictionnaire }
       If(DictPos - Offset + i) >= 0 Then
        OutBuf[OutPos]:=Dictionary[(DictPos - Offset + i) and MAX_DICT_SIZE]
       Else
        OutBuf[OutPos]:=0;
-       { Protection ‚criture dictionnaire }
+       { Protection ï¿½criture dictionnaire }
       If DictPos<=MAX_DICT_SIZE Then Dictionary[DictPos]:=OutBuf[OutPos];
       Inc(DictPos);
       DictPos := DictPos and MAX_DICT_SIZE;
@@ -236,7 +236,7 @@ Begin
 end;
 
 Procedure DecompressHuffman(Var Source,Dest:File);Begin
- WriteLn('Erreur: Compression Huffman n''est pas impl‚ment‚');
+ WriteLn('Erreur: Compression Huffman n''est pas implï¿½mentï¿½');
  Halt(9);
 End;
 
@@ -251,15 +251,15 @@ Procedure DecompressKWAJ(Var Source,Dest:File);Begin
    DecompressLZ77(Source, Dest);
   KWAJ_METHOD_HUFFMAN:
    DecompressHuffman(Source, Dest);
-  Else WriteLn('Erreur: M‚thode de compression non-support‚: ', KWAJHeader.Method);
+  Else WriteLn('Erreur: Mï¿½thode de compression non-supportï¿½: ', KWAJHeader.Method);
  End;
 End;
 
 Procedure DecompressSZDD(Var Source,Dest:File);
 Var
  InBuf,OutBuf:Array[0..BUFFER_SIZE-1] of Byte;
- InPos,OutPos:Word;
- InSize,OutSize:Word;
+ InPos,OutPos:LongInt;
+ InSize:Word;
  Control,Len,Offset:Byte;
  i:Integer;
 Begin
@@ -302,12 +302,12 @@ Var
 BEGIN
  If(ParamStr(1)='/?')or(ParamStr(1)='--help')or(ParamStr(1)='-h')or
    (ParamStr(1)='/h')or(ParamStr(1)='/H')Then Begin
-  WriteLn('EXPAND : Cette commande permet d''effectuer la d‚compression d''un fichier.');
+  WriteLn('EXPAND : Cette commande permet d''effectuer la dï¿½compression d''un fichier.');
   WriteLn;
   WriteLn('Syntaxe : EXPAND source [destination]');
   WriteLn;
-  WriteLn(' source      Indique le fichier compress‚');
-  WriteLn(' destination Indique le fichier … cr‚er');
+  WriteLn(' source      Indique le fichier compressï¿½');
+  WriteLn(' destination Indique le fichier ï¿½ crï¿½er');
   Halt;
  End;
  DecompressMethod:=methodNone;
@@ -323,14 +323,14 @@ BEGIN
  If Not(IsCompressedMS(SourceFile)or
         IsCompressedSZDD(SourceFile)or
         IsCompressedKWAJ(SourceFile))Then Begin
-  WriteLn('Erreur: Fichier source n''est pas compress‚.');
+  WriteLn('Erreur: Fichier source n''est pas compressï¿½.');
   Close(SourceFile);
   Halt(4);
  End;
  {$I-}Assign(DestFile, DestName);
  Rewrite(DestFile,1);{$I+}
  If IOResult<>0 Then Begin
-  WriteLn('Erreur: Impossible de cr‚er le fichier de destination');
+  WriteLn('Erreur: Impossible de crï¿½er le fichier de destination');
   Close(SourceFile);
   Halt(2);
  End;
@@ -339,11 +339,11 @@ BEGIN
   methodDict:ExpandFile(SourceFile,DestFile);
   methodSZDD:DecompressSZDD(SourceFile,DestFile);
   Else Begin
-   WriteLn('M‚thode de compression non reconnu');
+   WriteLn('Mï¿½thode de compression non reconnu');
    Halt(3);
   End;
  End;
  Close(SourceFile);
  Close(DestFile);
- WriteLn('Expension du fichier r‚ussis');
+ WriteLn('Expension du fichier rï¿½ussis');
 END.
