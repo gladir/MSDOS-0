@@ -69,7 +69,7 @@ Begin
  Regs.ES:=Seg(Buffer);
  Regs.BX:=Ofs(Buffer);
  Intr($13,Regs);
- WriteSector:= (Regs.Flags and 1) = 0;
+ WriteSector:=(Regs.Flags and 1) = 0;
 End;
 
 Function ReadBootSector(Drive:Byte):Boolean;Begin
@@ -101,7 +101,7 @@ Begin
     If(Mask='*.*')or(Mask=Entry.Name)Then Begin
      Sector:=i;
      Offset:=j*SizeOf(TDirEntry);
-     FindDeletedFile := True;
+     FindDeletedFile:=True;
      Exit;
     End;
    End;
@@ -112,14 +112,21 @@ End;
 Function RestoreFile(Var Entry:TDirEntry;Sector,Offset:Word):Boolean;
 Var
  DirSector:TSector;
+ FirstChar:Char;
 Begin
  RestoreFile:=False;
+
+ Write('Remplace la premier lettre ''',Chr(DELETED_MARKER),
+        ''' dans ''',Entry.Name,''' par quel lettre ? ');
+ ReadLn(FirstChar);
+ if FirstChar = #13 then Exit;
+
   { Lire le secteur contenant l'entrÇe }
  If Not ReadSector(0,ReservedSectors+(NumberOfFATs*SectorsPerFAT)+Sector,DirSector)Then
   Exit;
 
   { Restaurer le premier caractäre du nom }
- If Entry.Name[0]=Chr(DELETED_MARKER)Then Entry.Name[0]:='A';
+ If Entry.Name[0]=Chr(DELETED_MARKER)Then Entry.Name[0]:=FirstChar;
 
   { êcrire l'entrÇe mise Ö jour }
  Move(Entry, DirSector[Offset], SizeOf(TDirEntry));
