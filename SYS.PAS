@@ -8,12 +8,12 @@ Program SYS;
 
 {$A-}
 
-Uses DOS;
+Uses DOS,Strings;
 
 Const
- SECTOR_SIZE = 512;
- MAX_PATH = 64;
- SYSTEM_FILES: array[1..3] of string = ('IO.SYS', 'MSDOS.SYS', 'COMMAND.COM');
+ SECTOR_SIZE=512;
+ MAX_PATH=64;
+ SYSTEM_FILES:Array[1..3] of string = ('IO.SYS', 'MSDOS.SYS', 'COMMAND.COM');
 
 Type
  TSector=Array[0..SECTOR_SIZE-1] of Byte;
@@ -36,11 +36,25 @@ Type
   TotalSectorsBig:LongInt;
  End;
 
-var
-  SourceDrive, DestDrive: Char;
-  BootSector: TBootSector;
-  FATBuffer: array[0..32767] of Byte;
-  ErrorCode: Integer;
+ TDirEntry=Record
+  Name:Array[0..7] of Char;
+  Ext:Array[0..2] of Char;
+  Attr:Byte;
+  Reserved:Array[0..9] of Byte;
+  Time:Word;
+  Date:Word;
+  StartCluster:Word;
+  Size:LongInt;
+ End;
+
+Var
+ SourceDrive,DestDrive:Char;
+ BootSector:TBootSector;
+ FATBuffer:Array[0..32767] of Byte;
+ ErrorCode:Integer;
+ i:Integer;
+ Success:Boolean;
+ CurrParam:String;
 
 Function ReadSector(Drive:Byte;Sector:LongInt;Var Buffer;Count:Word):Boolean;
 Var
@@ -62,7 +76,7 @@ Function WriteSector(Drive:Byte;Sector:LongInt;Var Buffer;Count:Word):Boolean;
 Var
  Regs:Registers;
 Begin
- Regs.AH:=$03;  { êcriture de secteurs }
+ Regs.AH:=$03;  { ÔøΩcriture de secteurs }
  Regs.AL:=Count;
  Regs.CH:=(Sector shr 8) and $FF;
  Regs.CL:=(Sector and $3F) or ((Sector shr 2) and $C0);
@@ -74,29 +88,80 @@ Begin
  WriteSector:=(Regs.Flags and 1) = 0;
 End;
 
+Function TrimRight(Const S:String):String;
+Var
+ i:Integer;
+Begin
+ i:=Length(S);
+ While(i > 0)and(S[i] = ' ')do Dec(i);
+ TrimRight:=Copy(S, 1, i);
+End;
+
+Function GetFileCluster(Drive:Char;Const FileName:String):Word;
+Var
+ DirSector:TSector;
+ DirEntry:Array[0..31] of Byte;
+ i:Integer;
+Begin
+ GetFileCluster:=0;
+  { Lire le rÇpertoire racine }
+ If Not ReadSector(Ord(Drive)-Ord('A'), 19, DirSector, 1)Then Exit;
+  { Chercher le fichier }
+ For i:=0 to 15 do Begin
+  Move(DirSector[i * 32], DirEntry, 32);
+  If(DirEntry[0]<>0)and(DirEntry[0] <> $E5)and
+    (Copy(FileName,1,8)=TrimRight(StrPas(@DirEntry[0])))Then Begin
+   GetFileCluster := DirEntry[26] + (DirEntry[27] shl 8);
+   Exit;
+  End;
+ End;
+End;
+
+Function GetFileInfo(Drive:Char;Const FileName:String;Var Entry:TDirEntry):Boolean;
+Var
+ DirSector:TSector;
+ i:Integer;
+Begin
+ GetFileInfo:=False;
+ If Not ReadSector(Ord(Drive)-Ord('A'),19,DirSector,1)Then Exit;
+ For i:=0 to (SECTOR_SIZE div SizeOf(TDirEntry))-1 do Begin
+  Move(DirSector[i * SizeOf(TDirEntry)],Entry,SizeOf(TDirEntry));
+  If(Entry.Name[0]<>#0)and(Entry.Name[0]<>Chr($E5))and
+    (Copy(FileName,1,8)=TrimRight(StrPas(@Entry.Name)))Then Begin
+   GetFileInfo := True;
+   Exit;
+  End;
+ End;
+End;
+
 Function CopySystemFile(Const FileName:String;SourceDrv,DestDrv:Char):Boolean;
 Var
- SourceFile,DestFile:File;
- Buffer:Array[0..8191] of Byte;
- BytesRead:Word;
+ Entry:TDirEntry;
+ SourceSector,DestSector:LongInt;
+ Buffer:TSector;
+ SectorsToRead:LongInt;
+ CurrentSector:LongInt;
 Begin
- CopySystemFile:= False;
- {$I-}Assign(SourceFile, SourceDrv + ':' + FileName);
- Reset(SourceFile, 1); {$I+}
- If IOResult<>0 Then Exit;
- {$I-}Assign(DestFile, DestDrv + ':' + FileName);
- Rewrite(DestFile, 1);{$I+}
- If IOResult<>0 Then Begin
-  Close(SourceFile);
-  Exit;
+ CopySystemFile:=False;
+  { Obtenir les informations du fichier source }
+ If Not GetFileInfo(SourceDrv,FileName,Entry)Then Exit;
+
+  { Calculer le nombre de secteurs √† copier }
+ SectorsToRead:=(Entry.Size+SECTOR_SIZE-1) div SECTOR_SIZE;
+
+  { Calculer les secteurs de d√©part }
+ SourceSector:=33+(Entry.StartCluster-2);
+ DestSector:=33; { Pour IO.SYS et MSDOS.SYS }
+
+  { Pour COMMAND.COM, on √©crit ailleurs }
+ If FileName='COMMAND.COM'Then DestSector:=50;
+
+  { Copier les secteurs }
+ For CurrentSector:=0 to SectorsToRead-1 do Begin
+  If Not ReadSector(Ord(SourceDrv)-Ord('A'),SourceSector+CurrentSector,Buffer,1)Then Exit;
+  If Not WriteSector(Ord(DestDrv)-Ord('A'),DestSector+CurrentSector,Buffer,1)Then Exit;
  End;
- Repeat
-  BlockRead(SourceFile, Buffer, SizeOf(Buffer),BytesRead);
-  If BytesRead>0 Then BlockWrite(DestFile, Buffer,BytesRead);
- Until BytesRead = 0;
- Close(SourceFile);
- Close(DestFile);
- CopySystemFile:=True;
+ CopySystemFile := True;
 End;
 
 Function ReserveFATSpace(Drive:Char):Boolean;
@@ -105,21 +170,13 @@ Var
  i:Integer;
 Begin
  ReserveFATSpace:=False;
-
   { Lire le premier secteur de la FAT }
- If Not ReadSector(Ord(Drive)-Ord('A'),1,Sector,1) then Exit;
-
+ If Not ReadSector(Ord(Drive)-Ord('A'),1,Sector,1)Then Exit;
   { RÇserver les premiers unitÇs d'allocations }
- For i:=2 to 16 do Sector[i] := $FF;
-
+ For i:=2 to 16 do Sector[i]:=$FF;
   { êcrire la FAT mise Ö jour }
  ReserveFATSpace:=WriteSector(Ord(Drive)-Ord('A'),1,Sector,1);
 End;
-
-Var
- i:Integer;
- Success:Boolean;
- CurrParam:String;
 
 BEGIN
  If(ParamStr(1)='/?')or(ParamStr(1)='--help')or(ParamStr(1)='-h')or
@@ -129,15 +186,17 @@ BEGIN
   WriteLn('Syntaxe : SYS [source:] destination:');
   Halt;
  End;
-  { DÇterminer les lecteurs source et destination }
+  { DÔøΩterminer les lecteurs source et destination }
  If ParamCount=1 Then Begin
   SourceDrive:='C';
-  DestDrive:=ParamStr(1)[1];
+  CurrParam:=ParamStr(1);
+  DestDrive:=CurrParam[1];
  End
   Else
  Begin
   CurrParam:=ParamStr(1);
   SourceDrive:=CurrParam[1];
+  CurrParam:=ParamStr(2);
   DestDrive:=CurrParam[1];
  End;
   { RÇserver l'espace dans la FAT }
@@ -146,7 +205,7 @@ BEGIN
   Halt(1);
  End;
 
-  { Copier les fichiers systäme }
+  { Copier les fichiers systÔøΩme }
  Success:=True;
  For i:=1 to 3 do Begin
   Write('Copiage de ', SYSTEM_FILES[i], '... ');
