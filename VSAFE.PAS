@@ -10,6 +10,8 @@ Uses DOS;
 
 Const
  PROGRAM_ID=$4456;  { 'VD' pour le pilote VSAFE }
+ MAX_SIGNATURES=32;
+ SIG_LENGTH=16;
 
 Type
  TOptions=Record
@@ -25,6 +27,15 @@ Type
 
  TMemoryType=(mtConventional,mtEMS,mtXMS);
 
+ TVirusSignature=Record
+  Name:String[32];
+  Signature:Array[1..SIG_LENGTH] of Byte;
+  Offset:Word;
+ End;
+
+ TByteArray=Array[0..65520] of Byte;
+ PByteArray=^TByteArray;
+
 Var
  Options:TOptions;
  OldInt13h,OldInt21h:Pointer;
@@ -34,6 +45,8 @@ Var
  NetworkEnabled:Boolean;
  i:Integer;
  Param:String;
+ VirusDB:Array[1..MAX_SIGNATURES] of TVirusSignature;
+ SignatureCount:Integer;
 
 Function StrToUpper(S:String):String;
 Var
@@ -49,7 +62,7 @@ Function InstallEMS:Boolean;
 Var
  Regs:Registers;
 Begin
- Regs.AH:=$41;  { EMS - Demande l'‚tat }
+ Regs.AH:=$41;  { EMS - Demande l'ï¿½tat }
  Intr($67,Regs);
  InstallEMS:=(Regs.AH=0);
 End;
@@ -67,7 +80,7 @@ Procedure Int13Handler(Flags,CS,IP,AX,BX,CX,DX,SI,DI,DS,ES,BP:Word);Interrupt;Be
  If(Options.FormatWarning)Then Begin
    { Vï¿½rifier les tentatives de formatage }
   If (Hi(AX)=5)Then Begin { Formatage de piste }
-   WriteLn(#7'Attention: Tentative de formatage d‚tect‚!');
+   WriteLn(#7'Attention: Tentative de formatage dï¿½tectï¿½!');
    If Not(NetworkEnabled)Then Begin
     Flags:=Flags or $0001;  { Fixe le drapeau de retenue }
     Exit;
@@ -80,13 +93,17 @@ Procedure Int13Handler(Flags,CS,IP,AX,BX,CX,DX,SI,DI,DS,ES,BP:Word);Interrupt;Be
  inline($FF/$1E/     { CALL DWORD PTR } OldInt13h);
 End;
 
-Procedure Int21Handler(Flags,CS,IP,AX,BX,CX,DX,SI,DI,DS,ES,BP:Word);Interrupt;Begin
+Procedure Int21Handler(Flags,CS,IP,AX,BX,CX,DX,SI,DI,DS,ES,BP:Word);Interrupt;
+var
+  Buffer: array[1..512] of Byte;
+  VirusName: string;
+Begin
  Case Hi(AX) of
   $31:If Options.TSRWarning Then Begin { TSR }
    WriteLn(#7'Warning: Program attempting to go resident!');
   End;
   $3D:If Options.CheckPrograms and((Lo(AX) and 3) <> 0)Then Begin  { Ouverture de fichier }
-   { V‚rifier si c'est un fichier ex‚cutable }
+   { Vï¿½rifier si c'est un fichier exï¿½cutable }
   End;
  End;
   { Appeler le gestionnaire original }
@@ -101,12 +118,12 @@ Procedure InstallVSafe;Begin
   { Installer nos gestionnaires }
  SetIntVec($13, @Int13Handler);
  SetIntVec($21, @Int21Handler);
-  { Installer en m‚moire ‚tendue si possible }
+  { Installer en mï¿½moire ï¿½tendue si possible }
  If Not(UseEMS)and Not(UseXMS)Then Begin
   If(InstallXMS)Then UseXMS:=True Else
   If(InstallEMS)Then UseEMS := True;
  End;
-  { Devenir r‚sident }
+  { Devenir rï¿½sident }
  Keep(0);
 End;
 
@@ -115,9 +132,9 @@ Var
  Regs:Registers;
 Begin
  Regs.AX:=$4456;  { Notre identifiant VSAFE }
- Regs.BX:=$0000;  { Fonction de v‚rification }
+ Regs.BX:=$0000;  { Fonction de vï¿½rification }
  Intr($2F,Regs);   { Multiplexeur DOS }
- IsVSafeLoaded:=(Regs.BX=$4456);  { Si BX contient notre ID, VSAFE est charg‚ }
+ IsVSafeLoaded:=(Regs.BX=$4456);  { Si BX contient notre ID, VSAFE est chargï¿½ }
 End;
 
 Function UnloadVSafe:Boolean;
@@ -127,13 +144,54 @@ Begin
  UnloadVSafe:=False;
  If IsVSafeLoaded Then Begin
   Regs.AX := $4456;  { Notre identifiant VSAFE }
-  Regs.BX := $FFFF;  { Fonction de d‚chargement }
+  Regs.BX := $FFFF;  { Fonction de dï¿½chargement }
   Intr($2F, Regs);
   UnloadVSafe := True;
-  WriteLn('VSAFE d‚charger de la m‚moire');
+  WriteLn('VSAFE dï¿½charger de la mï¿½moire');
  End
   Else
- WriteLn('VSAFE n''est pas charg‚');
+ WriteLn('VSAFE n''est pas chargï¿½');
+End;
+
+Procedure InitVirusDB;Begin
+ SignatureCount:=3;  { 3 signatures de virus }
+ With VirusDB[1] do Begin  { Jerusalem }
+  Name:='Jerusalem';
+  Signature[1]:=$B8; Signature[2]:=$21; Signature[3]:=$35;
+  Offset:=0;
+ End;
+ With VirusDB[2]do Begin  { Stoned }
+  Name:='Stoned';
+  Signature[1]:=$B4; Signature[2]:=$02; Signature[3]:=$B0;
+  Offset:=32;
+ End;
+ With VirusDB[3] do Begin  { Brain }
+  Name:='Brain';
+  Signature[1]:=$FA; Signature[2]:=$B8; Signature[3]:=$C2;
+  Offset := 0;
+ End;
+End;
+
+Function CheckVirusSignature(Var Buffer;Size:Word):String;
+Var
+ i,j:Integer;
+ Match:Boolean;
+ BufPtr:PByteArray;
+Begin
+ CheckVirusSignature:='';
+ BufPtr:=@Buffer;
+ For i:=1 to SignatureCount do With VirusDB[i] do Begin
+  If Size<(Offset + SIG_LENGTH)Then Continue;
+  Match:=True;
+  For j:=1 to SIG_LENGTH do If BufPtr^[Offset+j-1]<>Signature[j]Then Begin
+   Match := False;
+   Break;
+  End;
+  If Match Then Begin
+   CheckVirusSignature:=Name;
+   Exit;
+  End;
+ End;
 End;
 
 BEGIN
@@ -154,16 +212,16 @@ BEGIN
   Halt;
  End;
 
-  { V‚rifier si VSAFE est d‚j… charg‚ }
+  { Vï¿½rifier si VSAFE est dï¿½jï¿½ chargï¿½ }
  If IsVSafeLoaded Then Begin
-  WriteLn('VSAFE est d‚ja charg‚');
+  WriteLn('VSAFE est dï¿½ja chargï¿½');
   For i:=1 to ParamCount do Begin
    If StrToUpper(ParamStr(i))='/U'Then Begin
     UnloadVSafe;
     Exit;
    End;
   End;
-  Exit;  { Si pas de /U, quitter car d‚j… charg‚ }
+  Exit;  { Si pas de /U, quitter car dï¿½jï¿½ chargï¿½ }
  End;
 
   { Initialiser les options }
@@ -172,7 +230,7 @@ BEGIN
  UseXMS:=True;
  ChecksumEnabled:=True;
  NetworkEnabled:=False;
-  { Analyser les paramŠtres }
+  { Analyser les paramï¿½tres }
  For i:=1 to ParamCount do Begin
    Param := StrToUpper(ParamStr(i));
    If Param[1]='/'Then Case Param[2] of
@@ -214,4 +272,5 @@ BEGIN
  End;
   { Installer VSafe }
  If Not(IsVSafeLoaded)Then InstallVSafe;
+ InitVirusDB;  { Initialiser la base de donnÃ©es de virus }
 END.
