@@ -6,12 +6,17 @@
 
 Program VSAFE;
 
-Uses DOS;
+Uses Crt,DOS;
 
 Const
  PROGRAM_ID=$4456;  { 'VD' pour le pilote VSAFE }
  MAX_SIGNATURES=32;
  SIG_LENGTH=16;
+  SCREEN_WIDTH = 80;
+  SCREEN_HEIGHT = 25;
+  POPUP_WIDTH = 60;
+  POPUP_HEIGHT = 15;
+  VIDEO_SEG = $B800;
 
 Type
  TOptions=Record
@@ -47,6 +52,9 @@ Var
  Param:String;
  VirusDB:Array[1..MAX_SIGNATURES] of TVirusSignature;
  SignatureCount:Integer;
+ ScreenX,ScreenY:Byte;
+
+Procedure ShowWarning(Const Msg:String);Forward;
 
 Function StrToUpper(S:String):String;
 Var
@@ -56,6 +64,12 @@ Begin
   If S[I] in['a'..'z']Then S[I]:=Chr(Ord(S[I])-32);
  End;
  StrToUpper:=S;
+End;
+
+Procedure PCopy(Source,Target:Byte);Begin
+ {$IFNDEF FPC}
+  Move(Mem[SegB800:Source*(MemW[$0040:$4A]*25*2)],Mem[SegB800:Target*(MemW[$0040:$4A]*25*2)],MemW[$0040:$4A]*25*2)
+ {$ENDIF}
 End;
 
 Function InstallEMS:Boolean;
@@ -80,27 +94,26 @@ Procedure Int13Handler(Flags,CS,IP,AX,BX,CX,DX,SI,DI,DS,ES,BP:Word);Interrupt;Be
  If(Options.FormatWarning)Then Begin
    { Vï¿½rifier les tentatives de formatage }
   If (Hi(AX)=5)Then Begin { Formatage de piste }
-   WriteLn(#7'Attention: Tentative de formatage dï¿½tectï¿½!');
+   ShowWarning('Tentative de formatage d‚tect‚ !');
    If Not(NetworkEnabled)Then Begin
     Flags:=Flags or $0001;  { Fixe le drapeau de retenue }
     Exit;
    End;
   End;
  End;
-
   { Appeler le gestionnaire original }
  inline($9C);         { PUSHF }
  inline($FF/$1E/     { CALL DWORD PTR } OldInt13h);
 End;
 
 Procedure Int21Handler(Flags,CS,IP,AX,BX,CX,DX,SI,DI,DS,ES,BP:Word);Interrupt;
-var
-  Buffer: array[1..512] of Byte;
-  VirusName: string;
+Var
+ Buffer: array[1..512] of Byte;
+ VirusName: string;
 Begin
  Case Hi(AX) of
   $31:If Options.TSRWarning Then Begin { TSR }
-   WriteLn(#7'Warning: Program attempting to go resident!');
+   WriteLn(#7'Attention: Le programmme tente de devenir r‚sident !');
   End;
   $3D:If Options.CheckPrograms and((Lo(AX) and 3) <> 0)Then Begin  { Ouverture de fichier }
    { Vï¿½rifier si c'est un fichier exï¿½cutable }
@@ -154,20 +167,23 @@ Begin
 End;
 
 Procedure InitVirusDB;Begin
- SignatureCount:=3;  { 3 signatures de virus }
- With VirusDB[1] do Begin  { Jerusalem }
+ SignatureCount := 3;     { 3 signatures }
+ With VirusDB[1]do Begin  { Jerusalem }
   Name:='Jerusalem';
-  Signature[1]:=$B8; Signature[2]:=$21; Signature[3]:=$35;
-  Offset:=0;
+  Signature[1] := $B8; Signature[2] := $21; Signature[3] := $35;
+  Signature[4] := $CD; Signature[5] := $21;
+  Offset := 0;
  End;
- With VirusDB[2]do Begin  { Stoned }
+ With VirusDB[2] do Begin  { Stoned }
   Name:='Stoned';
-  Signature[1]:=$B4; Signature[2]:=$02; Signature[3]:=$B0;
-  Offset:=32;
+  Signature[1] := $B4; Signature[2] := $02; Signature[3] := $B0;
+  Signature[4] := $03; Signature[5] := $CD;
+  Offset := 32;
  End;
  With VirusDB[3] do Begin  { Brain }
   Name:='Brain';
-  Signature[1]:=$FA; Signature[2]:=$B8; Signature[3]:=$C2;
+  Signature[1] := $FA; Signature[2] := $B8; Signature[3] := $C2;
+  Signature[4] := $34; Signature[5] := $B1;
   Offset := 0;
  End;
 End;
@@ -192,6 +208,83 @@ Begin
    Exit;
   End;
  End;
+End;
+
+Procedure SaveCursor;
+Var
+ Regs:Registers;
+Begin
+ Regs.AH:=3;
+ Regs.BH:=0;
+ Intr($10,Regs);
+ ScreenX:=Regs.DL;
+ ScreenY:=Regs.DH;
+End;
+
+Procedure RestoreCursor;
+Var
+ Regs:Registers;
+Begin
+ Regs.AH:=2;
+ Regs.BH:=0;
+ Regs.DL:=ScreenX;
+ Regs.DH:=ScreenY;
+ Intr($10,Regs);
+End;
+
+Procedure SaveScreenArea;Begin
+ PCopy(0,1);
+End;
+
+Procedure RestoreScreenArea;Begin
+ PCopy(1,0);
+End;
+
+Function StringOfChar(Ch:Char;Count:Integer):String;
+Var
+ i:Integer;
+ R:String;
+Begin
+ R[0]:=Chr(Count);
+ For i:=1 to Count do R[i]:=Ch;
+ StringOfChar:=R;
+End;
+
+Procedure ShowPopup(Const Title:String;Const Message:String);
+Var
+ i,StartX,StartY:Integer;
+ Attr:Byte;
+Begin
+ SaveCursor;
+ SaveScreenArea;
+ StartX:=(SCREEN_WIDTH-POPUP_WIDTH) div 2;
+ StartY:=(SCREEN_HEIGHT-POPUP_HEIGHT) div 2;
+ Attr:=$70;  { Blanc sur noir }
+  { Dessiner le cadre avec des caractÃ¨res simples }
+ For i:=StartY to StartY + POPUP_HEIGHT do Begin
+  GotoXY(StartX,i);
+  TextAttr:=Attr;
+  If i=StartY Then
+   Write('+', StringOfChar(#196, POPUP_WIDTH-2), '+')
+  Else If i = StartY + POPUP_HEIGHT then
+   Write('+', StringOfChar(#196, POPUP_WIDTH-2), '+')
+  Else
+   Write('|', StringOfChar(' ', POPUP_WIDTH-2), '|');
+ End;
+  { Afficher le titre }
+ GotoXY(StartX + (POPUP_WIDTH - Length(Title)) div 2, StartY);
+ Write(Title);
+  { Afficher le message }
+ GotoXY(StartX+2,StartY+2);
+ Write(Message);
+  { Attendre une touche }
+ ReadKey;
+ RestoreScreenArea;
+ RestoreCursor;
+End;
+
+Procedure ShowWarning(Const Msg:String);Begin
+ ShowPopup('Attention VSAFE ', Msg);
 End;
 
 BEGIN
