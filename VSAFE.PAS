@@ -54,6 +54,7 @@ Var
  SignatureCount:Integer;
  ScreenX,ScreenY:Byte;
 
+Procedure ShowPopup(Const Title:String;Const Message:String);Forward;
 Procedure ShowWarning(Const Msg:String);Forward;
 
 Function StrToUpper(S:String):String;
@@ -94,7 +95,7 @@ Procedure Int13Handler(Flags,CS,IP,AX,BX,CX,DX,SI,DI,DS,ES,BP:Word);Interrupt;Be
  If(Options.FormatWarning)Then Begin
    { V�rifier les tentatives de formatage }
   If (Hi(AX)=5)Then Begin { Formatage de piste }
-   ShowWarning('Tentative de formatage d�tect� !');
+   ShowWarning('Tentative de formatage d�tect� !');
    If Not(NetworkEnabled)Then Begin
     Flags:=Flags or $0001;  { Fixe le drapeau de retenue }
     Exit;
@@ -102,21 +103,53 @@ Procedure Int13Handler(Flags,CS,IP,AX,BX,CX,DX,SI,DI,DS,ES,BP:Word);Interrupt;Be
   End;
  End;
   { Appeler le gestionnaire original }
- inline($9C);         { PUSHF }
+ inline($9C);        { PUSHF }
  inline($FF/$1E/     { CALL DWORD PTR } OldInt13h);
+End;
+
+Function CheckExecutable(DS,SI:Word):Boolean;
+Var
+ FileName:String;
+ i:Integer;
+ Ext:String[3];
+Begin
+ CheckExecutable:=False;
+  { Obtenir le nom du fichier }
+ FileName:='';
+ i:=0;
+ While(Char(Mem[DS:SI+i])<>#0)and(i<64)do Begin
+  FileName:=FileName+Char(Mem[DS:SI+i]);
+  Inc(i);
+ End;
+  { Extraire l'extension }
+ Ext:='';
+ i:=Length(FileName);
+ While(i>0)and(FileName[i]<>'.') do Dec(i);
+ If i>0 Then Ext:=StrToUpper(Copy(FileName,i+1,3));
+  { Vérifier si c'est un exécutable }
+ If(Ext='EXE')or(Ext='COM')or(Ext='SYS')Then Begin
+  If(Options.ExeWarning)Then
+   ShowWarning('Attention: Accès � un fichier ex�cutable d�tect� !'#13#10 + FileName);
+  { Vérifier les signatures de virus si activé }
+  If(Options.CheckPrograms)Then
+   CheckExecutable:= True;  { Indique qu'il faut vérifier les signatures }
+ End;
 End;
 
 Procedure Int21Handler(Flags,CS,IP,AX,BX,CX,DX,SI,DI,DS,ES,BP:Word);Interrupt;
 Var
- Buffer: array[1..512] of Byte;
- VirusName: string;
+ CheckVirus:Boolean;
 Begin
  Case Hi(AX) of
   $31:If Options.TSRWarning Then Begin { TSR }
-   WriteLn(#7'Attention: Le programmme tente de devenir r�sident !');
+   ShowPopup('Attention VSAFE', 'Le programme essai de devenir r�sident !'#13#10+
+             'Presse une touche pour continue...');
   End;
-  $3D:If Options.CheckPrograms and((Lo(AX) and 3) <> 0)Then Begin  { Ouverture de fichier }
-   { V�rifier si c'est un fichier ex�cutable }
+  $3D,$3F,$40:Begin  { Ouverture, Lecture, Ecriture }
+   CheckVirus:=CheckExecutable(DS,SI);
+   If(CheckVirus)Then Begin
+    { Code de vérification des signatures }
+   End;
   End;
  End;
   { Appeler le gestionnaire original }
