@@ -6,11 +6,14 @@
 
 Program EXPAND;
 
+{$A-}
+
 Uses
  DOS;
 
-const
+Const
  BUFFER_SIZE=8192;
+ SZDD_SIGNATURE:Array[0..3]of Char='SZDD';
  DICT_SIZE=4096;
 
 Type
@@ -19,18 +22,40 @@ Type
   suffix:Byte;
  End;
 
+ TSZDDHeader=Record
+  Signature:Array[0..3] of Char;
+  Algorithm:Byte;
+  DollarChar:Char;
+ End;
+
 Var
+ DecompressMethod:(methodNone,methodDict,methodSZDD);
  SourceFile,DestFile:File;
  Buffer:Array[0..BUFFER_SIZE-1] of Byte;
+ HeaderSZDD:TSZDDHeader;
  Dictionary:Array[0..DICT_SIZE-1] of TDictEntry;
  DictCount:Word;
 
-Function IsCompressed(Var f:File):Boolean;
+Function IsCompressedMS(Var f:File):Boolean;
 Var
  Signature:Word;
 Begin
+ IsCompressedMS:=False;
  BlockRead(f,Signature,2);
- IsCompressed:=(Signature=$4D53); { Signature 'MS' }
+ If(Signature=$4D53)Then Begin { Signature 'MS' }
+  IsCompressedMS:=True;
+  DecompressMethod:=methodDict;
+ End;
+ Seek(f,0);
+End;
+
+Function IsCompressedSZDD(Var f:File):Boolean;Begin
+ IsCompressedSZDD:=False;
+ BlockRead(f,HeaderSZDD,SizeOf(HeaderSZDD));
+ If(HeaderSZDD.Signature='SZDD')Then Begin
+  IsCompressedSZDD:=True;
+  DecompressMethod:=methodSZDD;
+ End;
  Seek(f,0);
 End;
 
@@ -71,7 +96,7 @@ Begin
    End;
   End;
   If OldCode <> $FFFF Then Begin
-    { Ajout d'une entr‚e dans le dictionnaire }
+    { Ajout d'une entr,e dans le dictionnaire }
    Dictionary[DictCount].prefix:=OldCode;
    Dictionary[DictCount].suffix:=Char;
    Inc(DictCount);
@@ -80,6 +105,48 @@ Begin
   Char:=Dictionary[Code].suffix;
  End;
  If OutSize>0 Then BlockWrite(Dest,OutBuf,OutSize);
+End;
+
+
+Procedure DecompressSZDD(Var Source,Dest:File);
+Var
+ InBuf,OutBuf:Array[0..BUFFER_SIZE-1] of Byte;
+ InPos,OutPos:Word;
+ InSize,OutSize:Word;
+ Control,Len,Offset:Byte;
+ i:Integer;
+Begin
+ BlockRead(Source,HeaderSZDD,SizeOf(HeaderSZDD)); { Saute l'entˆte }
+ While Not Eof(Source) do Begin
+  BlockRead(Source, InBuf, BUFFER_SIZE, InSize);
+  If InSize=0 Then Break;
+  InPos:=0;
+  OutPos:=0;
+  While InPos<InSize do Begin
+   Control := InBuf[InPos];
+   Inc(InPos);
+   If Control=$FF Then Begin { Octet lit‚ral }
+    OutBuf[OutPos] := InBuf[InPos];
+    Inc(InPos);
+    Inc(OutPos);
+   End
+    Else { S‚quence de compression }
+   Begin
+    Len:=(Control and $0F)+3;
+    Offset:=Control shr 4;
+     { Copie de la sortie du tampon avec le d‚placement }
+    For i:=0 to Len-1 do Begin
+     OutBuf[OutPos]:=OutBuf[OutPos-Offset-1];
+     Inc(OutPos);
+    End;
+   End;
+   If OutPos>=BUFFER_SIZE Then Begin
+    BlockWrite(Dest, OutBuf, OutPos);
+    OutPos := 0;
+   End;
+  End;
+  If OutPos>0 Then BlockWrite(Dest,OutBuf,OutPos);
+ End;
 End;
 
 Var
@@ -96,28 +163,36 @@ BEGIN
   WriteLn(' destination Indique le fichier … cr‚er');
   Halt;
  End;
+ DecompressMethod:=methodNone;
  SourceName:=ParamStr(1);
- If ParamCount=2 Then DestName := ParamStr(2)
-                 Else DestName := SourceName + '.EXP';
+ If ParamCount=2 Then DestName:=ParamStr(2)
+                 Else DestName:=SourceName + '.EXP';
  {$I-} Assign(SourceFile,SourceName);
  Reset(SourceFile,1);{$I+}
  If IOResult<>0 Then Begin
   WriteLn('Erreur: Impossible d''ouvrir le fichier');
   Exit;
  End;
- If Not IsCompressed(SourceFile)Then Begin
+ If Not(IsCompressedMS(SourceFile)or IsCompressedSZDD(SourceFile))Then Begin
   WriteLn('Erreur: Fichier source n''est pas compress‚.');
   Close(SourceFile);
-  Exit;
+  Halt(4);
  End;
  {$I-}Assign(DestFile, DestName);
- Rewrite(DestFile, 1);{$I+}
+ Rewrite(DestFile,1);{$I+}
  If IOResult<>0 Then Begin
   WriteLn('Erreur: Impossible de cr‚er le fichier de destination');
   Close(SourceFile);
-  Exit;
+  Halt(2);
  End;
- ExpandFile(SourceFile,DestFile);
+ Case DecompressMethod of
+  methodDict:ExpandFile(SourceFile,DestFile);
+  methodSZDD:DecompressSZDD(SourceFile,DestFile);
+  Else Begin
+   WriteLn('M‚thode de compression non reconnu');
+   Halt(3);
+  End;
+ End;
  Close(SourceFile);
  Close(DestFile);
  WriteLn('Expension du fichier r‚ussis');
