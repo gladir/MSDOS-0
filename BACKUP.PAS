@@ -6,6 +6,8 @@
 
 Program BACKUP;
 
+{$A-}
+
 Uses DOS;
 
 Const
