@@ -13,13 +13,22 @@ Uses
 
 Const
  BUFFER_SIZE=8192;
- SZDD_SIGNATURE:Array[0..3]of Char='SZDD';
  DICT_SIZE=4096;
+ SZDD_SIGNATURE:Array[0..3]of Char='SZDD';
+ KWAJ_SIGNATURE:Array[0..3]of Char='KWAJ';
 
 Type
  TDictEntry=Record
   prefix:Word;
   suffix:Byte;
+ End;
+
+ TKWAJHeader=Record
+  Signature:Array[0..3] of Char;  { 'KWAJ' }
+  Method:Byte;                    { M‚thode de compression }
+  DictionarySize:Byte;            { Taille du dictionaire }
+  Flags:Word;                     { Drapeaux de compression }
+  OriginalSize:LongInt;           { Taille des donn‚es d‚compress‚s }
  End;
 
  TSZDDHeader=Record
@@ -29,18 +38,21 @@ Type
  End;
 
 Var
- DecompressMethod:(methodNone,methodDict,methodSZDD);
+ DecompressMethod:(methodNone,methodDict,methodSZDD,methodKWAJ);
  SourceFile,DestFile:File;
- Buffer:Array[0..BUFFER_SIZE-1] of Byte;
+ KWAJHeader:TKWAJHeader;
  HeaderSZDD:TSZDDHeader;
- Dictionary:Array[0..DICT_SIZE-1] of TDictEntry;
  DictCount:Word;
+ Dictionary:Array[0..DICT_SIZE-1] of TDictEntry;
+ Buffer:Array[0..BUFFER_SIZE-1] of Byte Absolute Dictionary;
+
 
 Function IsCompressedMS(Var f:File):Boolean;
 Var
  Signature:Word;
 Begin
  IsCompressedMS:=False;
+ Seek(f,0);
  BlockRead(f,Signature,2);
  If(Signature=$4D53)Then Begin { Signature 'MS' }
   IsCompressedMS:=True;
@@ -51,10 +63,25 @@ End;
 
 Function IsCompressedSZDD(Var f:File):Boolean;Begin
  IsCompressedSZDD:=False;
+ Seek(f,0);
  BlockRead(f,HeaderSZDD,SizeOf(HeaderSZDD));
  If(HeaderSZDD.Signature='SZDD')Then Begin
   IsCompressedSZDD:=True;
   DecompressMethod:=methodSZDD;
+ End;
+ Seek(f,0);
+End;
+
+Function IsCompressedKWAJ(Var f:File):Boolean;
+Var
+ Signature:Array[0..3] of Char;
+Begin
+ IsCompressedKWAJ:=False;
+ Seek(f,0);
+ BlockRead(f,Signature, 4);
+ If(Signature='KWAJ')Then Begin
+  IsCompressedKWAJ:=True;
+  DecompressMethod:=methodKWAJ;
  End;
  Seek(f,0);
 End;
@@ -96,7 +123,7 @@ Begin
    End;
   End;
   If OldCode <> $FFFF Then Begin
-    { Ajout d'une entr,e dans le dictionnaire }
+    { Ajout d'une entr‚e dans le dictionnaire }
    Dictionary[DictCount].prefix:=OldCode;
    Dictionary[DictCount].suffix:=Char;
    Inc(DictCount);
@@ -107,6 +134,58 @@ Begin
  If OutSize>0 Then BlockWrite(Dest,OutBuf,OutSize);
 End;
 
+Procedure DecompressKWAJ(Var Source,Dest:File);
+Var
+ InBuf,OutBuf,Dictionary:Array[0..BUFFER_SIZE-1] of Byte;
+ InPos,OutPos,DictPos:Word;
+ InSize,OutSize:Word;
+ Control:Byte;
+ Len,Offset:Word;
+ i:Integer;
+Begin
+ BlockRead(Source,KWAJHeader,SizeOf(KWAJHeader));
+ DictPos := 0;
+ While Not Eof(Source) do Begin
+  BlockRead(Source, InBuf,BUFFER_SIZE,InSize);
+  If InSize=0 Then Break;
+  InPos:=0;
+  OutPos:=0;
+  While InPos<InSize do Begin
+   Control:=InBuf[InPos];
+   Inc(InPos);
+   If Control and $80<>0 Then Begin { Bloc compress‚ }
+    Len:=((Control and $7F) shr 4)+3;
+    Offset:=((Control and $0F) shl 8)+InBuf[InPos];
+    Inc(InPos);
+     { Copie de la sortie du tampon avec le d‚placement }
+    For i:=0 to Len-1 do Begin
+     OutBuf[OutPos]:= Dictionary[(DictPos - Offset + i) and $FFF];
+     Dictionary[DictPos]:= OutBuf[OutPos];
+     Inc(DictPos);
+     DictPos:=DictPos and $FFF;
+     Inc(OutPos);
+    End;
+   End
+    Else { Octet lit‚ral }
+   Begin
+    Len:=Control+1;
+    For i:=0 to Len-1 do Begin
+     OutBuf[OutPos] := InBuf[InPos];
+     Dictionary[DictPos] := InBuf[InPos];
+     Inc(InPos);
+     Inc(DictPos);
+     DictPos := DictPos and $FFF;
+     Inc(OutPos);
+    End;
+   End;
+   If OutPos>=BUFFER_SIZE-256 Then Begin
+    BlockWrite(Dest, OutBuf, OutPos);
+    OutPos := 0;
+   End;
+  End;
+  If OutPos>0 Then BlockWrite(Dest,OutBuf,OutPos);
+ End;
+End;
 
 Procedure DecompressSZDD(Var Source,Dest:File);
 Var
@@ -173,7 +252,9 @@ BEGIN
   WriteLn('Erreur: Impossible d''ouvrir le fichier');
   Exit;
  End;
- If Not(IsCompressedMS(SourceFile)or IsCompressedSZDD(SourceFile))Then Begin
+ If Not(IsCompressedMS(SourceFile)or
+        IsCompressedSZDD(SourceFile)or
+        IsCompressedKWAJ(SourceFile))Then Begin
   WriteLn('Erreur: Fichier source n''est pas compress‚.');
   Close(SourceFile);
   Halt(4);
@@ -186,6 +267,7 @@ BEGIN
   Halt(2);
  End;
  Case DecompressMethod of
+  methodKWAJ:DecompressKWAJ(SourceFile,DestFile);
   methodDict:ExpandFile(SourceFile,DestFile);
   methodSZDD:DecompressSZDD(SourceFile,DestFile);
   Else Begin
