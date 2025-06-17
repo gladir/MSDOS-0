@@ -13,15 +13,24 @@ Uses
  DOS;
 
 Const
- BUFFER_SIZE=8192;
+ BUFFER_SIZE=16384;
  DICT_SIZE=4096;
+ MAX_DICT_SIZE=DICT_SIZE-1;
  SZDD_SIGNATURE:Array[0..3]of Char='SZDD';
  KWAJ_SIGNATURE:Array[0..3]of Char='KWAJ';
 
+ KWAJ_METHOD_NONE = 0;
+ KWAJ_METHOD_LZ77 = 1;
+ KWAJ_METHOD_LZ77_RLE = 2;
+ KWAJ_METHOD_HUFFMAN = 3;
+ KWAJ_METHOD_MSCOMP = $88;
+
 Type
+ TDictBuffer=Array[0..MAX_DICT_SIZE] of Byte;
+
  TDictEntry=Record
-  prefix:Word;
-  suffix:Byte;
+  Prefix:Word;
+  Suffix:Byte;
  End;
 
  TKWAJHeader=Record
@@ -46,7 +55,6 @@ Var
  DictCount:Word;
  Dictionary:Array[0..DICT_SIZE-1] of TDictEntry;
  Buffer:Array[0..BUFFER_SIZE-1] of Byte Absolute Dictionary;
-
 
 Function IsCompressedMS(Var f:File):Boolean;
 Var
@@ -124,7 +132,7 @@ Begin
    End;
   End;
   If OldCode <> $FFFF Then Begin
-    { Ajout d'une entrï¿½e dans le dictionnaire }
+    { Ajout d'une entr‚e dans le dictionnaire }
    Dictionary[DictCount].prefix:=OldCode;
    Dictionary[DictCount].suffix:=Char;
    Inc(DictCount);
@@ -135,78 +143,115 @@ Begin
  If OutSize>0 Then BlockWrite(Dest,OutBuf,OutSize);
 End;
 
-Procedure DecompressKWAJ(Var Source,Dest:File);
+Procedure CopyUncompressed(Var Source,Dest:File);
 Var
- InBuf,OutBuf,Dictionary:Array[0..BUFFER_SIZE-1] of Byte;
- InPos,OutPos,DictPos:Word;
- InSize,OutSize:Word;
+ Buffer:Array[0..BUFFER_SIZE-1] of Byte;
+ BytesRead:Word;
+Begin
+ While Not Eof(Source)do Begin
+  BlockRead(Source,Buffer,BUFFER_SIZE,BytesRead);
+  If BytesRead>0 Then BlockWrite(Dest,Buffer,BytesRead);
+ End;
+End;
+
+Procedure DecompressLZ77(Var Source,Dest:file);
+Var
+ InBuf:Array[0..BUFFER_SIZE-1] of Byte;
+ OutBuf:Array[0..BUFFER_SIZE-1] of Byte;
+ Dictionary:TDictBuffer;
+ InPos,OutPos:LongInt;
+ DictPos:Word;
+ InSize:Word;
  Control:Byte;
  Len,Offset:LongInt;
- i:Integer;
+ i:LongInt;
 Begin
- BlockRead(Source,KWAJHeader,SizeOf(KWAJHeader));
- DictPos:=0;
- While Not Eof(Source) do Begin
-  BlockRead(Source, InBuf,BUFFER_SIZE,InSize);
-  If InSize=0 Then Break;
+ DictPos := 0;
+ While not Eof(Source)do Begin
+  BlockRead(Source, InBuf, BUFFER_SIZE, InSize);
+  If InSize = 0 Then Break;
   InPos:=0;
   OutPos:=0;
-  While InPos<InSize do Begin
-   Control:=InBuf[InPos];
+  While InPos < InSize do Begin
+   Control := InBuf[InPos];
    Inc(InPos);
-   If Control and $80<>0 Then Begin { Bloc compressï¿½ }
-    Len:=((Control and $7F) shr 4)+3;
+   If Control and $80<>0 Then Begin
+    Len:=((Control and $7F) shr 4) + 3;
     Offset:=((Control and $0F) shl 8);
-    If InPos<InSize Then Offset:=Offset+InBuf[InPos];
-    Inc(InPos);
-
-    { S‚curisation du d‚placement }
-    If Offset>DictPos Then Offset:=DictPos;
-
-    { Copie du dictionaire avec v‚rifications des limites }
-    For i:=0 to Len-1 do Begin
-      If (DictPos - Offset + i) >= 0 Then
-        OutBuf[OutPos]:= Dictionary[(DictPos - Offset + i) and $FFF]
-      Else
-        OutBuf[OutPos]:= 0;  { Protection contre les d‚bordements n‚gatifs }
-
-     Dictionary[DictPos]:= OutBuf[OutPos];
-     Inc(DictPos);
-     DictPos:=DictPos and $FFF;
-     Inc(OutPos);
-
-     If OutPos >= BUFFER_SIZE Then Begin
-      BlockWrite(Dest, OutBuf, OutPos);
-      OutPos:=0;
-     End;
-    End;
-   End
-    Else { Octet lit‚ral }
-   Begin
-    Len:=Control+1;
-    For i:=0 to Len-1 do Begin
-     If OutPos>=SizeOf(OutBuf)Then Begin
-      WriteLn('D‚compression KWAJ impossible : D‚bordement du tampon de sortie');
-      Halt(6);
-     End;
-     If InPos>=SizeOf(InBuf)Then Begin
-      WriteLn('D‚compression KWAJ impossible : D‚bordement du tampon d''entr‚e');
-      Halt(7);
-     End;
-     OutBuf[OutPos]:=InBuf[InPos];
-     Dictionary[DictPos]:=InBuf[InPos];
+    If InPos>=InSize Then Break;  { V‚rification de s‚curit‚ }
+     Offset:=Offset+InBuf[InPos];
      Inc(InPos);
-     Inc(DictPos);
-     DictPos:=DictPos and $FFF;
-     Inc(OutPos);
-    End;
-   End;
-   If OutPos>=BUFFER_SIZE-256 Then Begin
-    BlockWrite(Dest, OutBuf, OutPos);
-    OutPos := 0;
-   End;
-  End;
-  If OutPos>0 Then BlockWrite(Dest,OutBuf,OutPos);
+      { Protection contre les d‚bordements }
+     If(Offset>DictPos)or(Offset>MAX_DICT_SIZE)Then Offset:=DictPos;
+     For i:=0 to Len-1 do Begin
+      If OutPos >= BUFFER_SIZE then Break;  { Protection de tampon de sortie }
+       { S‚curisation de l'accŠs au dictionnaire }
+      If(DictPos - Offset + i) >= 0 Then
+       OutBuf[OutPos]:=Dictionary[(DictPos - Offset + i) and MAX_DICT_SIZE]
+      Else
+       OutBuf[OutPos]:=0;
+       { Protection ‚criture dictionnaire }
+      If DictPos<=MAX_DICT_SIZE Then Dictionary[DictPos]:=OutBuf[OutPos];
+      Inc(DictPos);
+      DictPos := DictPos and MAX_DICT_SIZE;
+      Inc(OutPos);
+     End;
+    End
+     else
+    Begin
+        Len := Control + 1;
+
+        { Protection contre dÃ©bordement de buffer }
+        if Len > (InSize - InPos) then
+          Len := InSize - InPos;
+
+        for i := 0 to Len-1 do
+        begin
+          if (OutPos >= BUFFER_SIZE) or (InPos >= InSize) then Break;
+
+          OutBuf[OutPos] := InBuf[InPos];
+
+          { Protection Ã©criture dictionnaire }
+          if DictPos <= MAX_DICT_SIZE then
+            Dictionary[DictPos] := InBuf[InPos];
+
+          Inc(InPos);
+          Inc(DictPos);
+          DictPos := DictPos and MAX_DICT_SIZE;
+          Inc(OutPos);
+        end;
+      end;
+
+      { Ã‰criture du buffer quand il est presque plein }
+      if OutPos >= BUFFER_SIZE - 512 then
+      begin
+        BlockWrite(Dest, OutBuf, OutPos);
+        OutPos := 0;
+      end;
+    end;
+
+    if OutPos > 0 then
+      BlockWrite(Dest, OutBuf, OutPos);
+  end;
+end;
+
+Procedure DecompressHuffman(Var Source,Dest:File);Begin
+ WriteLn('Erreur: Compression Huffman n''est pas impl‚ment‚');
+ Halt(9);
+End;
+
+Procedure DecompressKWAJ(Var Source,Dest:File);Begin
+ BlockRead(Source, KWAJHeader,SizeOf(KWAJHeader));
+ Case KWAJHeader.Method of
+  KWAJ_METHOD_NONE:
+   CopyUncompressed(Source, Dest);
+  KWAJ_METHOD_LZ77,
+  KWAJ_METHOD_LZ77_RLE,
+  KWAJ_METHOD_MSCOMP:  { Ajout du cas 0x88 }
+   DecompressLZ77(Source, Dest);
+  KWAJ_METHOD_HUFFMAN:
+   DecompressHuffman(Source, Dest);
+  Else WriteLn('Erreur: M‚thode de compression non-support‚: ', KWAJHeader.Method);
  End;
 End;
 
@@ -218,7 +263,7 @@ Var
  Control,Len,Offset:Byte;
  i:Integer;
 Begin
- BlockRead(Source,HeaderSZDD,SizeOf(HeaderSZDD)); { Saute l'entˆte }
+ BlockRead(Source,HeaderSZDD,SizeOf(HeaderSZDD)); { Saute l'entï¿½te }
  While Not Eof(Source) do Begin
   BlockRead(Source, InBuf, BUFFER_SIZE, InSize);
   If InSize=0 Then Break;
@@ -227,16 +272,16 @@ Begin
   While InPos<InSize do Begin
    Control := InBuf[InPos];
    Inc(InPos);
-   If Control=$FF Then Begin { Octet lit‚ral }
+   If Control=$FF Then Begin { Octet litï¿½ral }
     OutBuf[OutPos] := InBuf[InPos];
     Inc(InPos);
     Inc(OutPos);
    End
-    Else { S‚quence de compression }
+    Else { Sï¿½quence de compression }
    Begin
     Len:=(Control and $0F)+3;
     Offset:=Control shr 4;
-     { Copie de la sortie du tampon avec le d‚placement }
+     { Copie de la sortie du tampon avec le dï¿½placement }
     For i:=0 to Len-1 do Begin
      OutBuf[OutPos]:=OutBuf[OutPos-Offset-1];
      Inc(OutPos);
