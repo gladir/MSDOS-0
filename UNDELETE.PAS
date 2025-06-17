@@ -116,7 +116,7 @@ Var
 Begin
  RestoreFile:=False;
 
- Write('Remplace la premier lettre ''',Chr(DELETED_MARKER),
+ Write('Remplace la premiäre lettre ''',Chr(DELETED_MARKER),
         ''' dans ''',Entry.Name,''' par quel lettre ? ');
  ReadLn(FirstChar);
  if FirstChar = #13 then Exit;
