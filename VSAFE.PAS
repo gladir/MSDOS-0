@@ -12,11 +12,15 @@ Const
  PROGRAM_ID=$4456;  { 'VD' pour le pilote VSAFE }
  MAX_SIGNATURES=32;
  SIG_LENGTH=16;
-  SCREEN_WIDTH = 80;
-  SCREEN_HEIGHT = 25;
-  POPUP_WIDTH = 60;
-  POPUP_HEIGHT = 15;
-  VIDEO_SEG = $B800;
+ SCREEN_WIDTH = 80;
+ SCREEN_HEIGHT = 25;
+ POPUP_WIDTH = 60;
+ POPUP_HEIGHT = 15;
+ VIDEO_SEG = $B800;
+
+ JerusalemSignature:Array[1..5]of Byte = ($B8, $21, $35, $CD, $21);
+ StonedSignature:Array[1..5]of Byte = ($B4, $02, $B0, $03, $CD);
+ MichelangeloSignature:Array[1..5]of Byte = ($FA, $B8, $C2, $34, $B1);
 
 Type
  TOptions=Record
@@ -67,6 +71,19 @@ Begin
  StrToUpper:=S;
 End;
 
+Function CompareMem(Const P1,P2;Size:Word):Boolean;
+Var
+ B1: array[0..65520] of Byte absolute P1;
+ B2: array[0..65520] of Byte absolute P2;
+ i:Word;
+Begin
+ CompareMem:=True;
+ For i:=0 to Size-1 do If B1[i]<>B2[i]Then Begin
+  CompareMem:=False;
+  Exit;
+ End;
+End;
+
 Procedure PCopy(Source,Target:Byte);Begin
  {$IFNDEF FPC}
   Move(Mem[SegB800:Source*(MemW[$0040:$4A]*25*2)],Mem[SegB800:Target*(MemW[$0040:$4A]*25*2)],MemW[$0040:$4A]*25*2)
@@ -77,7 +94,7 @@ Function InstallEMS:Boolean;
 Var
  Regs:Registers;
 Begin
- Regs.AH:=$41;  { EMS - Demande l'ï¿½tat }
+ Regs.AH:=$41;  { EMS - Demande l'‚tat }
  Intr($67,Regs);
  InstallEMS:=(Regs.AH=0);
 End;
@@ -93,9 +110,9 @@ End;
 
 Procedure Int13Handler(Flags,CS,IP,AX,BX,CX,DX,SI,DI,DS,ES,BP:Word);Interrupt;Begin
  If(Options.FormatWarning)Then Begin
-   { Vï¿½rifier les tentatives de formatage }
+   { V‚rifier les tentatives de formatage }
   If (Hi(AX)=5)Then Begin { Formatage de piste }
-   ShowWarning('Tentative de formatage dï¿½tectï¿½ !');
+   ShowWarning('Tentative de formatage d‚tect‚ !');
    If Not(NetworkEnabled)Then Begin
     Flags:=Flags or $0001;  { Fixe le drapeau de retenue }
     Exit;
@@ -129,26 +146,41 @@ Begin
   { VÃ©rifier si c'est un exÃ©cutable }
  If(Ext='EXE')or(Ext='COM')or(Ext='SYS')Then Begin
   If(Options.ExeWarning)Then
-   ShowWarning('Attention: AccÃ¨s ï¿½ un fichier exï¿½cutable dï¿½tectï¿½ !'#13#10 + FileName);
-  { VÃ©rifier les signatures de virus si activÃ© }
+   ShowWarning('Attention: AccŠs … un fichier ex‚cutable d‚tect‚ !'#13#10 + FileName);
+  { V‚rifier les signatures de virus si activ‚ }
   If(Options.CheckPrograms)Then
-   CheckExecutable:= True;  { Indique qu'il faut vÃ©rifier les signatures }
+   CheckExecutable:= True;  { Indique qu'il faut v‚rifier les signatures }
  End;
 End;
 
-Procedure Int21Handler(Flags,CS,IP,AX,BX,CX,DX,SI,DI,DS,ES,BP:Word);Interrupt;
+Procedure Int21Handler(Flags, CS, IP, AX, BX, CX, DX, SI, DI, DS, ES, BP: Word);Interrupt;
 Var
  CheckVirus:Boolean;
+ Buffer:Array[1..512] of Byte;
+ VirusName:String;
+ RFile:File;
+ SFile:FileRec Absolute RFile;
+ BytesRead:Word;
 Begin
- Case Hi(AX) of
+ Case AX shr 8 of  { AH }
   $31:If Options.TSRWarning Then Begin { TSR }
-   ShowPopup('Attention VSAFE', 'Le programme essai de devenir rï¿½sident !'#13#10+
+   ShowPopup('Attention VSAFE', 'Le programme essai de devenir r‚sident !'#13#10+
              'Presse une touche pour continue...');
   End;
-  $3D,$3F,$40:Begin  { Ouverture, Lecture, Ecriture }
-   CheckVirus:=CheckExecutable(DS,SI);
+  $3D,$3F,$40:Begin  { Open, Read, Write }
+   CheckVirus:=CheckExecutable(DS, SI);
    If(CheckVirus)Then Begin
-    { Code de vÃ©rification des signatures }
+    SFile.Handle:=AX and $FF;
+     { Lire le dÃ©but du fichier }
+    BlockRead(RFile,Buffer,SizeOf(Buffer),BytesRead);
+     { VÃ©rifier les signatures connues }
+    If CompareMem(Buffer[1],JerusalemSignature,5)Then
+     ShowWarning('Virus Jerusalem d‚tect‚ dans un fichier !')
+    Else If CompareMem(Buffer[32], StonedSignature, 5)Then
+     ShowWarning('Virus Stoned d‚tect‚ dans un fichier !')
+    Else If CompareMem(Buffer[128], MichelangeloSignature, 5)Then
+     ShowWarning('Virus Michelangelo d‚tect‚ dans un fichier !');
+    If IOResult<>0 Then;  { R‚initialise l'‚tat d'erreur }
    End;
   End;
  End;
@@ -159,17 +191,17 @@ End;
 
 Procedure InstallVSafe;Begin
   { Sauvegarder les anciens vecteurs }
- GetIntVec($13, OldInt13h);
- GetIntVec($21, OldInt21h);
+ GetIntVec($13,OldInt13h);
+ GetIntVec($21,OldInt21h);
   { Installer nos gestionnaires }
- SetIntVec($13, @Int13Handler);
- SetIntVec($21, @Int21Handler);
-  { Installer en mï¿½moire ï¿½tendue si possible }
+ SetIntVec($13,@Int13Handler);
+ SetIntVec($21,@Int21Handler);
+  { Installer en m‚moire ‚tendue si possible }
  If Not(UseEMS)and Not(UseXMS)Then Begin
   If(InstallXMS)Then UseXMS:=True Else
-  If(InstallEMS)Then UseEMS := True;
+  If(InstallEMS)Then UseEMS:=True;
  End;
-  { Devenir rï¿½sident }
+  { Devenir r‚sident }
  Keep(0);
 End;
 
@@ -189,14 +221,14 @@ Var
 Begin
  UnloadVSafe:=False;
  If IsVSafeLoaded Then Begin
-  Regs.AX := $4456;  { Notre identifiant VSAFE }
-  Regs.BX := $FFFF;  { Fonction de dï¿½chargement }
-  Intr($2F, Regs);
+  Regs.AX:=$4456;  { Notre identifiant VSAFE }
+  Regs.BX:=$FFFF;  { Fonction de dï¿½chargement }
+  Intr($2F,Regs);
   UnloadVSafe := True;
-  WriteLn('VSAFE dï¿½charger de la mï¿½moire');
+  WriteLn('VSAFE d‚charger de la m‚moire');
  End
   Else
- WriteLn('VSAFE n''est pas chargï¿½');
+ WriteLn('VSAFE n''est pas charg‚');
 End;
 
 Procedure InitVirusDB;Begin
@@ -322,41 +354,40 @@ End;
 
 BEGIN
  If ParamCount=0 Then Begin
-  WriteLn('VSAFE - Cette commande permet de gï¿½rer la protection virus');
+  WriteLn('VSAFE - Cette commande permet de g‚rer la protection virus');
   WriteLn;
   WriteLn('Syntaxe : VSAFE [/option[+ | -] ...] [/NE] [/NX] [/Ax | /Cx] [/N] [/D] [/U]');
   WriteLn;
   WriteLn('Options:');
   WriteLn('  1  Attention au formatage');
   WriteLn('  2  Attention au TSR');
-  WriteLn('  3  Protection contre l''ï¿½criture');
-  WriteLn('  4  Vï¿½rifie le programme');
-  WriteLn('  5  Vï¿½rifie le secteur de dï¿½marrage');
-  WriteLn('  6  Attention ï¿½ la partition et l''ï¿½criture du secteur de dï¿½marrage');
-  WriteLn('  7  Atterntion ï¿½ l''ï¿½criture du secteur de dï¿½marrage');
-  WriteLn('  8  Attention au ï¿½criture de fichier exï¿½cutable');
+  WriteLn('  3  Protection contre l''‚criture');
+  WriteLn('  4  V‚rifie le programme');
+  WriteLn('  5  V‚rifie le secteur de d‚marrage');
+  WriteLn('  6  Attention … la partition et l''‚criture du secteur de d‚marrage');
+  WriteLn('  7  Atterntion … l''‚criture du secteur de d‚marrage');
+  WriteLn('  8  Attention au ‚criture de fichier ex‚cutable');
   Halt;
  End;
 
   { Vï¿½rifier si VSAFE est dï¿½jï¿½ chargï¿½ }
  If IsVSafeLoaded Then Begin
-  WriteLn('VSAFE est dï¿½ja chargï¿½');
+  WriteLn('VSAFE est d‚j… charg‚');
   For i:=1 to ParamCount do Begin
    If StrToUpper(ParamStr(i))='/U'Then Begin
     UnloadVSafe;
     Exit;
    End;
   End;
-  Exit;  { Si pas de /U, quitter car dï¿½jï¿½ chargï¿½ }
+  Exit;  { Si pas de /U, quitter car d‚j… charg‚ }
  End;
-
   { Initialiser les options }
  FillChar(Options, SizeOf(Options), 0);
  UseEMS:=True;
  UseXMS:=True;
  ChecksumEnabled:=True;
  NetworkEnabled:=False;
-  { Analyser les paramï¿½tres }
+  { Analyser les paramŠtres }
  For i:=1 to ParamCount do Begin
    Param := StrToUpper(ParamStr(i));
    If Param[1]='/'Then Case Param[2] of
@@ -398,5 +429,5 @@ BEGIN
  End;
   { Installer VSafe }
  If Not(IsVSafeLoaded)Then InstallVSafe;
- InitVirusDB;  { Initialiser la base de donnÃ©es de virus }
+ InitVirusDB;  { Initialiser la base de donn‚es de virus }
 END.
