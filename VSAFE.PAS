@@ -6,6 +6,8 @@
 
 Program VSAFE;
 
+{$M 16384,0,0}
+
 Uses Crt,DOS;
 
 Const
