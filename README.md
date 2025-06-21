@@ -32,6 +32,10 @@ Voici la liste des différents fichiers proposés dans MSDOS-0 :
 			<td>Cette commande permet de demander ou de changer les attributs d'un fichier.</td>
 		</tr>
 	        <tr>
+			<td><b>BACKUP.PAS</b></td>
+			<td>Cette commande permet de créer une copie de sauvegarde.</td>
+		</tr>
+	        <tr>
 			<td><b>BASIC.PAS</b></td>
 			<td>Cette commande permet de lancer l'interpréteur de langage de programmation BASIC.</td>
 		</tr>
@@ -51,6 +55,10 @@ Voici la liste des différents fichiers proposés dans MSDOS-0 :
 			<td><b>COMP.PAS</b></td>
 			<td>Cette commande permet de comparer deux fichiers. Cette commande est un equivalent du <a href="https://www.gladir.com/OS/PCDOS/intro.htm">PC-DOS</a> ou <a href="https://www.gladir.com/OS/MSDOS/intro.htm">MS-DOS</a>.</td>
 		</tr>	
+		<tr>
+			<td><b>CREF.PAS</b></td>
+			<td>Cette commande permet de produire une liste de symboles croisés.</td>
+		</tr>
 		<tr>
 			 <td><b>DEBUG.PAS</b></td>
 			 <td>Cette commande permet de deboguer un programme.</td>
