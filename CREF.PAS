@@ -164,5 +164,5 @@ BEGIN
   { Fermer les fichiers }
  Close(CRFFile);
  Close(REFFile);
- WriteLn('Cross reference file created: ', REFName);
+ WriteLn('R‚f‚rence crois‚ cr‚e : ', REFName);
 END.
