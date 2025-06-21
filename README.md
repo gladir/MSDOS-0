@@ -100,6 +100,10 @@ Voici la liste des différents fichiers proposés dans MSDOS-0 :
 			<td>Cette commande permet d'afficher une aide rapide sur une commande spécifié.</td>
 		</tr>
 		<tr>
+			<td><b>FASTOPEN.PAS</b></td>
+			<td>Cette commande permet d'accélérer les accès fichiers.</td>
+		</tr>
+		<tr>
 			<td><b>FC.PAS</b></td>
 			<td>Cette commande permet de comparer deux fichiers.</td>
 		</tr>
