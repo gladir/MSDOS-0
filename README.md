@@ -180,6 +180,10 @@ Voici la liste des différents fichiers proposés dans MSDOS-0 :
 			<td>Cette commande permet d'effectuer une récupération de fichiers d'une copie de sécurités.</td>
 		</tr>
 		<tr>
+			<td><b>SETVER.PAS</b></td>
+			<td>Cette commande permet de fixer la version pour un programme.</td>
+		</tr>
+		<tr>
 			<td><b>SORT.PAS</b></td>
 			<td>Cette commande permet de trier une fichier texte ASCII et de retourner le résultat. Cette commande est un équivalent de la commande du DOS.</td>
 		</tr>
