@@ -207,6 +207,10 @@ Voici la liste des différents fichiers proposés dans MSDOS-0 :
 			<td><b>UNDELETE.PAS</b></td>
 			<td>Cette commande permet de récupérer des fichiers supprimés.</td>
 		</tr>
+		<tr>
+			<td><b>VSAFE.PAS</b></td>
+			<td>Cette commande permet de gérer la protection virus.</td>
+		</tr>
 		 <tr>
 			<td><b>XCOPY.PAS</b></td>
 			<td>Cette commande permet d'effectuer la copie étendue avec sous-répertoire de fichier(s) vers un nouvel emplacement.</td>
