@@ -141,7 +141,7 @@ Var
 BEGIN
  If(ParamStr(1)='/?')or(ParamStr(1)='--help')or(ParamStr(1)='-h')or
    (ParamStr(1)='/h')or(ParamStr(1)='/H')Then Begin
-  WriteLn('UNDELETE : Cette commande permet de r‚cuper des fichiers supprim‚s');
+  WriteLn('UNDELETE : Cette commande permet de r‚cup‚rer des fichiers supprim‚s');
   WriteLn;
   WriteLn('Syntaxe : UNDELETE [drive:][path]filename');
   WriteLn('          UNDELETE [drive:][path]*.*');
