@@ -176,6 +176,10 @@ Voici la liste des différents fichiers proposés dans MSDOS-0 :
 			<td>Cette commande permet de remplacer un fichier. Cette commande est un équivalent du DOS.</td>
 		</tr>
 		<tr>
+			<td><b>RESTORE.PAS</b></td>
+			<td>Cette commande permet d'effectuer une récupération de fichiers d'une copie de sécurités.</td>
+		</tr>
+		<tr>
 			<td><b>SORT.PAS</b></td>
 			<td>Cette commande permet de trier une fichier texte ASCII et de retourner le résultat. Cette commande est un équivalent de la commande du DOS.</td>
 		</tr>
