@@ -192,6 +192,10 @@ Voici la liste des différents fichiers proposés dans MSDOS-0 :
 			<td>Cette commande permet de créer un disque virtuel à partir d'un répertoire.</td>
 		</tr>
 		<tr>
+			<td><b>SYS.PAS</b></td>
+			<td>Cette commande permet de transférer les fichiers systèmes.</td>
+		</tr>
+		<tr>
 			<td><b>TREE.PAS</b></td>
 			<td>Cette commande permet d'afficher un arbre de répertoire.</td>
 		</tr>
