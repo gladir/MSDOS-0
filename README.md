@@ -32,6 +32,10 @@ Voici la liste des différents fichiers proposés dans MSDOS-0 :
 			<td>Cette commande permet de demander ou de changer les attributs d'un fichier.</td>
 		</tr>
 	        <tr>
+			<td><b>BACKUP.PAS</b></td>
+			<td>Cette commande permet de créer une copie de sauvegarde.</td>
+		</tr>
+	        <tr>
 			<td><b>BASIC.PAS</b></td>
 			<td>Cette commande permet de lancer l'interpréteur de langage de programmation BASIC.</td>
 		</tr>
@@ -51,6 +55,10 @@ Voici la liste des différents fichiers proposés dans MSDOS-0 :
 			<td><b>COMP.PAS</b></td>
 			<td>Cette commande permet de comparer deux fichiers. Cette commande est un equivalent du <a href="https://www.gladir.com/OS/PCDOS/intro.htm">PC-DOS</a> ou <a href="https://www.gladir.com/OS/MSDOS/intro.htm">MS-DOS</a>.</td>
 		</tr>	
+		<tr>
+			<td><b>CREF.PAS</b></td>
+			<td>Cette commande permet de produire une liste de symboles croisés.</td>
+		</tr>
 		<tr>
 			 <td><b>DEBUG.PAS</b></td>
 			 <td>Cette commande permet de deboguer un programme.</td>
@@ -90,6 +98,10 @@ Voici la liste des différents fichiers proposés dans MSDOS-0 :
 		<tr>
 			<td><b>FASTHELP.PAS</b></td>
 			<td>Cette commande permet d'afficher une aide rapide sur une commande spécifié.</td>
+		</tr>
+		<tr>
+			<td><b>FASTOPEN.PAS</b></td>
+			<td>Cette commande permet d'accélérer les accès fichiers.</td>
 		</tr>
 		<tr>
 			<td><b>FC.PAS</b></td>
@@ -164,12 +176,24 @@ Voici la liste des différents fichiers proposés dans MSDOS-0 :
 			<td>Cette commande permet de remplacer un fichier. Cette commande est un équivalent du DOS.</td>
 		</tr>
 		<tr>
+			<td><b>RESTORE.PAS</b></td>
+			<td>Cette commande permet d'effectuer une récupération de fichiers d'une copie de sécurités.</td>
+		</tr>
+		<tr>
+			<td><b>SETVER.PAS</b></td>
+			<td>Cette commande permet de fixer la version pour un programme.</td>
+		</tr>
+		<tr>
 			<td><b>SORT.PAS</b></td>
 			<td>Cette commande permet de trier une fichier texte ASCII et de retourner le résultat. Cette commande est un équivalent de la commande du DOS.</td>
 		</tr>
 		<tr>
 			<td><b>SUBST.PAS</b></td>
 			<td>Cette commande permet de créer un disque virtuel à partir d'un répertoire.</td>
+		</tr>
+		<tr>
+			<td><b>SYS.PAS</b></td>
+			<td>Cette commande permet de transférer les fichiers systèmes.</td>
 		</tr>
 		<tr>
 			<td><b>TREE.PAS</b></td>
@@ -179,6 +203,14 @@ Voici la liste des différents fichiers proposés dans MSDOS-0 :
 			<td><b>TYPE.PAS</b></td>
 			<td>Cette commande permet d'afficher le contenu d'un fichier.</td>
 		</tr>				
+		<tr>
+			<td><b>UNDELETE.PAS</b></td>
+			<td>Cette commande permet de récupérer des fichiers supprimés.</td>
+		</tr>
+		<tr>
+			<td><b>VSAFE.PAS</b></td>
+			<td>Cette commande permet de gérer la protection virus.</td>
+		</tr>
 		 <tr>
 			<td><b>XCOPY.PAS</b></td>
 			<td>Cette commande permet d'effectuer la copie étendue avec sous-répertoire de fichier(s) vers un nouvel emplacement.</td>
