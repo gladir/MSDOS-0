@@ -144,7 +144,7 @@ Begin
  
  { Barre cyan en bas }
  TextColor(Cyan);
- GotoXY(1, 25);
+ GotoXY(1, 24);
  For i := 1 to 80 do Write(#196);
  TextColor(White);
 End;
@@ -307,11 +307,11 @@ Var SectorsPerBlock: LongInt;
     i, j: Byte;
     DialogX1, DialogY1, DialogX2, DialogY2: Byte;
 Begin
- { Dimensions de la boîte de dialogue centrée }
+ { Dimensions de la boîte de dialogue centrée - PLUS PETITE }
  DialogX1 := 5;
- DialogY1 := 3;
+ DialogY1 := 4;
  DialogX2 := 75;
- DialogY2 := 22;
+ DialogY2 := 20;
  
  { Sauvegarder les couleurs actuelles et créer le fond gris de la boîte }
  TextBackground(LightGray);
@@ -379,7 +379,7 @@ Begin
  TextBackground(LightGray);
  
  { Informations du fichier/lecteur - position relative }
- GotoXY(DialogX1 + 2, DialogY1 + 15);
+ GotoXY(DialogX1 + 2, DialogY1 + 13);
  If IsImageFile Then
   Write('File: ', FileName)
  Else
@@ -430,7 +430,7 @@ Begin
  Write(' some bad sectors');
  
  { Boutons avec style gris foncé sur blanc et espacement correct - position relative en bas }
- GotoXY(DialogX1 + 40, DialogY1 + 15);
+ GotoXY(DialogX1 + 40, DialogY1 + 13);
  TextColor(Black);
  TextBackground(White);
  Write(' More Info ');
@@ -525,30 +525,28 @@ Begin
  TextColor(Black);
  TextBackground(LightGray);
  
- { Barre de progression - position relative en bas }
+ { Barre de progression - MAINTENANT EN DEHORS DE LA BOÎTE SUR LIGNE 25 }
+ TextBackground(Blue);
+ TextColor(White);
  Percentage := (SectorsChecked * 100) div TotalSectors;
  If Percentage > 100 Then Percentage := 100;
  
- GotoXY(DialogX1 + 2, DialogY1 + 17);
+ GotoXY(1, 25);
  Write(Percentage, '% complete  ');
  
- { Barre de progression graphique - position relative }
- For i := 10 to 50 do Begin
-  GotoXY(DialogX1 + i, DialogY1 + 17);
-  If i <= (DialogX1 + 10 + (Percentage * 40 div 100)) Then Begin
+ { Barre de progression graphique }
+ For i := 15 to 65 do Begin
+  GotoXY(i, 25);
+  If i <= (15 + (Percentage * 50 div 100)) Then Begin
    TextColor(White);
    TextBackground(Blue);
    Write(#219)
   End Else Begin
    TextColor(DarkGray);
-   TextBackground(Black);
+   TextBackground(Blue);
    Write(#177);
   End;
  End;
- 
- { Rétablir les couleurs }
- TextColor(Black);
- TextBackground(LightGray);
 End;
 
 Procedure ShowHelp;
@@ -853,10 +851,10 @@ Begin
  UpdateSurfaceProgress(SectorsExamined, BadSectors);
  CheckStatus[ciSurface] := True;
  
- { Attendre que l'utilisateur appuie sur une touche - position relative }
- GotoXY(DialogX1 + 2, DialogY1 + 19);
- TextColor(Black);
- TextBackground(LightGray);
+ { Attendre que l'utilisateur appuie sur une touche - EN BAS DE L'ÉCRAN }
+ TextBackground(Blue);
+ TextColor(White);
+ GotoXY(70, 25);
  Write('Press any key to continue...');
  ReadKey;
 End;
