@@ -180,6 +180,10 @@ Voici la liste des différents fichiers proposés dans MSDOS-0 :
 			<td>Cette commande permet d'effectuer la gestion des traitements d'impressions du système d'exploitation.</td>
 		</tr>
 		<tr>
+			<td><b>RECOVER.PAS</b></td>
+			<td>Cette commande permet de récupérer des fichiers d'un disque endommagé.</td>
+		</tr>
+		<tr>
 			<td><b>REPLACE.PAS</b></td>
 			<td>Cette commande permet de remplacer un fichier. Cette commande est un équivalent du DOS.</td>
 		</tr>
@@ -241,7 +245,7 @@ SET LANGUAGE=SQ
 
 <h2>Remarques</h3>
 <ul>
-	<li>Les commandes DISKCOMP, DISKCOPY, FDISK, SCANDISK et FORMAT on été amélioré par rapport à la version originale de Microsoft en proposant d'appliquer les changements sur un fichier d'image disque plutôt que directement sur un unité de disque.</li>
+	<li>Les commandes DISKCOMP, DISKCOPY, FDISK, RECOVER, SCANDISK et FORMAT on été amélioré par rapport à la version originale de Microsoft en proposant d'appliquer les changements sur un fichier d'image disque plutôt que directement sur un unité de disque.</li>
 	<li>Une commande externe TYPE (mais pas la commande dans COMMAND.COM) a été bonifié du paramètre /GWBASIC afin de permettre l'affichage des fichiers compressés sauvegarder par le GWBASIC.</li>
 </ul>
 
