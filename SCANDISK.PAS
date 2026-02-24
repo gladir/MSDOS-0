@@ -33,6 +33,25 @@ Type
   TotalSectorsBig: LongInt;
  End;
 
+ TPartitionEntry = Record
+  Status: Byte;         { $80 = active, $00 = inactive }
+  StartHead: Byte;
+  StartSector: Byte;    { bits 0-5 = secteur, bits 6-7 = cylindre high }
+  StartCylinder: Byte;
+  PartitionType: Byte;  { $01=FAT12, $04=FAT16<32M, $06=FAT16>32M }
+  EndHead: Byte;
+  EndSector: Byte;
+  EndCylinder: Byte;
+  RelativeSectors: LongInt; { Secteur de début de la partition }
+  TotalSectors: LongInt;    { Taille de la partition en secteurs }
+ End;
+
+ TMBR = Record
+  BootCode: Array[0..445] of Byte;
+  PartitionTable: Array[0..3] of TPartitionEntry;
+  Signature: Word;      { $AA55 }
+ End;
+
  TDirEntry = Record
   Name: Array[0..7] of Char;
   Ext: Array[0..2] of Char;
@@ -59,6 +78,9 @@ Var
  Language:(_French,_English,_Germany,_Italian,_Spain,_Albanian,_Portuguese,_Swedish,_Danish,_Japanese);
  TmpLanguage, DrivePath, FileName: String;
  BootSector: TBootSector;
+ MBR: TMBR;
+ PartitionOffset: LongInt;  { Décalage en secteurs pour la partition active }
+ HasPartition: Boolean;     { Indique si le fichier contient une table de partition }
  { Fragments FAT - 3 fragments de ~43KB chacun }
  FatA, FatB, FatC: PFATFragment;
  RootDir: Array[0..511] of TDirEntry;
@@ -179,6 +201,30 @@ Var S: String;
 Begin
  Str(Value, S);
  IntToStr := S;
+End;
+
+Function IntToHex(Value: Integer; Digits: Integer): String;
+Const
+ HexDigits: String[16] = '0123456789ABCDEF';
+Var
+ S: String;
+ i: Integer;
+Begin
+ S := '';
+ If Value = 0 Then Begin
+  IntToHex := '0';
+  Exit;
+ End;
+ 
+ While Value > 0 do Begin
+  S := HexDigits[(Value mod 16) + 1] + S;
+  Value := Value div 16;
+ End;
+ 
+ { Ajouter des zéros à gauche si nécessaire }
+ While Length(S) < Digits do S := '0' + S;
+ 
+ IntToHex := S;
 End;
 
 Procedure AllocateMemory;
@@ -967,7 +1013,8 @@ Function ReadSector(SectorNum: LongInt): Boolean;
 {$IFDEF Windows}
 Begin
  If IsImageFile Then Begin
-  Seek(FileHandle, SectorNum * 512);
+  { Appliquer l'offset de partition si nécessaire }
+  Seek(FileHandle, (SectorNum + PartitionOffset) * 512);
   BlockRead(FileHandle, SectorBuffer, 512);
   ReadSector := IOResult = 0;
  End Else Begin
@@ -979,7 +1026,8 @@ End;
 Var Regs: Registers;
 Begin
  If IsImageFile Then Begin
-  Seek(FileHandle, SectorNum * 512);
+  { Appliquer l'offset de partition si nécessaire }
+  Seek(FileHandle, (SectorNum + PartitionOffset) * 512);
   BlockRead(FileHandle, SectorBuffer, 512);
   ReadSector := IOResult = 0;
  End Else Begin
@@ -1001,7 +1049,8 @@ Function WriteSector(SectorNum: LongInt): Boolean;
 {$IFDEF Windows}
 Begin
  If IsImageFile Then Begin
-  Seek(FileHandle, SectorNum * 512);
+  { Appliquer l'offset de partition si nécessaire }
+  Seek(FileHandle, (SectorNum + PartitionOffset) * 512);
   BlockWrite(FileHandle, SectorBuffer, 512);
   WriteSector := IOResult = 0;
  End Else Begin
@@ -1013,7 +1062,8 @@ End;
 Var Regs: Registers;
 Begin
  If IsImageFile Then Begin
-  Seek(FileHandle, SectorNum * 512);
+  { Appliquer l'offset de partition si nécessaire }
+  Seek(FileHandle, (SectorNum + PartitionOffset) * 512);
   BlockWrite(FileHandle, SectorBuffer, 512);
   WriteSector := IOResult = 0;
  End Else Begin
@@ -1031,6 +1081,148 @@ Begin
 End;
 {$ENDIF}
 
+Function DetectPartition: Boolean;
+Var
+ i: Integer;
+ PartitionFound: Boolean;
+Begin
+ HasPartition := False;
+ PartitionOffset := 0;
+ DetectPartition := True;
+
+ If Not IsImageFile Then Begin
+  { Pour les vrais lecteurs, pas de partition à détecter }
+  DetectPartition := True;
+  Exit;
+ End;
+
+ { Lire le secteur 0 pour vérifier s'il y a une table de partition }
+ Seek(FileHandle, 0);
+ BlockRead(FileHandle, MBR, SizeOf(TMBR));
+ If IOResult <> 0 Then Begin
+  DetectPartition := False;
+  Exit;
+ End;
+
+ { Vérifier la signature MBR }
+ If MBR.Signature <> $AA55 Then Begin
+  Case(Language)of
+   _English:Begin
+    GotoXY(1, 3);
+    Write('No MBR signature found - assuming direct FAT format');
+    ClrEol;
+   End;
+   Else Begin
+    GotoXY(1, 3);
+    Write('Signature MBR introuvable - format FAT direct assumé');
+    ClrEol;
+   End;
+  End;
+  DetectPartition := True;
+  Exit;
+ End;
+
+ { Afficher info sur la détection de MBR }
+ Case(Language)of
+  _English:Begin
+   GotoXY(1, 3);
+   Write('MBR detected - analyzing partition table...');
+   ClrEol;
+  End;
+  Else Begin
+   GotoXY(1, 3);
+   Write('MBR détecté - analyse de la table de partition...');
+   ClrEol;
+  End;
+ End;
+
+ { Chercher une partition active ou la première partition FAT }
+ PartitionFound := False;
+ 
+ { D'abord, chercher une partition active }
+ For i := 0 to 3 do Begin
+  With MBR.PartitionTable[i] do Begin
+   If (Status = $80) and (PartitionType in [$01, $04, $06, $0B, $0C, $0E, $0F]) and (TotalSectors > 0) Then Begin
+    PartitionOffset := RelativeSectors;
+    HasPartition := True;
+    PartitionFound := True;
+    Case(Language)of
+     _English:Begin
+      GotoXY(1, 3);
+      Write('Active partition found at sector ', RelativeSectors, ' (Type: $', 
+            IntToHex(PartitionType, 2), ')');
+      ClrEol;
+     End;
+     Else Begin
+      GotoXY(1, 3);
+      Write('Partition active trouvée au secteur ', RelativeSectors, ' (Type: $', 
+            IntToHex(PartitionType, 2), ')');
+      ClrEol;
+     End;
+    End;
+    Break;
+   End;
+  End;
+ End;
+
+ { Si pas de partition active, chercher la première partition FAT }
+ If Not PartitionFound Then Begin
+  For i := 0 to 3 do Begin
+   With MBR.PartitionTable[i] do Begin
+    { Debug : afficher toutes les partitions trouvées }
+    If TotalSectors > 0 Then Begin
+     Case(Language)of
+      _English:Begin
+       GotoXY(1, 5 + i);
+       Write('Partition ', i, ': Type=$', IntToHex(PartitionType, 2), 
+             ' Status=$', IntToHex(Status, 2), ' Sectors=', TotalSectors);
+       ClrEol;
+      End;
+      Else Begin
+       GotoXY(1, 5 + i);
+       Write('Partition ', i, ': Type=$', IntToHex(PartitionType, 2), 
+             ' Status=$', IntToHex(Status, 2), ' Secteurs=', TotalSectors);
+       ClrEol;
+      End;
+     End;
+    End;
+    
+    If (PartitionType in [$01, $04, $06, $0B, $0C, $0E, $0F]) and (TotalSectors > 0) Then Begin
+     PartitionOffset := RelativeSectors;
+     HasPartition := True;
+     PartitionFound := True;
+     Case(Language)of
+      _English:Begin
+       GotoXY(1, 3);
+       Write('FAT partition found at sector ', RelativeSectors, ' (Type: $', 
+             IntToHex(PartitionType, 2), ')');
+       ClrEol;
+      End;
+      Else Begin
+       GotoXY(1, 3);
+       Write('Partition FAT trouvée au secteur ', RelativeSectors, ' (Type: $', 
+             IntToHex(PartitionType, 2), ')');
+       ClrEol;
+      End;
+     End;
+     Break;
+    End;
+   End;
+  End;
+ End;
+
+ If Not PartitionFound Then Begin
+  Case(Language)of
+   _English:ShowDialog('Error', 'No valid FAT partition found in disk image', False);
+   Else ShowDialog('Erreur', 'Aucune partition FAT valide trouvée dans l''image disque', False);
+  End;
+  DetectPartition := False;
+  Exit;
+ End;
+
+ DetectPartition := True;
+End;
+
 Function ReadBootSector:Boolean;Begin
  If ReadSector(0) Then Begin
   Move(SectorBuffer, BootSector, SizeOf(BootSector));
@@ -1041,7 +1233,7 @@ Function ReadBootSector:Boolean;Begin
   FATType := DetectFATType;
 
    { Vérifications de sanité }
-  If (BootSector.SectorsPerFAT = 0) or (BootSector.SectorsPerFAT > 255) Then Begin
+  If (BootSector.SectorsPerFAT = 0) or (BootSector.SectorsPerFAT > 512) Then Begin
    Case(Language)of
     _English:ShowDialog('Error', 'Invalid sectors per FAT: ' + IntToStr(BootSector.SectorsPerFAT), False);
     Else ShowDialog('Erreur', 'Secteurs par FAT invalide : ' + IntToStr(BootSector.SectorsPerFAT), False);
@@ -1706,6 +1898,8 @@ If TmpLanguage<>''Then Begin
  LostClusters := 0;
  CrossLinkedFiles := 0;
  ErrorsFound := 0;
+ HasPartition := False;
+ PartitionOffset := 0;
  { ClusterMap est maintenant initialisé dans AllocateMemory }
  FillChar(CheckStatus, SizeOf(CheckStatus), 0);
 
@@ -1755,6 +1949,16 @@ If TmpLanguage<>''Then Begin
   End;
  End;
  ErrorsFound := 0;
+  
+ { Détecter les partitions pour les fichiers images }
+ If IsImageFile Then Begin
+  If Not DetectPartition Then Begin
+   If IsImageFile Then Close(FileHandle);
+   FreeMemory;
+   Halt(1);
+  End;
+ End;
+ 
   { Lecture du secteur de boot }
  If Not ReadBootSector Then Begin
   Case(Language)of
