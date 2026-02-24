@@ -7,46 +7,48 @@
 Program NLSFUNC;
 
 {$M 16384,0,0}
+{$A-}
 
 Uses DOS,Crt;
 
 Const
  { Codes d'erreur MS-DOS }
- ERR_SUCCESS = 0;
- ERR_FUNCTION_INVALID = 1;
- ERR_FILE_NOT_FOUND = 2;
- ERR_ACCESS_DENIED = 5;
- ERR_INVALID_FORMAT = 11;
- ERR_INVALID_DATA = 13;
- ERR_INVALID_DRIVE = 15;
- ERR_CURRENT_DIR = 16;
- ERR_NO_MORE_FILES = 18;
- ERR_DISK_WRITE_PROTECT = 19;
- ERR_BAD_UNIT = 20;
- ERR_NOT_READY = 21;
- ERR_CRC_ERROR = 23;
- ERR_SEEK_ERROR = 25;
- ERR_SECTOR_NOT_FOUND = 27;
- ERR_OUT_OF_PAPER = 28;
- ERR_WRITE_FAULT = 29;
- ERR_READ_FAULT = 30;
- ERR_GENERAL_FAILURE = 31;
- ERR_INVALID_PARAMETER = 87;
+ ERR_SUCCESS = 0;                { Succès, aucune erreur }
+ ERR_FUNCTION_INVALID = 1;       { Fonction invalide }
+ ERR_FILE_NOT_FOUND = 2;         { Fichier introuvable }
+ ERR_ACCESS_DENIED = 5;          { Accès refusé }
+ ERR_INVALID_FORMAT = 11;        { Format invalide }
+ ERR_INVALID_DATA = 13;          { Données invalides }
+ ERR_INVALID_DRIVE = 15;         { Lecteur invalide }
+ ERR_CURRENT_DIR = 16;           { Répertoire courant }
+ ERR_NO_MORE_FILES = 18;         { Plus de fichiers }
+ ERR_DISK_WRITE_PROTECT = 19;    { Disque protégé en écriture }
+ ERR_BAD_UNIT = 20;              { Unité défaillante }
+ ERR_NOT_READY = 21;             { Lecteur pas prêt }
+ ERR_CRC_ERROR = 23;             { Erreur de contrôle CRC }
+ ERR_SEEK_ERROR = 25;            { Erreur de positionnement }
+ ERR_SECTOR_NOT_FOUND = 27;      { Secteur introuvable }
+ ERR_OUT_OF_PAPER = 28;          { Plus de papier }
+ ERR_WRITE_FAULT = 29;           { Défaut d'écriture }
+ ERR_READ_FAULT = 30;            { Défaut de lecture }
+ ERR_GENERAL_FAILURE = 31;       { Panne générale }
+ ERR_INVALID_PARAMETER = 87;     { Paramètre invalide }
 
  { Constantes NLSFUNC }
- NLSFUNC_MULTIPLEX = $14;      { Numéro d'interruption multiplex }
- NLSFUNC_INSTALL_CHECK = $00;  { Vérification d'installation }
- NLSFUNC_GET_EXTENDED_INFO = $01;  { Obtenir info étendue pays }
- NLSFUNC_SET_CODEPAGE = $02;   { Définir page de codes }
- NLSFUNC_GET_CODEPAGE = $03;   { Obtenir page de codes }
+ NLSFUNC_MULTIPLEX = $14;        { Numéro d'interruption multiplex pour NLSFUNC }
+ NLSFUNC_INSTALL_CHECK = $00;    { Vérification si NLSFUNC est installé }
+ NLSFUNC_GET_EXTENDED_INFO = $01;{ Obtenir informations étendues de pays }
+ NLSFUNC_SET_CODEPAGE = $02;     { Définir la page de codes active }
+ NLSFUNC_GET_CODEPAGE = $03;     { Obtenir la page de codes courante }
 
- { Tailles des buffers }
- COUNTRY_BUFFER_SIZE = 512;
- CODEPAGE_BUFFER_SIZE = 256;
- 
- { Signature NLSFUNC dans la mémoire }
- NLSFUNC_SIGNATURE = 'NLSFUNC';
- 
+ { Tailles des tampons mémoire }
+ COUNTRY_BUFFER_SIZE = 512;      { Taille du tampon pour informations de pays }
+ CODEPAGE_BUFFER_SIZE = 256;     { Taille du tampon pour page de codes }
+
+ { Signature d'identification NLSFUNC en mémoire (7 caractères) }
+ NLSFUNC_SIGNATURE: String[7] = 'NLSFUNC';
+
+ { Fichier par défaut contenant les informations de localisation }
  DEFAULT_COUNTRY_FILE = 'COUNTRY.SYS';
 
 Type
@@ -198,30 +200,30 @@ Var
 Begin
  LoadCountryInfo := False;
  Found := False;
- 
+
  { Ouvrir le fichier COUNTRY.SYS }
  Assign(F, CountryFile);
  {$I-}
  Reset(F, 1);
  {$I+}
  If IOResult <> 0 Then Exit;
- 
+
  { Lire l'en-tête }
  If Not ReadCountryFileHeader(F, Header) Then Begin
   Close(F);
   Exit;
  End;
- 
+
  { Rechercher l'entrée correspondante }
  For I := 1 to Header.InfoCount do Begin
   If Not ReadCountryEntry(F, Entry) Then Break;
-  If (Entry.CountryCode = CountryCode) And 
+  If (Entry.CountryCode = CountryCode) And
      ((CodePage = 0) Or (Entry.CodePage = CodePage)) Then Begin
    Found := True;
    Break;
   End;
  End;
- 
+
  If Found Then Begin
   { Se positionner aux données du pays }
   Seek(F, Entry.DataOffset);
@@ -230,7 +232,7 @@ Begin
   {$I+}
   LoadCountryInfo := (IOResult = 0);
  End;
- 
+
  Close(F);
 End;
 
@@ -250,7 +252,7 @@ Begin
   Mov SavedCX, CX
   Mov SavedDX, DX
  End;
- 
+
  { Vérifier si c'est notre fonction multiplex $14 }
  If (SavedAX Shr 8) = NLSFUNC_MULTIPLEX Then Begin
   Case (SavedAX And $FF) Of
@@ -260,21 +262,21 @@ Begin
      Mov AL, $FF
     End;
    End;
-   
+
    NLSFUNC_GET_EXTENDED_INFO: Begin
     { Obtenir informations étendues de pays }
     Asm
      Mov AX, ERR_SUCCESS
     End;
    End;
-   
+
    NLSFUNC_SET_CODEPAGE: Begin
     { Définir la page de codes }
     Asm
      Mov AX, ERR_SUCCESS
     End;
    End;
-   
+
    NLSFUNC_GET_CODEPAGE: Begin
     { Retourner page de codes et pays actuels }
     Asm
@@ -283,7 +285,7 @@ Begin
      Mov AX, ERR_SUCCESS
     End;
    End;
-   
+
    Else Begin
     { Fonction non supportée - passer à l'ancien gestionnaire }
     Asm
@@ -297,7 +299,7 @@ Begin
     Exit;
    End;
   End;
-  
+
   { Terminer avec IRET pour Turbo Pascal }
   Asm
    Iret
@@ -306,21 +308,21 @@ Begin
   { Autre fonction multiplex - passer à l'ancien gestionnaire }
   Asm
    Mov AX, SavedAX
-   Mov BX, SavedBX  
+   Mov BX, SavedBX
    Mov CX, SavedCX
    Mov DX, SavedDX
    Pushf
    Call NLSControl.OldInt2FHandler
   End;
  End;
-End; 
+End;
 {$ELSE}
 { Version Free Pascal simplifiée }
 Begin
  { Gestionnaire d'interruption simplifié pour Free Pascal }
  { En réalité, ce gestionnaire serait plus complexe }
  { mais pour la compatibilité avec FPC, on utilise une approche basique }
-End; 
+End;
 {$ENDIF}
 
 
@@ -333,13 +335,13 @@ Begin
  NLSControl.CountryFile := CountryFile;
  NLSControl.CurrentCountry := 1; { USA par défaut }
  NLSControl.CurrentCodePage := 437; { Page de codes par défaut }
- 
+
  { Sauvegarder l'ancien gestionnaire INT 2Fh }
  GetIntVec($2F, NLSControl.OldInt2FHandler);
- 
+
  { Installer le nouveau gestionnaire }
  SetIntVec($2F, @NLSFuncInt2FHandler);
- 
+
  { Marquer comme installé }
  IsInstalled := True;
 End;
@@ -351,55 +353,6 @@ Begin
   { Restaurer l'ancien gestionnaire INT 2Fh }
   SetIntVec($2F, NLSControl.OldInt2FHandler);
   IsInstalled := False;
- End;
-End;
-
-{ Afficher l'aide selon la langue }
-Procedure ShowHelp;
-Begin
- Case Language Of
-  _English: Begin
-   WriteLn('NLSFUNC - National Language Support Function');
-   WriteLn;
-   WriteLn('Loads country-specific information supporting code page switching.');
-   WriteLn;
-   WriteLn('NLSFUNC [filename]');
-   WriteLn;
-   WriteLn('  filename   Specifies the COUNTRY information file (default: COUNTRY.SYS)');
-   WriteLn;
-   WriteLn('Options:');
-   WriteLn('  /?         Display this help');
-   WriteLn('  /U         Uninstall NLSFUNC from memory');
-   WriteLn('  /S         Show current status');
-  End;
-  _Germany: Begin
-   WriteLn('NLSFUNC - Nationale Sprachunterstützungsfunktion');
-   WriteLn;
-   WriteLn('Lädt länderspezifische Informationen zur Unterstützung von Codeseiten.');
-   WriteLn;
-   WriteLn('NLSFUNC [dateiname]');
-   WriteLn;
-   WriteLn('  dateiname  Gibt die COUNTRY-Informationsdatei an (Standard: COUNTRY.SYS)');
-   WriteLn;
-   WriteLn('Optionen:');
-   WriteLn('  /?         Diese Hilfe anzeigen');
-   WriteLn('  /U         NLSFUNC aus dem Speicher entfernen');
-   WriteLn('  /S         Aktuellen Status anzeigen');
-  End;
-  Else Begin { Français }
-   WriteLn('NLSFUNC - Fonction de Support de Langue Nationale');
-   WriteLn;
-   WriteLn('Charge les informations spécifiques au pays supportant le changement de page de codes.');
-   WriteLn;
-   WriteLn('NLSFUNC [fichier]');
-   WriteLn;
-   WriteLn('  fichier    Spécifie le fichier d''informations COUNTRY (défaut: COUNTRY.SYS)');
-   WriteLn;
-   WriteLn('Options:');
-   WriteLn('  /?         Afficher cette aide');
-   WriteLn('  /U         Désinstaller NLSFUNC de la mémoire');
-   WriteLn('  /S         Afficher le statut actuel');
-  End;
  End;
 End;
 
@@ -455,12 +408,56 @@ Begin
  ShowStatusFlag := False;
  UninstallFlag := False;
  CountryFile := DEFAULT_COUNTRY_FILE;
- 
+
  For I := 1 to ParamCount do Begin
   Param := StrToUpper(ParamStr(I));
-  
+
   If (Param = '/?') Or (Param = '/H') Or (Param = '-H') Or (Param = '--HELP') Then Begin
-   ShowHelp;
+   Case Language Of
+  _English: Begin
+   WriteLn('NLSFUNC - National Language Support Function');
+   WriteLn;
+   WriteLn('Loads country-specific information supporting code page switching.');
+   WriteLn;
+   WriteLn('NLSFUNC [filename]');
+   WriteLn;
+   WriteLn('  filename   Specifies the COUNTRY information file (default: COUNTRY.SYS)');
+   WriteLn;
+   WriteLn('Options:');
+   WriteLn('  /?         Display this help');
+   WriteLn('  /U         Uninstall NLSFUNC from memory');
+   WriteLn('  /S         Show current status');
+  End;
+  _Germany: Begin
+   WriteLn('NLSFUNC - Nationale Sprachunterstützungsfunktion');
+   WriteLn;
+   WriteLn('Lädt länderspezifische Informationen zur Unterstützung von Codeseiten.');
+   WriteLn;
+   WriteLn('NLSFUNC [dateiname]');
+   WriteLn;
+   WriteLn('  dateiname  Gibt die COUNTRY-Informationsdatei an (Standard: COUNTRY.SYS)');
+   WriteLn;
+   WriteLn('Optionen:');
+   WriteLn('  /?         Diese Hilfe anzeigen');
+   WriteLn('  /U         NLSFUNC aus dem Speicher entfernen');
+   WriteLn('  /S         Aktuellen Status anzeigen');
+  End;
+  Else Begin { Français }
+   WriteLn('NLSFUNC - Fonction de Support de Langue Nationale');
+   WriteLn;
+   WriteLn('Cette commande permet de charger les informations spécifiques au ',
+           'pays supportant le changement de page de codes.');
+   WriteLn;
+   WriteLn('NLSFUNC [fichier]');
+   WriteLn;
+   WriteLn('  fichier    Spécifie le fichier d''informations COUNTRY (défaut: COUNTRY.SYS)');
+   WriteLn;
+   WriteLn('Options:');
+   WriteLn('  /?         Afficher cette aide');
+   WriteLn('  /U         Désinstaller NLSFUNC de la mémoire');
+   WriteLn('  /S         Afficher le statut actuel');
+  End;
+ End;
    ProcessParameters := False;
    Exit;
   End
@@ -484,7 +481,6 @@ Begin
    Exit;
   End;
  End;
- 
  If UninstallFlag Then Begin
   UninstallNLSFunc;
   Case Language Of
@@ -495,7 +491,6 @@ Begin
   ProcessParameters := False;
   Exit;
  End;
- 
  If ShowStatusFlag Then Begin
   ShowStatus;
   ProcessParameters := False;
@@ -519,33 +514,33 @@ Begin
  End;
 End;
 
-{ Programme principal }
-Begin
- { Détecter la langue }
+BEGIN
  Language := _French; { Français par défaut }
  TmpLanguage := GetEnv('LANGUAGE');
- If TmpLanguage <> '' Then Begin
-  TmpLanguage := StrToUpper(TmpLanguage);
-  If TmpLanguage = 'EN' Then Language := _English
-  Else If TmpLanguage = 'GR' Then Language := _Germany
-  Else If TmpLanguage = 'IT' Then Language := _Italian
-  Else If TmpLanguage = 'SP' Then Language := _Spain
-  Else If (TmpLanguage = 'SQ') Or (TmpLanguage = 'ALB') Then Language := _Albanian
-  Else If (TmpLanguage = 'PT') Or (TmpLanguage = 'PRT') Then Language := _Portuguese
-  Else If (TmpLanguage = 'SE') Or (TmpLanguage = 'SWE') Then Language := _Swedish
-  Else If (TmpLanguage = 'DK') Or (TmpLanguage = 'DNK') Then Language := _Danish
-  Else If (TmpLanguage = 'JP') Or (TmpLanguage = 'JPN') Then Language := _Japanese;
+ If TmpLanguage<>''Then Begin
+  If TmpLanguage[1]='"'Then TmpLanguage:=Copy(TmpLanguage,2,255);
+  If StrToUpper(Copy(TmpLanguage,1,2))='EN'Then Language:=_English Else
+  If StrToUpper(Copy(TmpLanguage,1,2))='GR'Then Language:=_Germany Else
+  If StrToUpper(Copy(TmpLanguage,1,2))='IT'Then Language:=_Italian Else
+  If StrToUpper(Copy(TmpLanguage,1,2))='SP'Then Language:=_Spain Else
+  If(StrToUpper(Copy(TmpLanguage,1,2))='SQ')or
+    (StrToUpper(Copy(TmpLanguage,1,3))='ALB')Then Language:=_Albanian Else
+  If(StrToUpper(Copy(TmpLanguage,1,2))='PT')or
+    (StrToUpper(Copy(TmpLanguage,1,3))='PRT')Then Language:=_Portuguese Else
+  If(StrToUpper(Copy(TmpLanguage,1,2))='SE')or
+    (StrToUpper(Copy(TmpLanguage,1,3))='SWE')Then Language:=_Swedish Else
+  If(StrToUpper(Copy(TmpLanguage,1,2))='DK')or
+    (StrToUpper(Copy(TmpLanguage,1,3))='DNK')Then Language:=_Danish Else
+  If(StrToUpper(Copy(TmpLanguage,1,2))='JP')or
+    (StrToUpper(Copy(TmpLanguage,1,3))='JPN')Then Language:=_Japanese;
  End;
- 
- { Initialisation }
+  { Initialisation }
  IsInstalled := False;
  FillChar(NLSControl, SizeOf(TNLSFuncControl), 0);
  FillChar(CountryInfo, SizeOf(TCountryInfo), 0);
- 
- { Traiter les paramètres }
+  { Traiter les paramètres }
  If Not ProcessParameters Then Exit;
- 
- { Vérifier si déjà installé }
+  { Vérifier si déjà installé }
  If IsNLSFuncInstalled Then Begin
   Case Language Of
    _English: WriteLn('NLSFUNC is already installed in memory.');
@@ -554,8 +549,7 @@ Begin
   End;
   Exit;
  End;
- 
- { Vérifier l'existence du fichier COUNTRY.SYS }
+  { Vérifier l'existence du fichier COUNTRY.SYS }
  If Not CheckCountryFile Then Begin
   Case Language Of
    _English: WriteLn('Cannot find country information file: ', CountryFile);
@@ -564,108 +558,13 @@ Begin
   End;
   Halt(1);
  End;
- 
- { Installer NLSFUNC }
+  { Installer NLSFUNC }
  InstallNLSFunc;
- 
  Case Language Of
   _English: WriteLn('NLSFUNC installed. Country information file: ', CountryFile);
   _Germany: WriteLn('NLSFUNC installiert. Länderinformationsdatei: ', CountryFile);
   Else WriteLn('NLSFUNC installé. Fichier d''informations de pays: ', CountryFile);
  End;
- 
- { Rester résident en mémoire }
+  { Rester résident en mémoire }
  Keep(0);
-End.
- {$I-}Assign(NLSFile, FileName);
- Reset(NLSFile, 1);{$I+}
- If IOResult<>0 Then Begin
-  WriteLn('Erreur: Impossible d''ouvrir le fichier NLS');
-  Exit;
- End;
- BlockRead(NLSFile,NLSHeader,SizeOf(NLSHeader),BytesRead);
- If(BytesRead <> SizeOf(NLSHeader))or(NLSHeader.Signature<>NLS_SIGNATURE)Then Begin
-  WriteLn('Error: Invalid NLS file format');
-  Close(NLSFile);
-  Exit;
- End;
- If NLSHeader.TableSize>MAX_TABLE_SIZE Then Begin
-  WriteLn('Erreur: Table NLS trop grande');
-  Close(NLSFile);
-  Exit;
- End;
- BlockRead(NLSFile,TableData,NLSHeader.TableSize,BytesRead);
- Close(NLSFile);
- If BytesRead<>NLSHeader.TableSize Then Begin
-  WriteLn('Erreur: Fichier NLS incomplet');
-  Exit;
- End;
- LoadNLSFile:= True;
-End;
-
-Procedure InstallNLSHandlers;
-Var
- Regs:Registers;
-Begin
- Regs.AH:=$14;  { DOS - Fixe la fonction de d�pendances de pays }
- Regs.AL:=$00;  { Installe le gestionnaire }
- Regs.DX:=DEFAULT_COUNTRY;
- Intr($21,Regs);
- If Regs.Flags and FCarry<>0 Then
-  WriteLn('Attention: Ne peut pas installer le gestionnaire NLS.')
- Else
-  WriteLn('Gestionnaire NLS install� avec succ�s.');
-End;
-
-Procedure UninstallNLSHandlers;
-Var
- Regs:Registers;
-Begin
- Regs.AH:=$14;
- Regs.AL:=$FF;  { D�sinstalle le gestionnaire }
- Intr($21,Regs);
- WriteLn('Gestionnaire NLS d�install�s.');
-End;
-
-Var
- i:Integer;
- Param:String;
- FileName:String;
- Install:Boolean;
-
-BEGIN
- If(ParamStr(1)='/?')or(ParamStr(1)='--help')or(ParamStr(1)='-h')or
-   (ParamStr(1)='/h')or(ParamStr(1)='/H')Then Begin
-  WriteLn('NLSFUNC : Cette commande permet d''effectuer la gestion du pays ',
-                    'et des conventions internationales du syst�me d''exploitation.');
-  WriteLn;
-  WriteLn('Syntaxe : NLSFUNC [/C[+|-]] [/F filename]');
-  WriteLn;
-  WriteLn(' /C    Charge ou d�charge la table de caract�res');
-  WriteLn(' /F    Fichier NLS sp�cifique � charger.');
-  Halt;
- End;
- ErrorLevel:=0;
- Install:=True;
- FileName:='';
- For i:=1 to ParamCount do Begin
-  Param:=ParamStr(i);
-  If(Param[1] = '/')or(Param[1] = '-')Then Begin
-   Case UpCase(Param[2]) of
-    'C':Install:=(Length(Param)<4)or(Param[3]='+');
-    'F':If i<ParamCount Then FileName:=ParamStr(i+1);
-                        Else WriteLn('Param�tre invalide : ', Param);
-    ErrorLevel := 1;
-    Exit;
-   End;
-  End;
- End;
- If(Install)Then Begin
-  If FileName=''Then FileName:='COUNTRY.NLS';
-  If LoadNLSFile(FileName)Then InstallNLSHandlers
-                          Else ErrorLevel:=2;
- End
-  Else
- UninstallNLSHandlers;
- Halt(ErrorLevel);
 END.
