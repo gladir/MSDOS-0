@@ -222,7 +222,7 @@ Begin
     Write('   ', CheckMark,'    ');
     Case(Language)of
      _English:Write('Media descriptor');
-     Else Write('Descripteur de m�dia');
+     Else Write('Descripteur de m�dia');
     End;
     ClrEol;
    End;
@@ -576,6 +576,162 @@ Begin
  End;
 End;
 
+Function DriveExists(Drive: Char): Boolean;
+{$IFDEF Windows}
+Var
+ F: File;
+ TestFile: String;
+Begin
+ TestFile := Drive + ':\$$$TEST.$$$';
+ {$I-}
+ Assign(F, TestFile);
+ Reset(F);
+ {$I+}
+ If IOResult = 0 Then Begin
+  Close(F);
+  DriveExists := True;
+ End Else Begin
+  { Essayer de créer un fichier test }
+  {$I-}
+  Assign(F, TestFile);
+  Rewrite(F);
+  {$I+}
+  If IOResult = 0 Then Begin
+   Close(F);
+   Erase(F);
+   DriveExists := True;
+  End Else Begin
+   DriveExists := False;
+  End;
+ End;
+End;
+{$ELSE}
+Var
+ Regs: Registers;
+ OldDrive: Byte;
+Begin
+ { Sauvegarder le lecteur actuel }
+ Regs.AH := $19;
+ Intr($21, Regs);
+ OldDrive := Regs.AL;
+ 
+ { Essayer de changer vers le lecteur }
+ Regs.AH := $0E;
+ Regs.DL := Ord(UpCase(Drive)) - Ord('A');
+ Intr($21, Regs);
+ 
+ { Vérifier si le changement a réussi }
+ Regs.AH := $19;
+ Intr($21, Regs);
+ DriveExists := Regs.AL = (Ord(UpCase(Drive)) - Ord('A'));
+ 
+ { Restaurer le lecteur original }
+ Regs.AH := $0E;
+ Regs.DL := OldDrive;
+ Intr($21, Regs);
+End;
+{$ENDIF}
+
+Function SelectDrive: String;
+Var
+ Key: Char;
+ SelectedDrive: Integer;
+ DriveAvailable: Array[0..3] of Boolean;
+ DriveCount: Integer;
+ i: Integer;
+Begin
+ { Vérifier quels lecteurs sont disponibles }
+ DriveAvailable[0] := DriveExists('A'); { A: }
+ DriveAvailable[1] := DriveExists('B'); { B: }
+ DriveAvailable[2] := DriveExists('C'); { C: }
+ DriveAvailable[3] := DriveExists('D'); { D: }
+ 
+ DriveCount := 0;
+ For i := 0 to 3 do
+  If DriveAvailable[i] Then Inc(DriveCount);
+ 
+ If DriveCount = 0 Then Begin
+  ShowDialog('Error', 'No drives available', False);
+  SelectDrive := '';
+  Exit;
+ End;
+ 
+ SelectedDrive := 2; { Commencer avec C: par défaut }
+ While Not DriveAvailable[SelectedDrive] do
+  SelectedDrive := (SelectedDrive + 1) mod 4;
+ 
+ Repeat
+  ClrScr;
+  ShowTitle;
+  
+  GotoXY(1, 4);
+  Case Language of
+   _English: Write('Select the drive you want to check:');
+   Else Write('Sélectionnez le lecteur que vous voulez vérifier :');
+  End;
+  
+  { Afficher les lecteurs disponibles }
+  For i := 0 to 3 do Begin
+   If DriveAvailable[i] Then Begin
+    GotoXY(5, 7 + i);
+    If i = SelectedDrive Then Begin
+     TextColor(Black);
+     TextBackground(White);
+     Write('> ');
+    End Else Begin
+     TextColor(White);
+     TextBackground(Blue);
+     Write('  ');
+    End;
+    Write(Chr(Ord('A') + i), ':');
+    If i = SelectedDrive Then Begin
+     Write(' <');
+     TextColor(White);
+     TextBackground(Blue);
+    End;
+    ClrEol;
+   End;
+  End;
+  
+  GotoXY(1, 15);
+  Case Language of
+   _English: Begin
+    Write('Use ↑↓ arrows to select, Enter to continue, Esc to exit');
+   End;
+   Else Begin
+    Write('Utilisez les flèches ↑↓ pour sélectionner, Entrée pour continuer, Échap pour quitter');
+   End;
+  End;
+  
+  Key := ReadKey;
+  Case Key of
+   #0: Begin { Touche étendue }
+    Key := ReadKey;
+    Case Key of
+     #72: Begin { Flèche haut }
+      Repeat
+       SelectedDrive := (SelectedDrive + 3) mod 4;
+      Until DriveAvailable[SelectedDrive];
+     End;
+     #80: Begin { Flèche bas }
+      Repeat
+       SelectedDrive := (SelectedDrive + 1) mod 4;
+      Until DriveAvailable[SelectedDrive];
+     End;
+    End;
+   End;
+   #13: Begin { Enter }
+    SelectDrive := Chr(Ord('A') + SelectedDrive) + ':';
+    Exit;
+   End;
+   #27: Begin { Escape }
+    SelectDrive := '';
+    Exit;
+   End;
+  End;
+ Until False;
+End;
+
 Function ReadSector(SectorNum: LongInt): Boolean;
 {$IFDEF Windows}
 Begin
@@ -690,8 +846,125 @@ End;
 
 Procedure CheckFATConsistency;
 Var
- i, j: Integer;
+ i, j, FATEntry, NextCluster: Integer;
+ FAT2: Array[0..8191] of Word;
+ MaxFATEntries, MaxSectors: Integer;
+ FATMismatch: Boolean;
 Begin
+ CheckStatus[ciMedia] := False;
+ 
+ { Vérifier d'abord le descripteur de média }
+ If BootSector.MediaDescriptor <> $F0 Then Begin { $F0 = disquette HD, $F8 = disque dur }
+  If BootSector.MediaDescriptor <> $F8 Then Begin
+   Inc(ErrorsFound);
+   If Not CheckOnly Then Begin
+    ShowDialog('Media Error', 'Invalid media descriptor: $' + 
+               IntToStr(BootSector.MediaDescriptor), False);
+   End;
+  End;
+ End;
+ 
+ { Vérifier que les deux copies de la FAT sont identiques }
+ If BootSector.NumberOfFATs >= 2 Then Begin
+  FATMismatch := False;
+  MaxFATEntries := High(FAT2) + 1;
+  MaxSectors := MaxFATEntries div 256;
+  
+  { Lire la deuxième FAT }
+  For i := 0 to Min(BootSector.SectorsPerFAT - 1, MaxSectors - 1) do Begin
+   If ReadSector(BootSector.ReservedSectors + BootSector.SectorsPerFAT + i) Then Begin
+    For j := 0 to 255 do Begin
+     If (i * 256 + j) < MaxFATEntries Then Begin
+      If (j * 2 + 1) < 512 Then Begin
+       FAT2[i * 256 + j] := SectorBuffer[j * 2] + (SectorBuffer[j * 2 + 1] shl 8);
+      End;
+     End Else Break;
+    End;
+   End Else Begin
+    Inc(ErrorsFound);
+    Exit;
+   End;
+  End;
+  
+  { Comparer les deux FATs }
+  For i := 0 to Min(High(FAT), High(FAT2)) do Begin
+   If FAT[i] <> FAT2[i] Then Begin
+    FATMismatch := True;
+    Inc(ErrorsFound);
+    Break;
+   End;
+  End;
+  
+  If FATMismatch Then Begin
+   If AutoFix Then Begin
+    { Réparer en copiant la première FAT sur la deuxième }
+    For i := 0 to Min(BootSector.SectorsPerFAT - 1, MaxSectors - 1) do Begin
+     { Reconstruire le secteur à partir de la FAT }
+     FillChar(SectorBuffer, 512, 0);
+     For j := 0 to 255 do Begin
+      If (i * 256 + j) < MaxFATEntries Then Begin
+       If (j * 2 + 1) < 512 Then Begin
+        SectorBuffer[j * 2] := FAT[i * 256 + j] and $FF;
+        SectorBuffer[j * 2 + 1] := (FAT[i * 256 + j] shr 8) and $FF;
+       End;
+      End;
+     End;
+     { Écrire le secteur corrigé dans la deuxième FAT }
+     If Not WriteSector(BootSector.ReservedSectors + BootSector.SectorsPerFAT + i) Then Begin
+      ShowDialog('Write Error', 'Cannot write corrected FAT sector', False);
+      Exit;
+     End;
+    End;
+   End Else Begin
+    ShowDialog('FAT Error', 'FAT copies are inconsistent. Use /AUTOFIX to repair.', False);
+   End;
+  End;
+ End;
+ 
+ { Vérifier les entrées spéciales de la FAT }
+ If High(FAT) >= 1 Then Begin
+  { Les deux premières entrées doivent avoir des valeurs spéciales }
+  If (FAT[0] and $0FFF) <> ($0F00 or BootSector.MediaDescriptor) Then Begin
+   Inc(ErrorsFound);
+   If AutoFix Then Begin
+    FAT[0] := $0F00 or BootSector.MediaDescriptor;
+   End Else Begin
+    ShowDialog('FAT Error', 'Invalid FAT[0] entry', False);
+   End;
+  End;
+  
+  If (FAT[1] and $0FFF) <> $0FFF Then Begin
+   Inc(ErrorsFound);
+   If AutoFix Then Begin
+    FAT[1] := $0FFF;
+   End Else Begin
+    ShowDialog('FAT Error', 'Invalid FAT[1] entry', False);
+   End;
+  End;
+ End;
+ 
+ { Vérifier les chaînes de clusters pour détecter les boucles infinies }
+ For i := 2 to High(FAT) do Begin
+  If (FAT[i] <> 0) and (FAT[i] < $FF8) Then Begin
+   NextCluster := FAT[i];
+   j := 0;
+   While (NextCluster < $FF8) and (NextCluster <> 0) and (j < 1000) do Begin
+    If NextCluster > High(FAT) Then Begin
+     Inc(ErrorsFound);
+     ShowDialog('FAT Error', 'Invalid cluster chain at cluster ' + IntToStr(i), False);
+     Break;
+    End;
+    NextCluster := FAT[NextCluster];
+    Inc(j);
+   End;
+   
+   If j >= 1000 Then Begin
+    Inc(ErrorsFound);
+    ShowDialog('FAT Error', 'Infinite loop detected in cluster chain starting at cluster ' + IntToStr(i), False);
+   End;
+  End;
+ End;
+ 
  CheckStatus[ciMedia] := True;
 End;
 
@@ -930,7 +1203,7 @@ BEGIN
  End;
   { Vérification des paramètres d'aide }
  If (ParamStr(1) = '/?') or (ParamStr(1) = '--help') or (ParamStr(1) = '-h') or
-    (ParamStr(1) = '/h') or (ParamStr(1) = '/H') or (ParamCount = 0) Then Begin
+    (ParamStr(1) = '/h') or (ParamStr(1) = '/H') Then Begin
   Case Language of
    _English: Begin
     WriteLn('SCANDISK - Disk diagnostic and repair utility');
@@ -944,7 +1217,8 @@ BEGIN
     WriteLn('  /SURFACE   Perform surface scan');
    End;
    Else Begin
-    WriteLn('SCANDISK - Utilitaire de diagnostic et réparation de disque');
+    WriteLn('SCANDISK - Cette commande permet de lancer l''utilitaire ',
+                        'de diagnostic et réparation de disque.');
     WriteLn;
     WriteLn('Syntaxe : SCANDISK [lecteur: | fichier] [/AUTOFIX] [/CHECKONLY] [/SURFACE]');
     WriteLn;
@@ -957,10 +1231,23 @@ BEGIN
   End;
   Halt;
  End;
-  { Setup de l'interface graphique }
+ 
+ { Setup de l'interface graphique }
  CursorOff;
  SetupColors;
-  { Initialisation des variables }
+ 
+ { Si aucun paramètre, permettre la sélection d'un lecteur }
+ If ParamCount = 0 Then Begin
+  DrivePath := SelectDrive;
+  If DrivePath = '' Then Begin
+   CursorOn;
+   Halt(0);
+  End;
+ End Else Begin
+  { Analyse des paramètres }
+  DrivePath := StrToUpper(ParamStr(1));
+ End;
+ { Initialisation des variables }
  AutoFix := False;
  CheckOnly := False;
  DoSurfaceScan := False;
@@ -971,8 +1258,8 @@ BEGIN
  ErrorsFound := 0;
  FillChar(ClusterMap, SizeOf(ClusterMap), 0);
  FillChar(CheckStatus, SizeOf(CheckStatus), 0);
-  { Analyse des paramètres }
- DrivePath := StrToUpper(ParamStr(1));
+
+ { Déterminer le type de cible (lecteur ou fichier image) }
  If (Length(DrivePath) = 2) and (DrivePath[2] = ':') Then Begin
   { C'est un lecteur }
   IsImageFile := False;
@@ -991,7 +1278,7 @@ BEGIN
  Begin
   { C'est un fichier image }
   IsImageFile := True;
-  FileName := ParamStr(1);
+  FileName := DrivePath;
   DrivePath := 'file';
   {$I-} Assign(FileHandle, FileName);
   Reset(FileHandle, 1);
