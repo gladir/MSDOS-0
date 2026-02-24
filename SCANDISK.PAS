@@ -215,15 +215,15 @@ Begin
   IntToHex := '0';
   Exit;
  End;
- 
+
  While Value > 0 do Begin
   S := HexDigits[(Value mod 16) + 1] + S;
   Value := Value div 16;
  End;
- 
+
  { Ajouter des zéros à gauche si nécessaire }
  While Length(S) < Digits do S := '0' + S;
- 
+
  IntToHex := S;
 End;
 
@@ -245,6 +245,38 @@ Begin
    _English:Begin
     WriteLn('Error: Not enough memory to allocate FAT tables');
     WriteLn('Required: ', (SizeOf(TFATFragment) * 3) + (SizeOf(TClusterMapFragment) * 2), ' bytes');
+   End;
+   _Germany:Begin
+    WriteLn('Fehler: Nicht genug Speicher für FAT-Tabellen');
+    WriteLn('Benötigt: ', (SizeOf(TFATFragment) * 3) + (SizeOf(TClusterMapFragment) * 2), ' Bytes');
+   End;
+   _Italian:Begin
+    WriteLn('Errore: Memoria insufficiente per allocare tabelle FAT');
+    WriteLn('Richiesto: ', (SizeOf(TFATFragment) * 3) + (SizeOf(TClusterMapFragment) * 2), ' byte');
+   End;
+   _Spain:Begin
+    WriteLn('Error: Memoria insuficiente para asignar tablas FAT');
+    WriteLn('Requerido: ', (SizeOf(TFATFragment) * 3) + (SizeOf(TClusterMapFragment) * 2), ' bytes');
+   End;
+   _Albanian:Begin
+    WriteLn('Gabim: Memorje e pamjaftueshme për të alokuar tabelat FAT');
+    WriteLn('E nevojshme: ', (SizeOf(TFATFragment) * 3) + (SizeOf(TClusterMapFragment) * 2), ' bajte');
+   End;
+   _Portuguese:Begin
+    WriteLn('Erro: Memória insuficiente para alocar tabelas FAT');
+    WriteLn('Necessário: ', (SizeOf(TFATFragment) * 3) + (SizeOf(TClusterMapFragment) * 2), ' bytes');
+   End;
+   _Swedish:Begin
+    WriteLn('Fel: Otillräckligt minne för att allokera FAT-tabeller');
+    WriteLn('Krävs: ', (SizeOf(TFATFragment) * 3) + (SizeOf(TClusterMapFragment) * 2), ' bytes');
+   End;
+   _Danish:Begin
+    WriteLn('Fejl: Utilstrækkelig hukommelse til at allokere FAT-tabeller');
+    WriteLn('Krævet: ', (SizeOf(TFATFragment) * 3) + (SizeOf(TClusterMapFragment) * 2), ' bytes');
+   End;
+   _Japanese:Begin
+    WriteLn('Erra: FAT teburu no wariate ni juubun na memori ga arimasen');
+    WriteLn('Hitsuyou: ', (SizeOf(TFATFragment) * 3) + (SizeOf(TClusterMapFragment) * 2), ' baito');
    End;
    Else Begin
     WriteLn('Erreur : Mémoire insuffisante pour allouer les tables FAT');
@@ -386,11 +418,27 @@ Procedure ShowMainButtons;Begin
  Write('  ');
  Case(Language)of
   _English:ShowButton('More Info', False);
+  _Germany:ShowButton('Mehr Info', False);
+  _Italian:ShowButton('Più Info', False);
+  _Spain:ShowButton('Más Info', False);
+  _Albanian:ShowButton('Më Shumë Info', False);
+  _Portuguese:ShowButton('Mais Info', False);
+  _Swedish:ShowButton('Mer Info', False);
+  _Danish:ShowButton('Mere Info', False);
+  _Japanese:ShowButton('Motto Joho', False);
   Else ShowButton('Plus Info',False);
  End;
  Write('  ');
  Case(Language)of
   _English:ShowButton('Exit',False);
+  _Germany:ShowButton('Beenden',False);
+  _Italian:ShowButton('Uscita',False);
+  _Spain:ShowButton('Salir',False);
+  _Albanian:ShowButton('Dalje',False);
+  _Portuguese:ShowButton('Sair',False);
+  _Swedish:ShowButton('Avsluta',False);
+  _Danish:ShowButton('Afslut',False);
+  _Japanese:ShowButton('Shuuryou',False);
   Else ShowButton('Quitter',False);
  End;
 End;
@@ -403,11 +451,27 @@ Begin
  If IsImageFile Then Begin
   Case(Language)of
    _English:Write('ScanDisk is now checking the following areas of file ', FileName, ':');
+   _Germany:Write('ScanDisk überprüft nun die folgenden Bereiche der Datei ', FileName, ':');
+   _Italian:Write('ScanDisk sta controllando le seguenti aree del file ', FileName, ':');
+   _Spain:Write('ScanDisk está verificando las siguientes áreas del archivo ', FileName, ':');
+   _Albanian:Write('ScanDisk po kontrollon zonat e mëposhtme të skedarit ', FileName, ':');
+   _Portuguese:Write('ScanDisk está verificando as seguintes áreas do arquivo ', FileName, ':');
+   _Swedish:Write('ScanDisk kontrollerar nu följande områden av filen ', FileName, ':');
+   _Danish:Write('ScanDisk kontrollerer nu følgende områder af filen ', FileName, ':');
+   _Japanese:Write('ScanDisk wa ima fairu ', FileName, ' no tsugi no ryouiki wo chekku shiteimasu:');
    Else Write('ScanDisk vérifie maintenant les zones suivantes du fichier ', FileName, ' :');
   End;
  End Else Begin
   Case(Language)of
    _English:Write('ScanDisk is now checking the following areas of drive ', DrivePath, ':');
+   _Germany:Write('ScanDisk überprüft nun die folgenden Bereiche von Laufwerk ', DrivePath, ':');
+   _Italian:Write('ScanDisk sta controllando le seguenti aree dell''unità ', DrivePath, ':');
+   _Spain:Write('ScanDisk está verificando las siguientes áreas de la unidad ', DrivePath, ':');
+   _Albanian:Write('ScanDisk po kontrollon zonat e mëposhtme të diskut ', DrivePath, ':');
+   _Portuguese:Write('ScanDisk está verificando as seguintes áreas da unidade ', DrivePath, ':');
+   _Swedish:Write('ScanDisk kontrollerar nu följande områden av enheten ', DrivePath, ':');
+   _Danish:Write('ScanDisk kontrollerer nu følgende områder af drevet ', DrivePath, ':');
+   _Japanese:Write('ScanDisk wa ima doraibu ', DrivePath, ' no tsugi no ryouiki wo chekku shiteimasu:');
    Else Write('ScanDisk vérifie maintenant les zones suivantes du lecteur ', DrivePath, ' :');
   End;
  End;
@@ -421,6 +485,14 @@ Begin
     Write('   ', CheckMark,'    ');
     Case(Language)of
      _English:Write('Media descriptor');
+     _Germany:Write('Medien-Deskriptor');
+     _Italian:Write('Descrittore supporto');
+     _Spain:Write('Descriptor de medios');
+     _Albanian:Write('Përshkruesi i medias');
+     _Portuguese:Write('Descritor de mídia');
+     _Swedish:Write('Mediabeskrivare');
+     _Danish:Write('Mediebeskriver');
+     _Japanese:Write('Media kishutsuji');
      Else Write('Descripteur de m�dia');
     End;
     ClrEol;
@@ -430,6 +502,14 @@ Begin
     Write('   ', CheckMark, '    ');
     Case(Language)of
      _English:Write('File allocation tables');
+     _Germany:Write('Dateizuordnungstabellen');
+     _Italian:Write('Tabelle di allocazione file');
+     _Spain:Write('Tablas de asignación de archivos');
+     _Albanian:Write('Tabelat e alokimit të skedarëve');
+     _Portuguese:Write('Tabelas de alocação de arquivos');
+     _Swedish:Write('Filallokeringstabeller');
+     _Danish:Write('Filallokeringstabeller');
+     _Japanese:Write('Fairu wariate teburu');
      Else Write('Table d''allocation de fichiers');
     End;
     ClrEol;
@@ -439,6 +519,14 @@ Begin
     Write('   ', CheckMark, '    ');
     Case(Language)of
      _English:Write('Directory structure');
+     _Germany:Write('Verzeichnisstruktur');
+     _Italian:Write('Struttura directory');
+     _Spain:Write('Estructura de directorios');
+     _Albanian:Write('Struktura e drejtorive');
+     _Portuguese:Write('Estrutura de diretórios');
+     _Swedish:Write('Katalogstruktur');
+     _Danish:Write('Mappestruktur');
+     _Japanese:Write('Direkutori kouzou');
      Else Write('Structure de répertoire');
     End;
     ClrEol;
@@ -448,6 +536,14 @@ Begin
     Write('   ', CheckMark, '    ');
     Case(Language)of
      _English:Write('File system');
+     _Germany:Write('Dateisystem');
+     _Italian:Write('Sistema file');
+     _Spain:Write('Sistema de archivos');
+     _Albanian:Write('Sistemi i skedarëve');
+     _Portuguese:Write('Sistema de arquivos');
+     _Swedish:Write('Filsystem');
+     _Danish:Write('Filsystem');
+     _Japanese:Write('Fairu shisutemu');
      Else Write('Système de fichiers');
     End;
     ClrEol;
@@ -457,6 +553,14 @@ Begin
     Write('   ', CheckMark, '    ');
     Case(Language)of
      _English:Write('Free space');
+     _Germany:Write('Freier Speicherplatz');
+     _Italian:Write('Spazio libero');
+     _Spain:Write('Espacio libre');
+     _Albanian:Write('Hapësirë e lirë');
+     _Portuguese:Write('Espaço livre');
+     _Swedish:Write('Ledigt utrymme');
+     _Danish:Write('Ledig plads');
+     _Japanese:Write('Kuu ryouiki');
      Else Write('Espace libre');
     End;
     ClrEol;
@@ -469,6 +573,14 @@ Begin
     Else Write(' ');
     Case(Language)of
      _English:Write('    Surface scan');
+     _Germany:Write('    Oberflächenscan');
+     _Italian:Write('    Scansione superficie');
+     _Spain:Write('    Exploración de superficie');
+     _Albanian:Write('    Skanimi i sipërfaqes');
+     _Portuguese:Write('    Varredura de superfície');
+     _Swedish:Write('    Ytskanning');
+     _Danish:Write('    Overfladeskanning');
+     _Japanese:Write('    Hyoumen sukyan');
      Else Write('    Balayage de surface');
     End;
     ClrEol;
@@ -541,6 +653,46 @@ Begin
     Write('  ');
     ShowButton('No',False);
    End;
+   _Germany:Begin
+    ShowButton('Ja',True);
+    Write('  ');
+    ShowButton('Nein',False);
+   End;
+   _Italian:Begin
+    ShowButton('Sì',True);
+    Write('  ');
+    ShowButton('No',False);
+   End;
+   _Spain:Begin
+    ShowButton('Sí',True);
+    Write('  ');
+    ShowButton('No',False);
+   End;
+   _Albanian:Begin
+    ShowButton('Po',True);
+    Write('  ');
+    ShowButton('Jo',False);
+   End;
+   _Portuguese:Begin
+    ShowButton('Sim',True);
+    Write('  ');
+    ShowButton('Não',False);
+   End;
+   _Swedish:Begin
+    ShowButton('Ja',True);
+    Write('  ');
+    ShowButton('Nej',False);
+   End;
+   _Danish:Begin
+    ShowButton('Ja',True);
+    Write('  ');
+    ShowButton('Nej',False);
+   End;
+   _Japanese:Begin
+    ShowButton('Hai',True);
+    Write('  ');
+    ShowButton('Iie',False);
+   End;
    Else Begin
     ShowButton('Oui',True);
     Write('  ');
@@ -576,6 +728,14 @@ Begin
  GotoXY(1, 24);
  Case(Language)of
   _English:Write('examining drive ', DrivePath, '...');
+  _Germany:Write('überprüfe Laufwerk ', DrivePath, '...');
+  _Italian:Write('esame unità ', DrivePath, '...');
+  _Spain:Write('examinando unidad ', DrivePath, '...');
+  _Albanian:Write('duke kontrolluar diskun ', DrivePath, '...');
+  _Portuguese:Write('examinando unidade ', DrivePath, '...');
+  _Swedish:Write('undersöker enhet ', DrivePath, '...');
+  _Danish:Write('undersøger drev ', DrivePath, '...');
+  _Japanese:Write('doraibu ', DrivePath, ' wo kensa chuu...');
   Else Write('examen du lecteur ', DrivePath, '...');
  End;
  ClrEol;
@@ -613,6 +773,14 @@ Begin
  TextBackground(LightGray);
  Case(Language)of
   _English:Write('Surface Scan');
+  _Germany:Write('Oberflächenscan');
+  _Italian:Write('Scansione Superficie');
+  _Spain:Write('Exploración Superficie');
+  _Albanian:Write('Skanim Sipërfaqe');
+  _Portuguese:Write('Varredura Superfície');
+  _Swedish:Write('Ytskanning');
+  _Danish:Write('Overfladeskanning');
+  _Japanese:Write('Hyoumen Sukyan');
   Else Write('Balayage Surface');
  End;
  { Calculer les secteurs par bloc selon la taille totale }
@@ -652,11 +820,27 @@ Begin
  If IsImageFile Then Begin
   Case(Language)of
    _English:Write('File: ', FileName);
+   _Germany:Write('Datei: ', FileName);
+   _Italian:Write('File: ', FileName);
+   _Spain:Write('Archivo: ', FileName);
+   _Albanian:Write('Skedari: ', FileName);
+   _Portuguese:Write('Arquivo: ', FileName);
+   _Swedish:Write('Fil: ', FileName);
+   _Danish:Write('Fil: ', FileName);
+   _Japanese:Write('Fairu: ', FileName);
    Else Write('Fichier : ', FileName);
   End;
  End Else Begin
   Case(Language)of
    _English:Write('Drive ', DrivePath, ':');
+   _Germany:Write('Laufwerk ', DrivePath, ':');
+   _Italian:Write('Unità ', DrivePath, ':');
+   _Spain:Write('Unidad ', DrivePath, ':');
+   _Albanian:Write('Disku ', DrivePath, ':');
+   _Portuguese:Write('Unidade ', DrivePath, ':');
+   _Swedish:Write('Enhet ', DrivePath, ':');
+   _Danish:Write('Drev ', DrivePath, ':');
+   _Japanese:Write('Doraibu ', DrivePath, ':');
    Else Write('Lecteur ', DrivePath, ' :');
   End;
  End;
@@ -1085,6 +1269,7 @@ Function DetectPartition: Boolean;
 Var
  i: Integer;
  PartitionFound: Boolean;
+ FileSize: LongInt;
 Begin
  HasPartition := False;
  PartitionOffset := 0;
@@ -1092,6 +1277,72 @@ Begin
 
  If Not IsImageFile Then Begin
   { Pour les vrais lecteurs, pas de partition à détecter }
+  DetectPartition := True;
+  Exit;
+ End;
+
+ { Obtenir la taille du fichier image }
+ FileSize := System.FileSize(FileHandle);
+ If IOResult <> 0 Then Begin
+  DetectPartition := False;
+  Exit;
+ End;
+
+ { Si le fichier fait moins de 4 MB, c'est probablement une disquette }
+ { Les disquettes n'ont pas de table de partition MBR }
+ If FileSize < (4 * 1024 * 1024) Then Begin
+  Case(Language)of
+   _English:Begin
+    GotoXY(1, 3);
+    Write('Small disk image (', FileSize div 1024, 'KB) - assuming floppy disk format');
+    ClrEol;
+   End;
+   _Germany:Begin
+    GotoXY(1, 3);
+    Write('Kleines Disk-Image (', FileSize div 1024, 'KB) - Disketten-Format angenommen');
+    ClrEol;
+   End;
+   _Italian:Begin
+    GotoXY(1, 3);
+    Write('Immagine disco piccola (', FileSize div 1024, 'KB) - formato dischetto assunto');
+    ClrEol;
+   End;
+   _Spain:Begin
+    GotoXY(1, 3);
+    Write('Imagen de disco pequeña (', FileSize div 1024, 'KB) - formato disquete asumido');
+    ClrEol;
+   End;
+   _Albanian:Begin
+    GotoXY(1, 3);
+    Write('Imazh disku i vogël (', FileSize div 1024, 'KB) - format diskete supozohet');
+    ClrEol;
+   End;
+   _Portuguese:Begin
+    GotoXY(1, 3);
+    Write('Imagem de disco pequena (', FileSize div 1024, 'KB) - formato disquete assumido');
+    ClrEol;
+   End;
+   _Swedish:Begin
+    GotoXY(1, 3);
+    Write('Liten diskavbild (', FileSize div 1024, 'KB) - diskett-format antas');
+    ClrEol;
+   End;
+   _Danish:Begin
+    GotoXY(1, 3);
+    Write('Lille disk-image (', FileSize div 1024, 'KB) - diskette-format antaget');
+    ClrEol;
+   End;
+   _Japanese:Begin
+    GotoXY(1, 3);
+    Write('Chiisana disuku imeeji (', FileSize div 1024, 'KB) - furopii disuku keishiki to suitei');
+    ClrEol;
+   End;
+   Else Begin
+    GotoXY(1, 3);
+    Write('Petite image disque (', FileSize div 1024, 'Ko) - format disquette assumé');
+    ClrEol;
+   End;
+  End;
   DetectPartition := True;
   Exit;
  End;
@@ -1138,7 +1389,7 @@ Begin
 
  { Chercher une partition active ou la première partition FAT }
  PartitionFound := False;
- 
+
  { D'abord, chercher une partition active }
  For i := 0 to 3 do Begin
   With MBR.PartitionTable[i] do Begin
@@ -1149,13 +1400,13 @@ Begin
     Case(Language)of
      _English:Begin
       GotoXY(1, 3);
-      Write('Active partition found at sector ', RelativeSectors, ' (Type: $', 
+      Write('Active partition found at sector ', RelativeSectors, ' (Type: $',
             IntToHex(PartitionType, 2), ')');
       ClrEol;
      End;
      Else Begin
       GotoXY(1, 3);
-      Write('Partition active trouvée au secteur ', RelativeSectors, ' (Type: $', 
+      Write('Partition active trouvée au secteur ', RelativeSectors, ' (Type: $',
             IntToHex(PartitionType, 2), ')');
       ClrEol;
      End;
@@ -1174,19 +1425,19 @@ Begin
      Case(Language)of
       _English:Begin
        GotoXY(1, 5 + i);
-       Write('Partition ', i, ': Type=$', IntToHex(PartitionType, 2), 
+       Write('Partition ', i, ': Type=$', IntToHex(PartitionType, 2),
              ' Status=$', IntToHex(Status, 2), ' Sectors=', TotalSectors);
        ClrEol;
       End;
       Else Begin
        GotoXY(1, 5 + i);
-       Write('Partition ', i, ': Type=$', IntToHex(PartitionType, 2), 
+       Write('Partition ', i, ': Type=$', IntToHex(PartitionType, 2),
              ' Status=$', IntToHex(Status, 2), ' Secteurs=', TotalSectors);
        ClrEol;
       End;
      End;
     End;
-    
+
     If (PartitionType in [$01, $04, $06, $0B, $0C, $0E, $0F]) and (TotalSectors > 0) Then Begin
      PartitionOffset := RelativeSectors;
      HasPartition := True;
@@ -1194,13 +1445,13 @@ Begin
      Case(Language)of
       _English:Begin
        GotoXY(1, 3);
-       Write('FAT partition found at sector ', RelativeSectors, ' (Type: $', 
+       Write('FAT partition found at sector ', RelativeSectors, ' (Type: $',
              IntToHex(PartitionType, 2), ')');
        ClrEol;
       End;
       Else Begin
        GotoXY(1, 3);
-       Write('Partition FAT trouvée au secteur ', RelativeSectors, ' (Type: $', 
+       Write('Partition FAT trouvée au secteur ', RelativeSectors, ' (Type: $',
              IntToHex(PartitionType, 2), ')');
        ClrEol;
       End;
@@ -1706,8 +1957,13 @@ Begin
     End;
    End;
   End;
-  { Mettre à jour l'affichage toutes les quelques secteurs selon la taille }
-  If (TotalSectors < 100) or ((i mod (TotalSectors div 200 + 1)) = 0) Then Begin
+  { Mettre à jour l'affichage selon la taille du disque pour éviter de ralentir }
+  If (HasPartition) Then Begin
+   { Pour les gros disques, mise à jour moins fréquente }
+   If (i mod (TotalSectors div 100 + 1)) = 0 Then Begin
+    UpdateSurfaceProgress(SectorsExamined, BadSectors);
+   End;
+  End Else If (TotalSectors < 100) or ((i mod (TotalSectors div 200 + 1)) = 0) Then Begin
    UpdateSurfaceProgress(SectorsExamined, BadSectors);
   End;
   { Vérifier si l'utilisateur appuie sur une touche }
@@ -1718,8 +1974,12 @@ Begin
     End;
    End;
   End;
-   { Délai proportionnel à la taille du disque }
-  If TotalSectors < 1000 Then Delay(20) Else Delay(5);
+   { Délai proportionnel à la taille du disque - pas de délai pour les gros disques }
+  If TotalSectors < 1000 Then Delay(20)
+  Else If TotalSectors < 10000 Then Delay(2)
+  Else If HasPartition Then { Pas de délai pour les disques avec partitions }
+   { Pas de délai du tout }
+  Else Delay(1);
  End;
   { Mettre à jour l'affichage final }
  UpdateSurfaceProgress(SectorsExamined, BadSectors);
@@ -1735,7 +1995,10 @@ Begin
  ReadKey;
 End;
 
-Procedure PerformChecks;Begin
+Procedure PerformChecks;
+Var
+ CheckDelay: Integer;
+Begin
  ClrScr;
  ShowTitle;
  ShowCheckList;
@@ -1745,27 +2008,33 @@ Procedure PerformChecks;Begin
   Else Write('examen du lecteur ', DrivePath, '...');
  End;
  ClrEol;
+
+ { Déterminer le délai selon la taille du disque }
+ If HasPartition or (TotalSectors > 10000) Then CheckDelay := 10
+ Else If TotalSectors > 2000 Then CheckDelay := 50
+ Else CheckDelay := 100;
+
  { Effectuer les vérifications une par une avec mise à jour en place }
  CheckStatus[ciMedia] := False;
  CheckFATConsistency;
  ShowCheckList;
- Delay(100);
+ Delay(CheckDelay);
  CheckStatus[ciFAT] := False;
  ReadFAT;
  ShowCheckList;
- Delay(100);
+ Delay(CheckDelay);
  CheckStatus[ciDirectory] := False;
  CheckDirectoryStructure;
  ShowCheckList;
- Delay(100);
+ Delay(CheckDelay);
  CheckStatus[ciFileSystem] := False;
  CheckFileAllocation;
  ShowCheckList;
- Delay(100);
+ Delay(CheckDelay);
  CheckStatus[ciFreeSpace] := False;
  CheckLostClusters;
  ShowCheckList;
- Delay(100);
+ Delay(CheckDelay);
  { Demander pour le surface scan }
  Case(Language)of
   _English:Begin
@@ -1822,7 +2091,7 @@ BEGIN
   { Initialisation }
  Language := _French;
  TmpLanguage := GetEnv('LANGUAGE');
-If TmpLanguage<>''Then Begin
+ If TmpLanguage<>''Then Begin
   If TmpLanguage[1]='"'Then TmpLanguage:=Copy(TmpLanguage,2,255);
   If StrToUpper(Copy(TmpLanguage,1,2))='EN'Then Language:=_English Else
   If StrToUpper(Copy(TmpLanguage,1,2))='GR'Then Language:=_Germany Else
@@ -1853,6 +2122,94 @@ If TmpLanguage<>''Then Begin
     WriteLn('  /AUTOFIX   Automatically fix errors');
     WriteLn('  /CHECKONLY Check only, do not fix');
     WriteLn('  /SURFACE   Perform surface scan');
+   End;
+   _Germany: Begin
+    WriteLn('SCANDISK - Festplatten-Diagnose- und Reparaturprogramm');
+    WriteLn;
+    WriteLn('Verwendung: SCANDISK [Laufwerk: | Dateiname] [/AUTOFIX] [/CHECKONLY] [/SURFACE]');
+    WriteLn;
+    WriteLn('  Laufwerk:  Zu prüfendes Laufwerk (A:, C:, usw.)');
+    WriteLn('  Dateiname  Zu prüfende Festplatten-Image-Datei');
+    WriteLn('  /AUTOFIX   Fehler automatisch beheben');
+    WriteLn('  /CHECKONLY Nur prüfen, nicht reparieren');
+    WriteLn('  /SURFACE   Oberflächenscan durchführen');
+   End;
+   _Italian: Begin
+    WriteLn('SCANDISK - Utilità di diagnosi e riparazione disco');
+    WriteLn;
+    WriteLn('Utilizzo: SCANDISK [unità: | nomefile] [/AUTOFIX] [/CHECKONLY] [/SURFACE]');
+    WriteLn;
+    WriteLn('  unità:     Unità da controllare (A:, C:, ecc.)');
+    WriteLn('  nomefile   File immagine disco da controllare');
+    WriteLn('  /AUTOFIX   Ripara automaticamente gli errori');
+    WriteLn('  /CHECKONLY Solo controllo, non riparare');
+    WriteLn('  /SURFACE   Esegui scansione superficie');
+   End;
+   _Spain: Begin
+    WriteLn('SCANDISK - Utilidad de diagnóstico y reparación de disco');
+    WriteLn;
+    WriteLn('Uso: SCANDISK [unidad: | archivo] [/AUTOFIX] [/CHECKONLY] [/SURFACE]');
+    WriteLn;
+    WriteLn('  unidad:    Unidad a verificar (A:, C:, etc.)');
+    WriteLn('  archivo    Archivo de imagen de disco a verificar');
+    WriteLn('  /AUTOFIX   Reparar automáticamente los errores');
+    WriteLn('  /CHECKONLY Solo verificar, no reparar');
+    WriteLn('  /SURFACE   Realizar exploración de superficie');
+   End;
+   _Albanian: Begin
+    WriteLn('SCANDISK - Utilitar diagnostik dhe riparim disku');
+    WriteLn;
+    WriteLn('Përdorimi: SCANDISK [disku: | skedari] [/AUTOFIX] [/CHECKONLY] [/SURFACE]');
+    WriteLn;
+    WriteLn('  disku:     Disku për të kontrolluar (A:, C:, etj.)');
+    WriteLn('  skedari    Skedari imazh disku për të kontrolluar');
+    WriteLn('  /AUTOFIX   Riparo automatikisht gabimet');
+    WriteLn('  /CHECKONLY Vetëm kontrollo, mos riparo');
+    WriteLn('  /SURFACE   Kryej skanim sipërfaqe');
+   End;
+   _Portuguese: Begin
+    WriteLn('SCANDISK - Utilitário de diagnóstico e reparo de disco');
+    WriteLn;
+    WriteLn('Uso: SCANDISK [unidade: | arquivo] [/AUTOFIX] [/CHECKONLY] [/SURFACE]');
+    WriteLn;
+    WriteLn('  unidade:   Unidade a verificar (A:, C:, etc.)');
+    WriteLn('  arquivo    Arquivo de imagem de disco a verificar');
+    WriteLn('  /AUTOFIX   Reparar automaticamente os erros');
+    WriteLn('  /CHECKONLY Apenas verificar, não reparar');
+    WriteLn('  /SURFACE   Realizar varredura de superfície');
+   End;
+   _Swedish: Begin
+    WriteLn('SCANDISK - Disk diagnos- och reparationsverktyg');
+    WriteLn;
+    WriteLn('Användning: SCANDISK [enhet: | filnamn] [/AUTOFIX] [/CHECKONLY] [/SURFACE]');
+    WriteLn;
+    WriteLn('  enhet:     Enhet att kontrollera (A:, C:, osv.)');
+    WriteLn('  filnamn    Diskavbildningsfil att kontrollera');
+    WriteLn('  /AUTOFIX   Åtgärda fel automatiskt');
+    WriteLn('  /CHECKONLY Bara kontrollera, reparera inte');
+    WriteLn('  /SURFACE   Utför ytskanning');
+   End;
+   _Danish: Begin
+    WriteLn('SCANDISK - Disk diagnose- og reparationsværktøj');
+    WriteLn;
+    WriteLn('Brug: SCANDISK [drev: | filnavn] [/AUTOFIX] [/CHECKONLY] [/SURFACE]');
+    WriteLn;
+    WriteLn('  drev:      Drev at kontrollere (A:, C:, osv.)');
+    WriteLn('  filnavn    Disk-image-fil at kontrollere');
+    WriteLn('  /AUTOFIX   Reparer fejl automatisk');
+    WriteLn('  /CHECKONLY Kun kontroller, reparer ikke');
+    WriteLn('  /SURFACE   Udfør overfladeskanning');
+   End;
+   _Japanese: Begin
+    WriteLn('SCANDISK - Disuku shindan oyobi shuuri yuutiriti');
+    WriteLn;
+    WriteLn('Tsukaikata: SCANDISK [doraibu: | fairu mei] [/AUTOFIX] [/CHECKONLY] [/SURFACE]');
+    WriteLn;
+    WriteLn('  doraibu:   Chekku suru doraibu (A:, C:, nado)');
+    WriteLn('  fairu mei  Chekku suru disuku imeeji fairu');
+    WriteLn('  /AUTOFIX   Jidouteki ni eraa wo shuuri suru');
+    WriteLn('  /CHECKONLY Chekku nomi, shuuri shinai');
+    WriteLn('  /SURFACE   Hyoumen sukyan wo jikkou suru');
    End;
    Else Begin
     WriteLn('SCANDISK - Cette commande permet de lancer l''utilitaire ',
@@ -1949,7 +2306,7 @@ If TmpLanguage<>''Then Begin
   End;
  End;
  ErrorsFound := 0;
-  
+
  { Détecter les partitions pour les fichiers images }
  If IsImageFile Then Begin
   If Not DetectPartition Then Begin
@@ -1958,7 +2315,7 @@ If TmpLanguage<>''Then Begin
    Halt(1);
   End;
  End;
- 
+
   { Lecture du secteur de boot }
  If Not ReadBootSector Then Begin
   Case(Language)of
