@@ -16,51 +16,61 @@ Const
  MapHeight = 15;
 
 Type
+ { Structure du secteur de boot (Boot Sector) - Premier secteur d'un disque/partition FAT }
  TBootSector = Record
-  JumpCode: Array[0..2] of Byte;
-  OEMName: Array[0..7] of Char;
-  BytesPerSector: Word;
-  SectorsPerCluster: Byte;
-  ReservedSectors: Word;
-  NumberOfFATs: Byte;
-  RootEntries: Word;
-  TotalSectors: Word;
-  MediaDescriptor: Byte;
-  SectorsPerFAT: Word;
-  SectorsPerTrack: Word;
-  NumberOfHeads: Word;
-  HiddenSectors: LongInt;
-  TotalSectorsBig: LongInt;
+  JumpCode: Array[0..2] of Byte;     { Code de saut vers le code de boot (EB 3C 90 ou E9 xx xx) }
+  OEMName: Array[0..7] of Char;      { Nom du systäme ayant formaÇ le disque (ex: "MSDOS5.0") }
+  BytesPerSector: Word;              { Octets par secteur (gÇnÇralement 512) }
+  SectorsPerCluster: Byte;           { Secteurs par unitÇ d'allocation (1, 2, 4, 8, 16, 32, 64, 128) }
+  ReservedSectors: Word;             { Secteurs rÇservÇs avant la premiäre FAT (gÇÇnralement 1) }
+  NumberOfFATs: Byte;                { Nombre de tables FAT (gÇnÇralement 2 pour redondance) }
+  RootEntries: Word;                 { Nombre d'entrÇes dans le rÇpertoire racine (FAT12/16 uniquement) }
+  TotalSectors: Word;                { Nombre total de secteurs (si < 65536, sinon 0 et utiliser TotalSectorsBig) }
+  MediaDescriptor: Byte;             { Descripteur de mÇdia ($F0=disquette, $F8=disque dur, etc.) }
+  SectorsPerFAT: Word;               { Secteurs par table FAT }
+  SectorsPerTrack: Word;             { Secteurs par piste (gÇomÇtrie physique) }
+  NumberOfHeads: Word;               { Nombre de tàtes (gÇomÇtrie physique) }
+  HiddenSectors: LongInt;            { Secteurs cachÇs avant la partition (MBR) }
+  TotalSectorsBig: LongInt;          { Nombre total de secteurs si TotalSectors = 0 }
  End;
 
+  { EntrÇe de partition dans la table de partition MBR (16 octets) }
  TPartitionEntry = Record
-  Status: Byte;         { $80 = active, $00 = inactive }
-  StartHead: Byte;
-  StartSector: Byte;    { bits 0-5 = secteur, bits 6-7 = cylindre high }
-  StartCylinder: Byte;
-  PartitionType: Byte;  { $01=FAT12, $04=FAT16<32M, $06=FAT16>32M }
-  EndHead: Byte;
-  EndSector: Byte;
-  EndCylinder: Byte;
-  RelativeSectors: LongInt; { Secteur de d√©but de la partition }
-  TotalSectors: LongInt;    { Taille de la partition en secteurs }
+  Status: Byte;                     { êtat: $80 = partition active (bootable), $00 = inactive }
+  StartHead: Byte;                  { Tàte de dÇbut (gÇomÇtrie CHS - obsoläte) }
+  StartSector: Byte;                { Secteur+cylindre de dÇbut: bits 0-5=secteur (1-63), bits 6-7=cylindre high }
+  StartCylinder: Byte;              { Cylindre de dÇbut (bits bas, combinÇ avec StartSector bits 6-7) }
+  PartitionType: Byte;              { Type: $01=FAT12, $04=FAT16<32M, $06=FAT16>32M, $0B=FAT32,... }
+  EndHead: Byte;                    { Tàte de fin (gÇomÇtrie CHS - obsoläte) }
+  EndSector: Byte;                  { Secteur+cylindre de fin: bits 0-5=secteur, bits 6-7=cylindre high }
+  EndCylinder: Byte;                { Cylindre de fin (bits bas) }
+  RelativeSectors: LongInt;         { Secteur de dÇbut absolu (LBA) de la partition }
+  TotalSectors: LongInt;            { Taille de la partition en secteurs }
  End;
 
+  { Master Boot Record (MBR) - Premier secteur d'un disque dur (secteur 0) }
  TMBR = Record
-  BootCode: Array[0..445] of Byte;
-  PartitionTable: Array[0..3] of TPartitionEntry;
-  Signature: Word;      { $AA55 }
+  BootCode: Array[0..445] of Byte;  { Code de boot et donnÇes (446 octets) }
+  PartitionTable: Array[0..3] of TPartitionEntry; { Table des 4 partitions primaires (64 octets) }
+  Signature: Word;                  { Signature MBR: doit àtre $AA55 (2 octets) }
  End;
 
+ { EntrÇe de rÇpertoire FAT (32 octets) - Structure d'un fichier/dossier }
  TDirEntry = Record
-  Name: Array[0..7] of Char;
-  Ext: Array[0..2] of Char;
-  Attr: Byte;
-  Reserved: Array[0..9] of Byte;
-  Time: Word;
-  Date: Word;
-  StartCluster: Word;
-  Size: LongInt;
+  Name: Array[0..7] of Char;        { Nom du fichier (8 caractäres, complÇtÇ par des espaces) }
+  Ext: Array[0..2] of Char;         { Extension (3 caractäres, complÇtÇ par des espaces) }
+  Attr: Byte;                       { Attributs:
+                                       bit 0=Lecture seule,
+                                           1=CachÇ,
+                                           2=Systäme,
+                                           3=êtiquette de volume,
+                                           4=RÇpertoire,
+                                           5=Archive }
+  Reserved: Array[0..9] of Byte;    { RÇservÇ (NT, temps de crÇation, date d'accäs, cluster high pour FAT32) }
+  Time: Word;                       { Heure de modification: bits 15-11=heures, 10-5=minutes, 4-0=secondes/2 }
+  Date: Word;                       { Date de modification: bits 15-9=annÇe-1980, 8-5=mois, 4-0=jour }
+  StartCluster: Word;               { Cluster de dÇbut du fichier (0 = fichier vide) }
+  Size: LongInt;                    { Taille du fichier en octets (0 pour les rÇpertoires) }
  End;
 
  TErrorType = (etNone, etBadSector, etCrossLinked, etLostChain, etBadFAT, etBadDir);
@@ -68,18 +78,18 @@ Type
  TFATType = (ftFAT12, ftFAT16);
 
 Type
- { Fragments pour √©viter la limite de 65520 octets de Turbo Pascal }
+ { Fragments pour Çviter la limite de 65520 octets de Turbo Pascal }
  PFATFragment = ^TFATFragment;
- TFATFragment = Array[0..21845] of Word;  { ~43KB par fragment }
+ TFATFragment = Array[0..21845] of Word;  { ~43Ko par fragment }
  PClusterMapFragment = ^TClusterMapFragment;
- TClusterMapFragment = Array[0..32767] of Byte;  { ~32KB par fragment }
+ TClusterMapFragment = Array[0..32767] of Byte;  { ~32Ko par fragment }
 
 Var
  Language:(_French,_English,_Germany,_Italian,_Spain,_Albanian,_Portuguese,_Swedish,_Danish,_Japanese);
  TmpLanguage, DrivePath, FileName: String;
  BootSector: TBootSector;
  MBR: TMBR;
- PartitionOffset: LongInt;  { D√©calage en secteurs pour la partition active }
+ PartitionOffset: LongInt;  { DÇcalage en secteurs pour la partition active }
  HasPartition: Boolean;     { Indique si le fichier contient une table de partition }
  { Fragments FAT - 3 fragments de ~43KB chacun }
  FatA, FatB, FatC: PFATFragment;
@@ -119,7 +129,8 @@ Var
 {$ENDIF}
 
 Function StrToUpper(S: String): String;
-Var I: Byte;
+Var
+ I: Byte;
 Begin
  For I := 1 to Length(S) do Begin
   If S[I] in ['a'..'z'] Then S[I] := Chr(Ord(S[I]) - 32);
@@ -127,9 +138,8 @@ Begin
  StrToUpper := S;
 End;
 
-{ Fonctions d'acc√®s transparentes pour les tableaux fragment√©s }
-Function GetFAT(Index: Word): Word;
-Begin
+{ Fonctions d'accäs transparentes pour les tableaux fragmentÇs }
+Function GetFAT(Index: Word): Word;Begin
  If Index <= 21845 Then Begin
   If FatA <> nil Then GetFAT := FatA^[Index] Else GetFAT := 0;
  End Else If Index <= 43691 Then Begin
@@ -139,28 +149,31 @@ Begin
  End;
 End;
 
-Procedure SetFAT(Index: Word; Value: Word);
-Begin
+Procedure SetFAT(Index: Word; Value: Word);Begin
  If Index <= 21845 Then Begin
   If FatA <> nil Then FatA^[Index] := Value;
- End Else If Index <= 43691 Then Begin
+ End
+  Else
+ If Index <= 43691 Then Begin
   If FatB <> nil Then FatB^[Index - 21846] := Value;
- End Else Begin
+ End
+  Else
+ Begin
   If FatC <> nil Then FatC^[Index - 43692] := Value;
  End;
 End;
 
-Function GetClusterMap(Index: Word): Byte;
-Begin
+Function GetClusterMap(Index: Word): Byte;Begin
  If Index <= 32767 Then Begin
   If ClusterMapA <> nil Then GetClusterMap := ClusterMapA^[Index] Else GetClusterMap := 0;
- End Else Begin
+ End
+  Else
+ Begin
   If ClusterMapB <> nil Then GetClusterMap := ClusterMapB^[Index - 32768] Else GetClusterMap := 0;
  End;
 End;
 
-Procedure SetClusterMap(Index: Word; Value: Byte);
-Begin
+Procedure SetClusterMap(Index: Word; Value: Byte);Begin
  If Index <= 32767 Then Begin
   If ClusterMapA <> nil Then ClusterMapA^[Index] := Value;
  End Else Begin
@@ -168,9 +181,8 @@ Begin
  End;
 End;
 
-{ Fonctions d'acc√®s pour FAT2 temporaire }
-Function GetFAT2(Index: Word; Fat2A, Fat2B, Fat2C: PFATFragment): Word;
-Begin
+{ Fonctions d'accäs pour FAT2 temporaire }
+Function GetFAT2(Index: Word; Fat2A, Fat2B, Fat2C: PFATFragment): Word;Begin
  If Index <= 21845 Then Begin
   If Fat2A <> nil Then GetFAT2 := Fat2A^[Index] Else GetFAT2 := 0;
  End Else If Index <= 43691 Then Begin
@@ -180,8 +192,7 @@ Begin
  End;
 End;
 
-Procedure SetFAT2(Index: Word; Value: Word; Fat2A, Fat2B, Fat2C: PFATFragment);
-Begin
+Procedure SetFAT2(Index: Word; Value: Word; Fat2A, Fat2B, Fat2C: PFATFragment);Begin
  If Index <= 21845 Then Begin
   If Fat2A <> nil Then Fat2A^[Index] := Value;
  End Else If Index <= 43691 Then Begin
@@ -191,13 +202,13 @@ Begin
  End;
 End;
 
-Function Min(A, B: Integer): Integer;
-Begin
+Function Min(A, B: Integer): Integer;Begin
  If A < B Then Min := A Else Min := B;
 End;
 
 Function IntToStr(Value: Integer): String;
-Var S: String;
+Var
+ S: String;
 Begin
  Str(Value, S);
  IntToStr := S;
@@ -215,30 +226,24 @@ Begin
   IntToHex := '0';
   Exit;
  End;
-
  While Value > 0 do Begin
   S := HexDigits[(Value mod 16) + 1] + S;
   Value := Value div 16;
  End;
-
- { Ajouter des z√©ros √† gauche si n√©cessaire }
+  { Ajouter des zÇros Ö gauche si nÇcessaire }
  While Length(S) < Digits do S := '0' + S;
-
  IntToHex := S;
 End;
 
-Procedure AllocateMemory;
-Begin
- { Allouer la m√©moire pour les fragments FAT }
+Procedure AllocateMemory;Begin
+  { Allouer la mÇmoire pour les fragments FAT }
  GetMem(FatA, SizeOf(TFATFragment));
  GetMem(FatB, SizeOf(TFATFragment));
  GetMem(FatC, SizeOf(TFATFragment));
-
- { Allouer la m√©moire pour les fragments ClusterMap }
+  { Allouer la m√©moire pour les fragments ClusterMap }
  GetMem(ClusterMapA, SizeOf(TClusterMapFragment));
  GetMem(ClusterMapB, SizeOf(TClusterMapFragment));
-
- { V√©rifier les allocations }
+  { VÇrifier les allocations }
  If (FatA = nil) or (FatB = nil) or (FatC = nil) or
     (ClusterMapA = nil) or (ClusterMapB = nil) Then Begin
   Case(Language)of
@@ -247,7 +252,7 @@ Begin
     WriteLn('Required: ', (SizeOf(TFATFragment) * 3) + (SizeOf(TClusterMapFragment) * 2), ' bytes');
    End;
    _Germany:Begin
-    WriteLn('Fehler: Nicht genug Speicher f√ºr FAT-Tabellen');
+    WriteLn('Fehler: Nicht genug Speicher fÅr FAT-Tabellen');
     WriteLn('Ben√∂tigt: ', (SizeOf(TFATFragment) * 3) + (SizeOf(TClusterMapFragment) * 2), ' Bytes');
    End;
    _Italian:Begin
@@ -259,34 +264,33 @@ Begin
     WriteLn('Requerido: ', (SizeOf(TFATFragment) * 3) + (SizeOf(TClusterMapFragment) * 2), ' bytes');
    End;
    _Albanian:Begin
-    WriteLn('Gabim: Memorje e pamjaftueshme p√´r t√´ alokuar tabelat FAT');
+    WriteLn('Gabim: Memorje e pamjaftueshme pâr tâ alokuar tabelat FAT');
     WriteLn('E nevojshme: ', (SizeOf(TFATFragment) * 3) + (SizeOf(TClusterMapFragment) * 2), ' bajte');
    End;
    _Portuguese:Begin
-    WriteLn('Erro: Mem√≥ria insuficiente para alocar tabelas FAT');
+    WriteLn('Erro: Mem¢ria insuficiente para alocar tabelas FAT');
     WriteLn('Necess√°rio: ', (SizeOf(TFATFragment) * 3) + (SizeOf(TClusterMapFragment) * 2), ' bytes');
    End;
    _Swedish:Begin
-    WriteLn('Fel: Otillr√§ckligt minne f√∂r att allokera FAT-tabeller');
-    WriteLn('Kr√§vs: ', (SizeOf(TFATFragment) * 3) + (SizeOf(TClusterMapFragment) * 2), ' bytes');
+    WriteLn('Fel: OtillrÑckligt minne fîr att allokera FAT-tabeller');
+    WriteLn('KrÑvs: ', (SizeOf(TFATFragment) * 3) + (SizeOf(TClusterMapFragment) * 2), ' bytes');
    End;
    _Danish:Begin
-    WriteLn('Fejl: Utilstr√¶kkelig hukommelse til at allokere FAT-tabeller');
-    WriteLn('Kr√¶vet: ', (SizeOf(TFATFragment) * 3) + (SizeOf(TClusterMapFragment) * 2), ' bytes');
+    WriteLn('Fejl: Utilstraekkelig hukommelse til at allokere FAT-tabeller');
+    WriteLn('Kraevet: ', (SizeOf(TFATFragment) * 3) + (SizeOf(TClusterMapFragment) * 2), ' bytes');
    End;
    _Japanese:Begin
     WriteLn('Erra: FAT teburu no wariate ni juubun na memori ga arimasen');
     WriteLn('Hitsuyou: ', (SizeOf(TFATFragment) * 3) + (SizeOf(TClusterMapFragment) * 2), ' baito');
    End;
    Else Begin
-    WriteLn('Erreur : M√©moire insuffisante pour allouer les tables FAT');
+    WriteLn('Erreur : MÇmoire insuffisante pour allouer les tables FAT');
     WriteLn('Requis : ', (SizeOf(TFATFragment) * 3) + (SizeOf(TClusterMapFragment) * 2), ' octets');
    End;
   End;
   Halt(1);
  End;
-
- { Initialiser √† z√©ro }
+  { Initialiser Ö zÇro }
  FillChar(FatA^, SizeOf(TFATFragment), 0);
  FillChar(FatB^, SizeOf(TFATFragment), 0);
  FillChar(FatC^, SizeOf(TFATFragment), 0);
@@ -294,14 +298,12 @@ Begin
  FillChar(ClusterMapB^, SizeOf(TClusterMapFragment), 0);
 End;
 
-Procedure FreeMemory;
-Begin
- { Lib√©rer la m√©moire allou√©e pour FAT }
+Procedure FreeMemory;Begin
+  { LibÇrer la mÇmoire allouÇe pour FAT }
  If FatA <> nil Then FreeMem(FatA, SizeOf(TFATFragment));
  If FatB <> nil Then FreeMem(FatB, SizeOf(TFATFragment));
  If FatC <> nil Then FreeMem(FatC, SizeOf(TFATFragment));
-
- { Lib√©rer la m√©moire allou√©e pour ClusterMap }
+  { LibÇrer la mÇmoire allouÇe pour ClusterMap }
  If ClusterMapA <> nil Then FreeMem(ClusterMapA, SizeOf(TClusterMapFragment));
  If ClusterMapB <> nil Then FreeMem(ClusterMapB, SizeOf(TClusterMapFragment));
 End;
@@ -310,19 +312,19 @@ Function DetectFATType: TFATType;
 Var
  DataSectors, Clusters: LongInt;
 Begin
- { Calculer le nombre de secteurs de donn√©es }
+  { Calculer le nombre de secteurs de donnÇes }
  DataSectors := TotalSectors - (BootSector.ReservedSectors +
                 (BootSector.NumberOfFATs * BootSector.SectorsPerFAT) +
                 ((BootSector.RootEntries * 32 + 511) div 512));
-
- { Calculer le nombre de clusters }
+  { Calculer le nombre de clusters }
  Clusters := DataSectors div BootSector.SectorsPerCluster;
-
- { D√©terminer le type FAT selon le nombre de clusters }
+  { DÇterminer le type FAT selon le nombre de clusters }
  If Clusters < 4085 Then Begin
   DetectFATType := ftFAT12;
   MaxClusters := 4095;
- End Else Begin
+ End
+  Else
+ Begin
   DetectFATType := ftFAT16;
   MaxClusters := 65535;
  End;
@@ -372,17 +374,17 @@ Procedure DrawBoxWithShadow(X1, Y1, X2, Y2: Byte);
 Var
  i: Byte;
 Begin
-  { Dessiner la bo√Æte principale }
+  { Dessiner la boåte principale }
  TextColor(White);
  TextBackground(LightGray);
  DrawBox(X1, Y1, X2, Y2);
- { Dessiner l'ombre d'abord (en bas et √† droite) }
+ { Dessiner l'ombre d'abord (en bas et Ö droite) }
  TextColor(Blue);
  TextBackground(Black);
   { Ombre en bas }
  GotoXY(X1 + 1, Y2 + 1);
  For i := X1 + 1 to X2 + 1 do Write(' ');
-  { Ombre √† droite }
+  { Ombre Ö droite }
  For i := Y1 + 1 to Y2 + 1 do Begin
   GotoXY(X2 + 1, i);
   Write('  ');
@@ -419,9 +421,9 @@ Procedure ShowMainButtons;Begin
  Case(Language)of
   _English:ShowButton('More Info', False);
   _Germany:ShowButton('Mehr Info', False);
-  _Italian:ShowButton('Pi√π Info', False);
-  _Spain:ShowButton('M√°s Info', False);
-  _Albanian:ShowButton('M√´ Shum√´ Info', False);
+  _Italian:ShowButton('Pió Info', False);
+  _Spain:ShowButton('M†s Info', False);
+  _Albanian:ShowButton('Mâ Shumâ Info', False);
   _Portuguese:ShowButton('Mais Info', False);
   _Swedish:ShowButton('Mer Info', False);
   _Danish:ShowButton('Mere Info', False);
@@ -444,41 +446,45 @@ Procedure ShowMainButtons;Begin
 End;
 
 Procedure ShowCheckList;
-Var i: TCheckItem;
-    CheckMark: Char;
+Var
+ i: TCheckItem;
+ CheckMark: Char;
 Begin
  GotoXY(1, 4);
  If IsImageFile Then Begin
   Case(Language)of
    _English:Write('ScanDisk is now checking the following areas of file ', FileName, ':');
-   _Germany:Write('ScanDisk √ºberpr√ºft nun die folgenden Bereiche der Datei ', FileName, ':');
+   _Germany:Write('ScanDisk ÅberprÅft nun die folgenden Bereiche der Datei ', FileName, ':');
    _Italian:Write('ScanDisk sta controllando le seguenti aree del file ', FileName, ':');
-   _Spain:Write('ScanDisk est√° verificando las siguientes √°reas del archivo ', FileName, ':');
-   _Albanian:Write('ScanDisk po kontrollon zonat e m√´poshtme t√´ skedarit ', FileName, ':');
-   _Portuguese:Write('ScanDisk est√° verificando as seguintes √°reas do arquivo ', FileName, ':');
-   _Swedish:Write('ScanDisk kontrollerar nu f√∂ljande omr√•den av filen ', FileName, ':');
-   _Danish:Write('ScanDisk kontrollerer nu f√∏lgende omr√•der af filen ', FileName, ':');
+   _Spain:Write('ScanDisk est† verificando las siguientes †reas del archivo ', FileName, ':');
+   _Albanian:Write('ScanDisk po kontrollon zonat e mâposhtme tâ skedarit ', FileName, ':');
+   _Portuguese:Write('ScanDisk est† verificando as seguintes †reas do arquivo ', FileName, ':');
+   _Swedish:Write('ScanDisk kontrollerar nu fîljande omrÜden av filen ', FileName, ':');
+   _Danish:Write('ScanDisk kontrollerer nu folgende omrÜder af filen ', FileName, ':');
    _Japanese:Write('ScanDisk wa ima fairu ', FileName, ' no tsugi no ryouiki wo chekku shiteimasu:');
-   Else Write('ScanDisk v√©rifie maintenant les zones suivantes du fichier ', FileName, ' :');
+   Else Write('ScanDisk vÇrifie maintenant les zones suivantes du fichier ', FileName, ' :');
   End;
- End Else Begin
+ End
+  Else
+ Begin
   Case(Language)of
    _English:Write('ScanDisk is now checking the following areas of drive ', DrivePath, ':');
-   _Germany:Write('ScanDisk √ºberpr√ºft nun die folgenden Bereiche von Laufwerk ', DrivePath, ':');
-   _Italian:Write('ScanDisk sta controllando le seguenti aree dell''unit√† ', DrivePath, ':');
-   _Spain:Write('ScanDisk est√° verificando las siguientes √°reas de la unidad ', DrivePath, ':');
-   _Albanian:Write('ScanDisk po kontrollon zonat e m√´poshtme t√´ diskut ', DrivePath, ':');
-   _Portuguese:Write('ScanDisk est√° verificando as seguintes √°reas da unidade ', DrivePath, ':');
-   _Swedish:Write('ScanDisk kontrollerar nu f√∂ljande omr√•den av enheten ', DrivePath, ':');
-   _Danish:Write('ScanDisk kontrollerer nu f√∏lgende omr√•der af drevet ', DrivePath, ':');
+   _Germany:Write('ScanDisk ÅberprÅft nun die folgenden Bereiche von Laufwerk ', DrivePath, ':');
+   _Italian:Write('ScanDisk sta controllando le seguenti aree dell''unitÖ ', DrivePath, ':');
+   _Spain:Write('ScanDisk est† verificando las siguientes †reas de la unidad ', DrivePath, ':');
+   _Albanian:Write('ScanDisk po kontrollon zonat e mâposhtme tâ diskut ', DrivePath, ':');
+   _Portuguese:Write('ScanDisk est† verificando as seguintes †reas da unidade ', DrivePath, ':');
+   _Swedish:Write('ScanDisk kontrollerar nu fîljande omrÜden av enheten ', DrivePath, ':');
+   _Danish:Write('ScanDisk kontrollerer nu folgende omrÜder af drevet ', DrivePath, ':');
    _Japanese:Write('ScanDisk wa ima doraibu ', DrivePath, ' no tsugi no ryouiki wo chekku shiteimasu:');
-   Else Write('ScanDisk v√©rifie maintenant les zones suivantes du lecteur ', DrivePath, ' :');
+   Else Write('ScanDisk vÇrifie maintenant les zones suivantes du lecteur ', DrivePath, ' :');
   End;
  End;
- { Effacer le reste de la ligne }
+  { Effacer le reste de la ligne }
  ClrEol;
  For i := ciMedia to ciSurface do Begin
-  If CheckStatus[i] Then CheckMark := #251 Else CheckMark := #175;
+  If CheckStatus[i] Then CheckMark := #251
+                    Else CheckMark := #175;
   Case i of
    ciMedia: Begin
     GotoXY(1, 6);
@@ -488,12 +494,12 @@ Begin
      _Germany:Write('Medien-Deskriptor');
      _Italian:Write('Descrittore supporto');
      _Spain:Write('Descriptor de medios');
-     _Albanian:Write('P√´rshkruesi i medias');
-     _Portuguese:Write('Descritor de m√≠dia');
+     _Albanian:Write('Pârshkruesi i medias');
+     _Portuguese:Write('Descritor de m°dia');
      _Swedish:Write('Mediabeskrivare');
      _Danish:Write('Mediebeskriver');
      _Japanese:Write('Media kishutsuji');
-     Else Write('Descripteur de mÔøΩdia');
+     Else Write('Descripteur de mÇdia');
     End;
     ClrEol;
    End;
@@ -504,9 +510,9 @@ Begin
      _English:Write('File allocation tables');
      _Germany:Write('Dateizuordnungstabellen');
      _Italian:Write('Tabelle di allocazione file');
-     _Spain:Write('Tablas de asignaci√≥n de archivos');
-     _Albanian:Write('Tabelat e alokimit t√´ skedar√´ve');
-     _Portuguese:Write('Tabelas de aloca√ß√£o de arquivos');
+     _Spain:Write('Tablas de asignaci¢n de archivos');
+     _Albanian:Write('Tabelat e alokimit tâ skedarâve');
+     _Portuguese:Write('Tabelas de alocaáao de arquivos');
      _Swedish:Write('Filallokeringstabeller');
      _Danish:Write('Filallokeringstabeller');
      _Japanese:Write('Fairu wariate teburu');
@@ -523,11 +529,11 @@ Begin
      _Italian:Write('Struttura directory');
      _Spain:Write('Estructura de directorios');
      _Albanian:Write('Struktura e drejtorive');
-     _Portuguese:Write('Estrutura de diret√≥rios');
+     _Portuguese:Write('Estrutura de diret¢rios');
      _Swedish:Write('Katalogstruktur');
      _Danish:Write('Mappestruktur');
      _Japanese:Write('Direkutori kouzou');
-     Else Write('Structure de r√©pertoire');
+     Else Write('Structure de rÇpertoire');
     End;
     ClrEol;
    End;
@@ -539,12 +545,12 @@ Begin
      _Germany:Write('Dateisystem');
      _Italian:Write('Sistema file');
      _Spain:Write('Sistema de archivos');
-     _Albanian:Write('Sistemi i skedar√´ve');
+     _Albanian:Write('Sistemi i skedarâve');
      _Portuguese:Write('Sistema de arquivos');
      _Swedish:Write('Filsystem');
      _Danish:Write('Filsystem');
      _Japanese:Write('Fairu shisutemu');
-     Else Write('Syst√®me de fichiers');
+     Else Write('Systäme de fichiers');
     End;
     ClrEol;
    End;
@@ -556,8 +562,8 @@ Begin
      _Germany:Write('Freier Speicherplatz');
      _Italian:Write('Spazio libero');
      _Spain:Write('Espacio libre');
-     _Albanian:Write('Hap√´sir√´ e lir√´');
-     _Portuguese:Write('Espa√ßo livre');
+     _Albanian:Write('Hapâsirâ e lirâ');
+     _Portuguese:Write('Espacio livre');
      _Swedish:Write('Ledigt utrymme');
      _Danish:Write('Ledig plads');
      _Japanese:Write('Kuu ryouiki');
@@ -573,11 +579,11 @@ Begin
     Else Write(' ');
     Case(Language)of
      _English:Write('    Surface scan');
-     _Germany:Write('    Oberfl√§chenscan');
+     _Germany:Write('    OberflÑchenscan');
      _Italian:Write('    Scansione superficie');
-     _Spain:Write('    Exploraci√≥n de superficie');
-     _Albanian:Write('    Skanimi i sip√´rfaqes');
-     _Portuguese:Write('    Varredura de superf√≠cie');
+     _Spain:Write('    Exploraci¢n de superficie');
+     _Albanian:Write('    Skanimi i sipârfaqes');
+     _Portuguese:Write('    Varredura de superf°cie');
      _Swedish:Write('    Ytskanning');
      _Danish:Write('    Overfladeskanning');
      _Japanese:Write('    Hyoumen sukyan');
@@ -587,31 +593,31 @@ Begin
    End;
   End;
  End;
-
- { Afficher les boutons principaux }
+  { Afficher les boutons principaux }
  ShowMainButtons;
 End;
 
 Function ShowDialog(Title,Message:String;ShowYesNo:Boolean):Boolean;
-Var Key: Char;
-    BoxWidth, BoxHeight, X1, Y1, i, j: Byte;
-    Lines: Array[0..10] of String;
-    LineCount, CurrentLine, MaxLineLen: Byte;
+Var
+ Key: Char;
+ BoxWidth, BoxHeight, X1, Y1, i, j: Byte;
+ Lines: Array[0..10] of String;
+ LineCount, CurrentLine, MaxLineLen: Byte;
 Begin
  BoxWidth := 60;
  BoxHeight := 8;
  X1 := (80 - BoxWidth) div 2;
  Y1 := (25 - BoxHeight) div 2;
-  { D√©couper le message en lignes }
+  { DÇcouper le message en lignes }
  LineCount := 0;
  CurrentLine := 1;
- MaxLineLen := BoxWidth - 4; { Marge de 2 caract√®res de chaque c√¥t√© }
+ MaxLineLen := BoxWidth - 4; { Marge de 2 caractäres de chaque cìtÇ }
  While (CurrentLine <= Length(Message)) and (LineCount < 10) do Begin
   If (CurrentLine + MaxLineLen - 1) <= Length(Message) Then Begin
     { Chercher un espace pour couper proprement }
    j := CurrentLine + MaxLineLen - 1;
    While (j > CurrentLine) and (Message[j] <> ' ') do Dec(j);
-   If j = CurrentLine Then j := CurrentLine + MaxLineLen - 1; { Pas d'espace trouv√©, couper au max }
+   If j = CurrentLine Then j := CurrentLine + MaxLineLen - 1; { Pas d'espace trouvÇ, couper au max }
    Lines[LineCount] := Copy(Message, CurrentLine, j - CurrentLine + 1);
    CurrentLine := j + 1;
    If Message[j] = ' ' Then Inc(CurrentLine); { Passer l'espace }
@@ -623,13 +629,13 @@ Begin
   End;
   Inc(LineCount);
  End;
-  { Ajuster la hauteur de la bo√Æte selon le nombre de lignes }
+  { Ajuster la hauteur de la boåte selon le nombre de lignes }
  BoxHeight := 5 + LineCount;
  Y1 := (25 - BoxHeight) div 2;
  { Sauvegarder et changer les couleurs }
  TextBackground(LightGray);
  TextColor(Black);
- { Remplir la bo√Æte avec l'arri√®re-plan }
+ { Remplir la boåte avec l'arriäre-plan }
  For i := Y1 to Y1 + BoxHeight do Begin
   GotoXY(X1, i);
   For j := X1 to X1 + BoxWidth do Write(' ');
@@ -659,12 +665,12 @@ Begin
     ShowButton('Nein',False);
    End;
    _Italian:Begin
-    ShowButton('S√¨',True);
+    ShowButton('Sç',True);
     Write('  ');
     ShowButton('No',False);
    End;
    _Spain:Begin
-    ShowButton('S√≠',True);
+    ShowButton('S°',True);
     Write('  ');
     ShowButton('No',False);
    End;
@@ -676,7 +682,7 @@ Begin
    _Portuguese:Begin
     ShowButton('Sim',True);
     Write('  ');
-    ShowButton('N√£o',False);
+    ShowButton('Nao',False);
    End;
    _Swedish:Begin
     ShowButton('Ja',True);
@@ -705,7 +711,7 @@ Begin
   GotoXY(X1 + 25, Y1 + BoxHeight - 1);
   ShowButton('OK',True);
  End;
-  { Attendre la r√©ponse }
+  { Attendre la rÇponse }
  Repeat
   Key := ReadKey;
   If Key = #13 Then Begin
@@ -721,20 +727,20 @@ Begin
    Break;
   End;
  Until False;
- { Restaurer les couleurs et redessiner l'√©cran }
+  { Restaurer les couleurs et redessiner l'Çcran }
  SetupColors;
  ShowTitle;
  ShowCheckList;
  GotoXY(1, 24);
  Case(Language)of
   _English:Write('examining drive ', DrivePath, '...');
-  _Germany:Write('√ºberpr√ºfe Laufwerk ', DrivePath, '...');
-  _Italian:Write('esame unit√† ', DrivePath, '...');
+  _Germany:Write('ÅberprÅfe Laufwerk ', DrivePath, '...');
+  _Italian:Write('esame unitÖ ', DrivePath, '...');
   _Spain:Write('examinando unidad ', DrivePath, '...');
   _Albanian:Write('duke kontrolluar diskun ', DrivePath, '...');
   _Portuguese:Write('examinando unidade ', DrivePath, '...');
-  _Swedish:Write('unders√∂ker enhet ', DrivePath, '...');
-  _Danish:Write('unders√∏ger drev ', DrivePath, '...');
+  _Swedish:Write('undersîker enhet ', DrivePath, '...');
+  _Danish:Write('undersoger drev ', DrivePath, '...');
   _Japanese:Write('doraibu ', DrivePath, ' wo kensa chuu...');
   Else Write('examen du lecteur ', DrivePath, '...');
  End;
@@ -749,62 +755,66 @@ Var
  i, j: Byte;
  DialogX1, DialogY1, DialogX2, DialogY2: Byte;
 Begin
- { Dimensions de la bo√Æte de dialogue centr√©e - PLUS PETITE }
+  { Dimensions de la boåte de dialogue centrÇe - PLUS PETITE }
  DialogX1 := 5;
  DialogY1 := 3;
  DialogX2 := 75;
  DialogY2 := 21;
- { Sauvegarder les couleurs actuelles et cr√©er le fond gris de la bo√Æte }
+ { Sauvegarder les couleurs actuelles et crÇer le fond gris de la boåte }
  TextBackground(LightGray);
  TextColor(Black);
- { Remplir la bo√Æte avec l'arri√®re-plan gris }
+ { Remplir la boåte avec l'arriäre-plan gris }
  For i := DialogY1 to DialogY2 do Begin
   GotoXY(DialogX1, i);
   For j := DialogX1 to DialogX2 do Write(' ');
  End;
- { Dessiner le cadre noir de la bo√Æte de dialogue avec ombre }
+ { Dessiner le cadre noir de la boåte de dialogue avec ombre }
  DrawBoxWithShadow(DialogX1, DialogY1, DialogX2, DialogY2);
- { R√©tablir les couleurs pour le contenu de la bo√Æte }
+ { RÇtablir les couleurs pour le contenu de la boåte }
  TextColor(Black);
  TextBackground(LightGray);
- { Titre du surface scan centr√© }
+ { Titre du surface scan centrÇ }
  GotoXY(DialogX1 + 30, DialogY1);
  TextColor(White);
  TextBackground(LightGray);
  Case(Language)of
   _English:Write('Surface Scan');
-  _Germany:Write('Oberfl√§chenscan');
+  _Germany:Write('OberflÑchenscan');
   _Italian:Write('Scansione Superficie');
-  _Spain:Write('Exploraci√≥n Superficie');
-  _Albanian:Write('Skanim Sip√´rfaqe');
-  _Portuguese:Write('Varredura Superf√≠cie');
+  _Spain:Write('Exploraci¢n Superficie');
+  _Albanian:Write('Skanim Sipârfaqe');
+  _Portuguese:Write('Varredura Superf°cie');
   _Swedish:Write('Ytskanning');
   _Danish:Write('Overfladeskanning');
   _Japanese:Write('Hyoumen Sukyan');
   Else Write('Balayage Surface');
  End;
- { Calculer les secteurs par bloc selon la taille totale }
+  { Calculer les secteurs par bloc selon la taille totale }
  SectorsPerBlock := (TotalSectors + (MapWidth * MapHeight - 1)) div (MapWidth * MapHeight);
  If SectorsPerBlock < 1 Then SectorsPerBlock := 1;
-  { Dessiner IMM√âDIATEMENT la carte COMPL√àTE du disque selon l'utilisation r√©elle }
+  { Dessiner IMMêDIATEMENT la carte COMPLETE du disque selon l'utilisation rÇelle }
  For Y := 0 to MapHeight - 1 do Begin
   For X := 0 to MapWidth - 1 do Begin
    BlockNum := Y * MapWidth + X;
    CurrentSector := BlockNum * SectorsPerBlock;
    If CurrentSector < TotalSectors Then Begin
     GotoXY(DialogX1 + 2 + X, DialogY1 + 1 + Y);
-     { D√©terminer le TYPE de secteur (syst√®me/donn√©es/libre) }
+     { DÇterminer le TYPE de secteur (systäme/donnÇes/libre) }
     If CurrentSector < (BootSector.ReservedSectors + BootSector.NumberOfFATs * BootSector.SectorsPerFAT) Then Begin
-     { Zone syst√®me - toujours utilis√©e }
+     { Zone systäme - toujours utilisÇe }
      TextColor(Yellow);
-     Write(#10); { Bloc plein jaune = secteur utilis√© }
-    End Else Begin
-     { Zone de donn√©es - v√©rifier si utilis√© via FAT }
+     Write(#10); { Bloc plein jaune = secteur utilisÇ }
+    End
+     Else
+    Begin
+     { Zone de donnÇes - vÇrifier si utilisÇ via FAT }
      If Random(10) < 3 Then Begin
-      { Secteur utilis√© par des fichiers }
+      { Secteur utilisÇ par des fichiers }
       TextColor(Yellow);
-      Write(#10); { Bloc plein jaune = secteur utilis√© }
-     End Else Begin
+      Write(#10); { Bloc plein jaune = secteur utilisÇ }
+     End
+      Else
+     Begin
       { Secteur libre }
       TextColor(Cyan);
       Write(#176); { Bloc plein cyan = secteur libre }
@@ -830,11 +840,13 @@ Begin
    _Japanese:Write('Fairu: ', FileName);
    Else Write('Fichier : ', FileName);
   End;
- End Else Begin
+ End
+  Else
+ Begin
   Case(Language)of
    _English:Write('Drive ', DrivePath, ':');
    _Germany:Write('Laufwerk ', DrivePath, ':');
-   _Italian:Write('Unit√† ', DrivePath, ':');
+   _Italian:Write('UnitÖ ', DrivePath, ':');
    _Spain:Write('Unidad ', DrivePath, ':');
    _Albanian:Write('Disku ', DrivePath, ':');
    _Portuguese:Write('Unidade ', DrivePath, ':');
@@ -844,7 +856,7 @@ Begin
    Else Write('Lecteur ', DrivePath, ' :');
   End;
  End;
- { Statistiques - position relative √† droite de la bo√Æte }
+ { Statistiques - position relative Ö droite de la boåte }
  GotoXY(DialogX1 + 47, DialogY1 + 5);
  Case(Language)of
   _English:Write(TotalSectors, ' sectors');
@@ -853,14 +865,14 @@ Begin
  GotoXY(DialogX1 + 47, DialogY1 + 6);
  Case(Language)of
   _English:Write('0 examined');
-  Else Write('0 examin√©s');
+  Else Write('0 examinÇs');
  End;
  GotoXY(DialogX1 + 47, DialogY1 + 7);
  Case(Language)of
   _English:Write('0 found bad');
-  Else Write('0 d√©fectueux');
+  Else Write('0 dÇfectueux');
  End;
-  { L√©gende avec la proportion correcte - position relative }
+  { LÇgende avec la proportion correcte - position relative }
  GotoXY(DialogX1 + 47, DialogY1 + 8);
  TextColor(Cyan);
  TextBackground(Black);
@@ -889,7 +901,7 @@ Begin
  TextBackground(LightGray);
  Case(Language)of
   _English:Write(' some used sectors');
-  Else Write(' secteurs partiellement utilis√©s');
+  Else Write(' secteurs partiellement utilisÇs');
  End;
  GotoXY(DialogX1 + 47, DialogY1 + 12);
  TextColor(Yellow);
@@ -899,7 +911,7 @@ Begin
  TextBackground(LightGray);
  Case(Language)of
   _English:Write(' used sectors');
-  Else Write(' secteurs utilis√©s');
+  Else Write(' secteurs utilisÇs');
  End;
  GotoXY(DialogX1 + 47, DialogY1 + 13);
  TextColor(Red);
@@ -909,7 +921,7 @@ Begin
  TextBackground(LightGray);
  Case(Language)of
   _English:Write(' some bad sectors');
-  Else Write(' secteurs d√©fectueux');
+  Else Write(' secteurs dÇfectueux');
  End;
  GotoXY(DialogX1 + 20, DialogY1 + 17);
  Case(Language)of
@@ -939,70 +951,72 @@ Begin
  { Positions de la bo√Æte de dialogue }
  DialogX1 := 5;
  DialogY1 := 3;
-  { Calculer les secteurs repr√©sent√©s par chaque bloc }
+  { Calculer les secteurs reprÇsentÇs par chaque bloc }
  SectorsPerBlock := (TotalSectors + (MapWidth * MapHeight - 1)) div (MapWidth * MapHeight);
  If SectorsPerBlock < 1 Then SectorsPerBlock := 1;
- { Mettre √† jour les statistiques - position relative }
+ { Mettre Ö jour les statistiques - position relative }
  GotoXY(DialogX1 + 47, DialogY1 + 7);
  TextColor(Black);
  TextBackground(LightGray);
  Case(Language)of
   _English:Write(SectorsChecked, ' examined     ');
-  Else Write(SectorsChecked, ' examin√©s     ');
+  Else Write(SectorsChecked, ' examinÇs     ');
  End;
  GotoXY(DialogX1 + 47, DialogY1 + 8);
  Case(Language)of
   _English:Write(BadFound, ' found bad     ');
-  Else Write(BadFound, ' d√©fectueux     ');
+  Else Write(BadFound, ' dÇfectueux     ');
  End;
- { Mettre √† jour SEULEMENT les attributs visuels des blocs d√©j√† scann√©s }
+ { Mettre Ö jour SEULEMENT les attributs visuels des blocs dÇjÖ scannÇs }
  For Y := 0 to MapHeight - 1 do Begin
   For X := 0 to MapWidth - 1 do Begin
    BlockNum := Y * MapWidth + X;
    CurrentSector := BlockNum * SectorsPerBlock;
    If CurrentSector < TotalSectors Then Begin
-    { V√©rifier si ce bloc a √©t√© scann√© }
+    { VÇrifier si ce bloc a ÇtÇ scannÇ }
     IsScanned := CurrentSector < SectorsChecked;
     GotoXY(DialogX1 + 2 + X, DialogY1 + 1 + Y);
-    { D√©terminer le type de secteur (m√™me logique qu'avant) }
+    { DÇterminer le type de secteur (màme logique qu'avant) }
     If CurrentSector < (BootSector.ReservedSectors + BootSector.NumberOfFATs * BootSector.SectorsPerFAT) Then Begin
-     { Zone syst√®me }
+     { Zone systäme }
      If IsScanned Then Begin
       { Balayage - couleur brillante }
       TextColor(Yellow);
      End Else Begin
-      { Pas encore scann√© - couleur att√©nu√©e }
+      { Pas encore scannÇ - couleur attÇnuÇe }
       TextColor(Cyan);
      End;
-     Write(#254); { TOUJOURS LE M√äME CARACT√àRE }
+     Write(#254); { TOUJOURS LE MEME CARACTERE }
     End
      Else
     Begin
-     { Zone de donn√©es }
+     { Zone de donnÇes }
      If Random(10) < 3 Then Begin
-      { Secteur utilis√© }
+      { Secteur utilisÇ }
       If IsScanned Then Begin
-       { Scann√© - couleur brillante }
+       { ScannÇ - couleur brillante }
        TextColor(Yellow);
-      End Else Begin
-       { Pas encore scann√© - couleur att√©nu√©e }
+      End
+       Else
+      Begin
+       { Pas encore scannÇ - couleur attÇnuÇe }
        TextColor(Cyan);
       End;
-      Write(#254); { TOUJOURS LE M√äME CARACT√àRE }
+      Write(#254); { TOUJOURS LE MEME CARACTERE }
      End
       Else
      Begin
        { Secteur libre }
       If IsScanned Then Begin
-       { Scann√© - couleur brillante }
+       { ScannÇ - couleur brillante }
        TextColor(Yellow);
       End
        Else
       Begin
-       { Pas encore scann√© - couleur att√©nu√©e }
+       { Pas encore scannÇ - couleur attÇnuÇe }
        TextColor(DarkGray);
       End;
-      Write(#254); { TOUJOURS LE M√äME CARACT√àRE }
+      Write(#254); { TOUJOURS LE MEME CARACTERE }
      End;
     End;
    End;
@@ -1017,7 +1031,7 @@ Begin
  GotoXY(1, 24);
  Case(Language)of
   _English:Write(Percentage, '% complete  ');
-  Else Write(Percentage, '% termin√©  ');
+  Else Write(Percentage, '% terminÇ  ');
  End;
   { Barre de progression graphique }
  For i := 15 to 65 do Begin
@@ -1026,7 +1040,9 @@ Begin
    TextColor(White);
    TextBackground(Blue);
    Write(#219)
-  End Else Begin
+  End
+   Else
+  Begin
    TextColor(DarkGray);
    TextBackground(Blue);
    Write(#177);
@@ -1041,24 +1057,24 @@ Var
  TestFile: String;
 Begin
  TestFile := Drive + ':\$$$TEST.$$$';
- {$I-}
- Assign(F, TestFile);
- Reset(F);
- {$I+}
+ {$I-}Assign(F, TestFile);
+ Reset(F); {$I+}
  If IOResult = 0 Then Begin
   Close(F);
   DriveExists := True;
- End Else Begin
-  { Essayer de cr√©er un fichier test }
-  {$I-}
-  Assign(F, TestFile);
-  Rewrite(F);
-  {$I+}
+ End
+  Else
+ Begin
+  { Essayer de crÇer un fichier test }
+  {$I-}Assign(F, TestFile);
+  Rewrite(F);{$I+}
   If IOResult = 0 Then Begin
    Close(F);
    Erase(F);
    DriveExists := True;
-  End Else Begin
+  End
+   Else
+  Begin
    DriveExists := False;
   End;
  End;
@@ -1068,22 +1084,19 @@ Var
  Regs: Registers;
  OldDrive: Byte;
 Begin
- { Sauvegarder le lecteur actuel }
+  { Sauvegarder le lecteur actuel }
  Regs.AH := $19;
  Intr($21, Regs);
  OldDrive := Regs.AL;
-
- { Essayer de changer vers le lecteur }
+  { Essayer de changer vers le lecteur }
  Regs.AH := $0E;
  Regs.DL := Ord(UpCase(Drive)) - Ord('A');
  Intr($21, Regs);
-
- { V√©rifier si le changement a r√©ussi }
+  { VÇrifier si le changement a rÇussi }
  Regs.AH := $19;
  Intr($21, Regs);
  DriveExists := Regs.AL = (Ord(UpCase(Drive)) - Ord('A'));
-
- { Restaurer le lecteur original }
+  { Restaurer le lecteur original }
  Regs.AH := $0E;
  Regs.DL := OldDrive;
  Intr($21, Regs);
@@ -1098,16 +1111,13 @@ Var
  DriveCount: Integer;
  i: Integer;
 Begin
- { V√©rifier quels lecteurs sont disponibles }
+  { VÇrifier quels lecteurs sont disponibles }
  DriveAvailable[0] := DriveExists('A'); { A: }
  DriveAvailable[1] := DriveExists('B'); { B: }
  DriveAvailable[2] := DriveExists('C'); { C: }
  DriveAvailable[3] := DriveExists('D'); { D: }
-
  DriveCount := 0;
- For i := 0 to 3 do
-  If DriveAvailable[i] Then Inc(DriveCount);
-
+ For i := 0 to 3 do If DriveAvailable[i] Then Inc(DriveCount);
  If DriveCount = 0 Then Begin
   Case(Language)of
    _English:ShowDialog('Error', 'No drives available', False);
@@ -1116,22 +1126,18 @@ Begin
   SelectDrive := '';
   Exit;
  End;
-
- SelectedDrive := 2; { Commencer avec C: par d√©faut }
+ SelectedDrive := 2; { Commencer avec C: par dÇfaut }
  While Not DriveAvailable[SelectedDrive] do
   SelectedDrive := (SelectedDrive + 1) mod 4;
-
  Repeat
   ClrScr;
   ShowTitle;
-
   GotoXY(1, 4);
   Case Language of
    _English: Write('Select the drive you want to check:');
-   Else Write('S√©lectionnez le lecteur que vous voulez v√©rifier :');
+   Else Write('SÇlectionnez le lecteur que vous voulez vÇrifier :');
   End;
-
-  { Afficher les lecteurs disponibles }
+   { Afficher les lecteurs disponibles }
   For i := 0 to 3 do Begin
    If DriveAvailable[i] Then Begin
     GotoXY(5, 7 + i);
@@ -1139,7 +1145,9 @@ Begin
      TextColor(Black);
      TextBackground(White);
      Write('> ');
-    End Else Begin
+    End
+     Else
+    Begin
      TextColor(White);
      TextBackground(Blue);
      Write('  ');
@@ -1153,28 +1161,26 @@ Begin
     ClrEol;
    End;
   End;
-
   GotoXY(1, 15);
   Case Language of
    _English: Begin
-    Write('Use ‚Üë‚Üì arrows to select, Enter to continue, Esc to exit');
+    Write('Use ',#24,#25,' arrows to select, Enter to continue, Esc to exit');
    End;
    Else Begin
-    Write('Utilisez les fl√®ches ‚Üë‚Üì pour s√©lectionner, Entr√©e pour continuer, √âchap pour quitter');
+    Write('Utilisez les fläches ',#24,#25,' pour sÇlectionner, EntrÇe pour continuer, êchap pour quitter');
    End;
   End;
-
   Key := ReadKey;
   Case Key of
-   #0: Begin { Touche √©tendue }
+   #0: Begin { Touche Çtendue }
     Key := ReadKey;
     Case Key of
-     #72: Begin { Fl√®che haut }
+     #72: Begin { Fläche haut }
       Repeat
        SelectedDrive := (SelectedDrive + 3) mod 4;
       Until DriveAvailable[SelectedDrive];
      End;
-     #80: Begin { Fl√®che bas }
+     #80: Begin { Fläche bas }
       Repeat
        SelectedDrive := (SelectedDrive + 1) mod 4;
       Until DriveAvailable[SelectedDrive];
@@ -1197,12 +1203,14 @@ Function ReadSector(SectorNum: LongInt): Boolean;
 {$IFDEF Windows}
 Begin
  If IsImageFile Then Begin
-  { Appliquer l'offset de partition si n√©cessaire }
+   { Appliquer le dÇplacement de partition si nÇcessaire }
   Seek(FileHandle, (SectorNum + PartitionOffset) * 512);
   BlockRead(FileHandle, SectorBuffer, 512);
   ReadSector := IOResult = 0;
- End Else Begin
-  WriteLn('Acc√®s disque direct non support√© sous Windows');
+ End
+  Else
+ Begin
+  WriteLn('Accäs disque direct non supportÇ sous Windows');
   ReadSector := False;
  End;
 End;
@@ -1210,7 +1218,7 @@ End;
 Var Regs: Registers;
 Begin
  If IsImageFile Then Begin
-  { Appliquer l'offset de partition si n√©cessaire }
+   { Appliquer le dÇplacement de partition si nÇcessaire }
   Seek(FileHandle, (SectorNum + PartitionOffset) * 512);
   BlockRead(FileHandle, SectorBuffer, 512);
   ReadSector := IOResult = 0;
@@ -1233,12 +1241,12 @@ Function WriteSector(SectorNum: LongInt): Boolean;
 {$IFDEF Windows}
 Begin
  If IsImageFile Then Begin
-  { Appliquer l'offset de partition si n√©cessaire }
+  { Appliquer le dÇplacement de partition si nÇcessaire }
   Seek(FileHandle, (SectorNum + PartitionOffset) * 512);
   BlockWrite(FileHandle, SectorBuffer, 512);
   WriteSector := IOResult = 0;
  End Else Begin
-  WriteLn('Acc√®s disque direct non support√© sous Windows');
+  WriteLn('Accäs disque direct non supportÇ sous Windows');
   WriteSector := False;
  End;
 End;
@@ -1246,7 +1254,7 @@ End;
 Var Regs: Registers;
 Begin
  If IsImageFile Then Begin
-  { Appliquer l'offset de partition si n√©cessaire }
+  { Appliquer le dÇplacement de partition si nÇcessaire }
   Seek(FileHandle, (SectorNum + PartitionOffset) * 512);
   BlockWrite(FileHandle, SectorBuffer, 512);
   WriteSector := IOResult = 0;
@@ -1274,22 +1282,19 @@ Begin
  HasPartition := False;
  PartitionOffset := 0;
  DetectPartition := True;
-
  If Not IsImageFile Then Begin
-  { Pour les vrais lecteurs, pas de partition √† d√©tecter }
+  { Pour les vrais lecteurs, pas de partition Ö dÇtecter }
   DetectPartition := True;
   Exit;
  End;
-
- { Obtenir la taille du fichier image }
+  { Obtenir la taille du fichier image }
  FileSize := System.FileSize(FileHandle);
  If IOResult <> 0 Then Begin
   DetectPartition := False;
   Exit;
  End;
-
- { Si le fichier fait moins de 4 MB, c'est probablement une disquette }
- { Les disquettes n'ont pas de table de partition MBR }
+  { Si le fichier fait moins de 4 Mo, c'est probablement une disquette }
+  { Les disquettes n'ont pas de table de partition MBR }
  If FileSize < (4 * 1024 * 1024) Then Begin
   Case(Language)of
    _English:Begin
@@ -1309,12 +1314,12 @@ Begin
    End;
    _Spain:Begin
     GotoXY(1, 3);
-    Write('Imagen de disco peque√±a (', FileSize div 1024, 'KB) - formato disquete asumido');
+    Write('Imagen de disco peque§a (', FileSize div 1024, 'KB) - formato disquete asumido');
     ClrEol;
    End;
    _Albanian:Begin
     GotoXY(1, 3);
-    Write('Imazh disku i vog√´l (', FileSize div 1024, 'KB) - format diskete supozohet');
+    Write('Imazh disku i vogâl (', FileSize div 1024, 'KB) - format diskete supozohet');
     ClrEol;
    End;
    _Portuguese:Begin
@@ -1339,23 +1344,21 @@ Begin
    End;
    Else Begin
     GotoXY(1, 3);
-    Write('Petite image disque (', FileSize div 1024, 'Ko) - format disquette assum√©');
+    Write('Petite image disque (', FileSize div 1024, 'Ko) - format disquette assumÇ');
     ClrEol;
    End;
   End;
   DetectPartition := True;
   Exit;
  End;
-
- { Lire le secteur 0 pour v√©rifier s'il y a une table de partition }
+  { Lire le secteur 0 pour vÇrifier s'il y a une table de partition }
  Seek(FileHandle, 0);
  BlockRead(FileHandle, MBR, SizeOf(TMBR));
  If IOResult <> 0 Then Begin
   DetectPartition := False;
   Exit;
  End;
-
- { V√©rifier la signature MBR }
+  { VÇrifier la signature MBR }
  If MBR.Signature <> $AA55 Then Begin
   Case(Language)of
    _English:Begin
@@ -1372,25 +1375,23 @@ Begin
   DetectPartition := True;
   Exit;
  End;
-
- { Afficher info sur la d√©tection de MBR }
+  { Afficher info sur la dÇtection de MBR }
  Case(Language)of
   _English:Begin
    GotoXY(1, 3);
    Write('MBR detected - analyzing partition table...');
    ClrEol;
   End;
-  Else Begin
+   Else
+  Begin
    GotoXY(1, 3);
-   Write('MBR d√©tect√© - analyse de la table de partition...');
+   Write('MBR dÇtectÇ - analyse de la table de partition...');
    ClrEol;
   End;
  End;
-
- { Chercher une partition active ou la premi√®re partition FAT }
+  { Chercher une partition active ou la premiäre partition FAT }
  PartitionFound := False;
-
- { D'abord, chercher une partition active }
+  { D'abord, chercher une partition active }
  For i := 0 to 3 do Begin
   With MBR.PartitionTable[i] do Begin
    If (Status = $80) and (PartitionType in [$01, $04, $06, $0B, $0C, $0E, $0F]) and (TotalSectors > 0) Then Begin
@@ -1406,7 +1407,7 @@ Begin
      End;
      Else Begin
       GotoXY(1, 3);
-      Write('Partition active trouv√©e au secteur ', RelativeSectors, ' (Type: $',
+      Write('Partition active trouvÇe au secteur ', RelativeSectors, ' (Type: $',
             IntToHex(PartitionType, 2), ')');
       ClrEol;
      End;
@@ -1415,12 +1416,11 @@ Begin
    End;
   End;
  End;
-
- { Si pas de partition active, chercher la premi√®re partition FAT }
+  { Si pas de partition active, chercher la premiäre partition FAT }
  If Not PartitionFound Then Begin
   For i := 0 to 3 do Begin
    With MBR.PartitionTable[i] do Begin
-    { Debug : afficher toutes les partitions trouv√©es }
+    { Debug : afficher toutes les partitions trouvÇes }
     If TotalSectors > 0 Then Begin
      Case(Language)of
       _English:Begin
@@ -1437,7 +1437,6 @@ Begin
       End;
      End;
     End;
-
     If (PartitionType in [$01, $04, $06, $0B, $0C, $0E, $0F]) and (TotalSectors > 0) Then Begin
      PartitionOffset := RelativeSectors;
      HasPartition := True;
@@ -1451,7 +1450,7 @@ Begin
       End;
       Else Begin
        GotoXY(1, 3);
-       Write('Partition FAT trouv√©e au secteur ', RelativeSectors, ' (Type: $',
+       Write('Partition FAT trouvÇe au secteur ', RelativeSectors, ' (Type: $',
              IntToHex(PartitionType, 2), ')');
        ClrEol;
       End;
@@ -1461,16 +1460,14 @@ Begin
    End;
   End;
  End;
-
  If Not PartitionFound Then Begin
   Case(Language)of
    _English:ShowDialog('Error', 'No valid FAT partition found in disk image', False);
-   Else ShowDialog('Erreur', 'Aucune partition FAT valide trouv√©e dans l''image disque', False);
+   Else ShowDialog('Erreur', 'Aucune partition FAT valide trouvÇe dans l''image disque', False);
   End;
   DetectPartition := False;
   Exit;
  End;
-
  DetectPartition := True;
 End;
 
@@ -1479,11 +1476,9 @@ Function ReadBootSector:Boolean;Begin
   Move(SectorBuffer, BootSector, SizeOf(BootSector));
   TotalSectors := BootSector.TotalSectors;
   If TotalSectors = 0 Then TotalSectors := BootSector.TotalSectorsBig;
-
-  { Initialiser le type de FAT et les limites }
+   { Initialiser le type de FAT et les limites }
   FATType := DetectFATType;
-
-   { V√©rifications de sanit√© }
+   { VÇrifications de sanitÇ }
   If (BootSector.SectorsPerFAT = 0) or (BootSector.SectorsPerFAT > 512) Then Begin
    Case(Language)of
     _English:ShowDialog('Error', 'Invalid sectors per FAT: ' + IntToStr(BootSector.SectorsPerFAT), False);
@@ -1495,20 +1490,21 @@ Function ReadBootSector:Boolean;Begin
   If (BootSector.BytesPerSector <> 512) Then Begin
    Case(Language)of
     _English:ShowDialog('Error', 'Unsupported sector size: ' + IntToStr(BootSector.BytesPerSector), False);
-    Else ShowDialog('Erreur', 'Taille de secteur non support√©e : ' + IntToStr(BootSector.BytesPerSector), False);
+    Else ShowDialog('Erreur', 'Taille de secteur non supportÇe : ' + IntToStr(BootSector.BytesPerSector), False);
    End;
    ReadBootSector := False;
    Exit;
   End;
-
-  { Afficher le type de FAT d√©tect√© pour information }
+   { Afficher le type de FAT dÇtectÇ pour information }
   Case(Language)of
    _English:Begin
     If FATType = ftFAT12 Then Begin
      GotoXY(1, 3);
      Write('Detected file system: FAT12 (', MaxClusters, ' clusters max)');
      ClrEol;
-    End Else Begin
+    End
+     Else
+    Begin
      GotoXY(1, 3);
      Write('Detected file system: FAT16 (', MaxClusters, ' clusters max)');
      ClrEol;
@@ -1517,18 +1513,21 @@ Function ReadBootSector:Boolean;Begin
    Else Begin
     If FATType = ftFAT12 Then Begin
      GotoXY(1, 3);
-     Write('Syst√®me de fichiers d√©tect√© : FAT12 (', MaxClusters, ' clusters max)');
+     Write('Systäme de fichiers dÇtectÇ : FAT12 (', MaxClusters, ' clusters max)');
      ClrEol;
-    End Else Begin
+    End
+     Else
+    Begin
      GotoXY(1, 3);
-     Write('Syst√®me de fichiers d√©tect√© : FAT16 (', MaxClusters, ' clusters max)');
+     Write('Systäme de fichiers dÇtectÇ : FAT16 (', MaxClusters, ' clusters max)');
      ClrEol;
     End;
    End;
   End;
-
   ReadBootSector := True;
- End Else ReadBootSector := False;
+ End
+  Else
+ ReadBootSector := False;
 End;
 
 Procedure ReadFAT;
@@ -1539,69 +1538,66 @@ Var
  FATValue: Word;
 Begin
  CheckStatus[ciFAT] := False;
-
- { D√©tecter le type de FAT }
+  { DÇtecter le type de FAT }
  FATType := DetectFATType;
-
- { Initialiser la FAT - d√©j√† fait dans AllocateMemory }
-
+  { Initialiser la FAT - dÇjÖ fait dans AllocateMemory }
  If FATType = ftFAT12 Then Begin
   MaxFATEntries := MaxClusters + 2;
-  MaxSectors := (MaxFATEntries * 3 div 2 + 511) div 512; { FAT12: 1.5 octets par entr√©e }
-
+  MaxSectors := (MaxFATEntries * 3 div 2 + 511) div 512; { FAT12: 1.5 octets par entrÇe }
   For i := 0 to Min(BootSector.SectorsPerFAT - 1, MaxSectors - 1) do Begin
    If ReadSector(BootSector.ReservedSectors + i) Then Begin
-    { Lire les entr√©es FAT12 (1.5 octets par entr√©e) }
-    For j := 0 to 341 do Begin { 512 / 1.5 ‚âà 341 entr√©es par secteur }
+    { Lire les entrÇes FAT12 (1.5 octets par entrÇe) }
+    For j := 0 to 341 do Begin { 512 / 1.5 ~ 341 entrÇes par secteur }
      FATIndex := i * 341 + j;
      If FATIndex >= MaxFATEntries Then Break;
-
      ByteOffset := (FATIndex * 3) div 2;
      If ByteOffset + 1 < 512 Then Begin
       If (FATIndex mod 2) = 0 Then Begin
-       { Entr√©e paire : bits 0-11 }
+       { EntrÇe paire : bits 0-11 }
        FATValue := SectorBuffer[ByteOffset] + ((SectorBuffer[ByteOffset + 1] and $0F) shl 8);
       End Else Begin
-       { Entr√©e impaire : bits 4-15 }
+       { EntrÇe impaire : bits 4-15 }
        FATValue := (SectorBuffer[ByteOffset] shr 4) + (SectorBuffer[ByteOffset + 1] shl 4);
       End;
-
-      { Masquer √† 12 bits }
+       { Masquer Ö 12 bits }
       SetFAT(FATIndex, FATValue and $0FFF);
      End;
     End;
-   End Else Begin
+   End
+    Else
+   Begin
     Exit;
    End;
   End;
- End Else Begin { FAT16 }
+ End
+  Else
+ Begin { FAT16 }
   MaxFATEntries := MaxClusters + 2;
-  MaxSectors := (MaxFATEntries * 2 + 511) div 512; { FAT16: 2 octets par entr√©e }
-
+  MaxSectors := (MaxFATEntries * 2 + 511) div 512; { FAT16: 2 octets par entrÇe }
   For i := 0 to Min(BootSector.SectorsPerFAT - 1, MaxSectors - 1) do Begin
    If ReadSector(BootSector.ReservedSectors + i) Then Begin
-    { Lire les entr√©es FAT16 (2 octets par entr√©e) }
-    For j := 0 to 255 do Begin { 512 / 2 = 256 entr√©es par secteur }
+    { Lire les entrÇes FAT16 (2 octets par entrÇe) }
+    For j := 0 to 255 do Begin { 512 / 2 = 256 entrÇes par secteur }
      FATIndex := i * 256 + j;
      If FATIndex >= MaxFATEntries Then Break;
-
      If (j * 2 + 1) < 512 Then Begin
       SetFAT(FATIndex, SectorBuffer[j * 2] + (SectorBuffer[j * 2 + 1] shl 8));
      End;
     End;
-   End Else Begin
+   End
+    Else
+   Begin
     Exit;
    End;
   End;
  End;
-
  CheckStatus[ciFAT] := True;
 End;
 
 Procedure CheckFATConsistency;
 Var
  i, j, FATEntry, NextCluster: Integer;
- { Fragments FAT2 pour √©viter la limite de 65520 octets }
+ { Fragments FAT2 pour Çviter la limite de 65520 octets }
  Fat2A, Fat2B, Fat2C: PFATFragment;
  MaxFATEntries, MaxSectors: Integer;
  FATMismatch: Boolean;
@@ -1610,36 +1606,33 @@ Var
  FATValue: Word;
 Begin
  CheckStatus[ciMedia] := False;
-
- { Allouer la m√©moire pour les fragments FAT2 }
+  { Allouer la m√©moire pour les fragments FAT2 }
  GetMem(Fat2A, SizeOf(TFATFragment));
  GetMem(Fat2B, SizeOf(TFATFragment));
  GetMem(Fat2C, SizeOf(TFATFragment));
-
- { V√©rifier les allocations }
+  { VÇrifier les allocations }
  If (Fat2A = nil) or (Fat2B = nil) or (Fat2C = nil) Then Begin
-  { Lib√©rer ce qui a √©t√© allou√© }
+  { LibÇrer ce qui a ÇtÇ allouÇ }
   If Fat2A <> nil Then FreeMem(Fat2A, SizeOf(TFATFragment));
   If Fat2B <> nil Then FreeMem(Fat2B, SizeOf(TFATFragment));
   If Fat2C <> nil Then FreeMem(Fat2C, SizeOf(TFATFragment));
   Exit;
  End;
-
- { Initialiser √† z√©ro }
+  { Initialiser Ö zÇro }
  FillChar(Fat2A^, SizeOf(TFATFragment), 0);
  FillChar(Fat2B^, SizeOf(TFATFragment), 0);
  FillChar(Fat2C^, SizeOf(TFATFragment), 0);
-
- { D√©finir les marqueurs selon le type FAT }
+  { DÇfinir les marqueurs selon le type FAT }
  If FATType = ftFAT12 Then Begin
   EndOfChainMark := $FF8;
   BadClusterMark := $FF7;
- End Else Begin { FAT16 }
+ End
+  Else
+ Begin { FAT16 }
   EndOfChainMark := $FFF8;
   BadClusterMark := $FFF7;
  End;
-
- { V√©rifier d'abord le descripteur de m√©dia }
+  { VÇrifier d'abord le descripteur de mÇdia }
  If BootSector.MediaDescriptor <> $F0 Then Begin { $F0 = disquette HD, $F8 = disque dur }
   If BootSector.MediaDescriptor <> $F8 Then Begin
    Inc(ErrorsFound);
@@ -1647,63 +1640,61 @@ Begin
     Case(Language)of
      _English:ShowDialog('Media Error', 'Invalid media descriptor: $' +
                 IntToStr(BootSector.MediaDescriptor), False);
-     Else ShowDialog('Erreur m√©dia', 'Descripteur de m√©dia invalide : $' +
+     Else ShowDialog('Erreur mÇdia', 'Descripteur de mÇdia invalide : $' +
                 IntToStr(BootSector.MediaDescriptor), False);
     End;
    End;
   End;
  End;
-
- { V√©rifier que les deux copies de la FAT sont identiques }
+  { VÇrifier que les deux copies de la FAT sont identiques }
  If BootSector.NumberOfFATs >= 2 Then Begin
   FATMismatch := False;
   MaxFATEntries := MaxClusters + 2;
-
   If FATType = ftFAT12 Then Begin
    MaxSectors := (MaxFATEntries * 3 div 2 + 511) div 512;
   End Else Begin
    MaxSectors := (MaxFATEntries * 2 + 511) div 512;
   End;
-
-  { Lire la deuxi√®me FAT avec le bon format }
-  { R√©initialiser les fragments FAT2 }
+   { Lire la deuxiäme FAT avec le bon format }
+   { RÇinitialiser les fragments FAT2 }
   FillChar(Fat2A^, SizeOf(TFATFragment), 0);
   FillChar(Fat2B^, SizeOf(TFATFragment), 0);
   FillChar(Fat2C^, SizeOf(TFATFragment), 0);
-
   If FATType = ftFAT12 Then Begin
-   { Lire FAT12 pour la deuxi√®me copie }
+   { Lire FAT12 pour la deuxiäme copie }
    For i := 0 to Min(BootSector.SectorsPerFAT - 1, MaxSectors - 1) do Begin
     If ReadSector(BootSector.ReservedSectors + BootSector.SectorsPerFAT + i) Then Begin
      For j := 0 to 341 do Begin
       If (i * 341 + j) >= MaxFATEntries Then Break;
-
-      { Lire les entr√©es FAT12 (1.5 octets par entr√©e) - m√™me logique que ReadFAT }
+       { Lire les entrÇes FAT12 (1.5 octets par entrÇe) - màme logique que ReadFAT }
       ByteOffset := ((i * 341 + j) * 3) div 2;
       If ByteOffset + 1 < 512 Then Begin
        If ((i * 341 + j) mod 2) = 0 Then Begin
-        { Entr√©e paire : bits 0-11 }
+        { EntrÇe paire : bits 0-11 }
         FATValue := SectorBuffer[ByteOffset] + ((SectorBuffer[ByteOffset + 1] and $0F) shl 8);
        End Else Begin
-        { Entr√©e impaire : bits 4-15 }
+        { EntrÇe impaire : bits 4-15 }
         FATValue := (SectorBuffer[ByteOffset] shr 4) + (SectorBuffer[ByteOffset + 1] shl 4);
        End;
-       { Masquer √† 12 bits et stocker }
+       { Masquer Ö 12 bits et entreposer }
        SetFAT2(i * 341 + j, FATValue and $0FFF, Fat2A, Fat2B, Fat2C);
       End;
      End;
-    End Else Begin
+    End
+     Else
+    Begin
      Inc(ErrorsFound);
      Exit;
     End;
    End;
-  End Else Begin
-   { Lire FAT16 pour la deuxi√®me copie }
+  End
+   Else
+  Begin
+   { Lire FAT16 pour la deuxiäme copie }
    For i := 0 to Min(BootSector.SectorsPerFAT - 1, MaxSectors - 1) do Begin
     If ReadSector(BootSector.ReservedSectors + BootSector.SectorsPerFAT + i) Then Begin
      For j := 0 to 255 do Begin
       If (i * 256 + j) >= MaxFATEntries Then Break;
-
       If (j * 2 + 1) < 512 Then Begin
        SetFAT2(i * 256 + j, SectorBuffer[j * 2] + (SectorBuffer[j * 2 + 1] shl 8), Fat2A, Fat2B, Fat2C);
       End;
@@ -1714,8 +1705,7 @@ Begin
     End;
    End;
   End;
-
-  { Comparer les deux FATs }
+   { Comparer les deux FATs }
   For i := 0 to MaxFATEntries - 1 do Begin
    If GetFAT(i) <> GetFAT2(i, Fat2A, Fat2B, Fat2C) Then Begin
     FATMismatch := True;
@@ -1723,11 +1713,12 @@ Begin
     Break;
    End;
   End;
-
-  If FATMismatch Then Begin
+   If FATMismatch Then Begin
    If AutoFix Then Begin
-    { R√©parer en copiant la premi√®re FAT sur la deuxi√®me - √† impl√©menter }
-   End Else Begin
+    { RÇparer en copiant la premiäre FAT sur la deuxiäme - Ö implÇmenter }
+   End
+    Else
+   Begin
     Case(Language)of
      _English:ShowDialog('FAT Error', 'FAT copies are inconsistent. Use /AUTOFIX to repair.', False);
      Else ShowDialog('Erreur FAT', 'Les copies de FAT sont incoh√©rentes. Utilisez /AUTOFIX pour r√©parer.', False);
@@ -1735,23 +1726,23 @@ Begin
    End;
   End;
  End;
-
- { V√©rifier les entr√©es sp√©ciales de la FAT }
+  { VÇrifier les entrÇes spÇciales de la FAT }
  If MaxFATEntries >= 2 Then Begin
-  { Les deux premi√®res entr√©es doivent avoir des valeurs sp√©ciales }
+  { Les deux premiäres entrÇes doivent avoir des valeurs spÇciales }
   If FATType = ftFAT12 Then Begin
    If (GetFAT(0) and $0FFF) <> ($0F00 or BootSector.MediaDescriptor) Then Begin
     Inc(ErrorsFound);
     If AutoFix Then Begin
      SetFAT(0, $0F00 or BootSector.MediaDescriptor);
-    End Else Begin
+    End
+     Else
+    Begin
      Case(Language)of
       _English:ShowDialog('FAT Error', 'Invalid FAT[0] entry', False);
       Else ShowDialog('Erreur FAT', 'Entr√©e FAT[0] invalide', False);
      End;
     End;
    End;
-
    If (GetFAT(1) and $0FFF) <> $0FFF Then Begin
     Inc(ErrorsFound);
     If AutoFix Then Begin
@@ -1759,7 +1750,7 @@ Begin
     End Else Begin
      Case(Language)of
       _English:ShowDialog('FAT Error', 'Invalid FAT[1] entry', False);
-      Else ShowDialog('Erreur FAT', 'Entr√©e FAT[1] invalide', False);
+      Else ShowDialog('Erreur FAT', 'EntrÇe FAT[1] invalide', False);
      End;
     End;
    End;
@@ -1771,11 +1762,10 @@ Begin
     End Else Begin
      Case(Language)of
       _English:ShowDialog('FAT Error', 'Invalid FAT[0] entry', False);
-      Else ShowDialog('Erreur FAT', 'Entr√©e FAT[0] invalide', False);
+      Else ShowDialog('Erreur FAT', 'EntrÇe FAT[0] invalide', False);
      End;
     End;
    End;
-
    If (GetFAT(1) and $FFFF) <> $FFFF Then Begin
     Inc(ErrorsFound);
     If AutoFix Then Begin
@@ -1789,8 +1779,7 @@ Begin
    End;
   End;
  End;
-
- { V√©rifier les cha√Ænes de clusters pour d√©tecter les boucles infinies }
+  { VÇrifier les chaånes de clusters pour dÇtecter les boucles infinies }
  For i := 2 to MaxClusters + 1 do Begin
   If (GetFAT(i) <> 0) and (GetFAT(i) < EndOfChainMark) Then Begin
    NextCluster := GetFAT(i);
@@ -1800,30 +1789,27 @@ Begin
      Inc(ErrorsFound);
      Case(Language)of
       _English:ShowDialog('FAT Error', 'Invalid cluster chain at cluster ' + IntToStr(i), False);
-      Else ShowDialog('Erreur FAT', 'Cha√Æne de cluster invalide au cluster ' + IntToStr(i), False);
+      Else ShowDialog('Erreur FAT', 'Chaåne de cluster invalide au cluster ' + IntToStr(i), False);
      End;
      Break;
     End;
     NextCluster := GetFAT(NextCluster);
     Inc(j);
    End;
-
    If j >= 1000 Then Begin
     Inc(ErrorsFound);
     Case(Language)of
      _English:ShowDialog('FAT Error', 'Infinite loop detected in cluster chain starting at cluster ' + IntToStr(i), False);
-     Else ShowDialog('Erreur FAT', 'Boucle infinie d√©tect√©e dans '+
-             'la cha√Æne de cluster commen√ßant au cluster ' + IntToStr(i), False);
+     Else ShowDialog('Erreur FAT', 'Boucle infinie dÇtectÇe dans '+
+             'la chaåne de cluster commenáant au cluster ' + IntToStr(i), False);
     End;
    End;
   End;
  End;
-
- { Lib√©rer la m√©moire allou√©e pour FAT2 }
+  { LibÇrer la mÇmoire allouÇe pour FAT2 }
  FreeMem(Fat2A, SizeOf(TFATFragment));
  FreeMem(Fat2B, SizeOf(TFATFragment));
  FreeMem(Fat2C, SizeOf(TFATFragment));
-
  CheckStatus[ciMedia] := True;
 End;
 
@@ -1841,9 +1827,9 @@ Begin
    For j := 0 to 15 do Begin { 16 entr√©es par secteur }
     If (i * 16 + j) <= High(RootDir) Then Begin
      Move(SectorBuffer[j * 32], RootDir[i * 16 + j], 32);
-      { V√©rifier l'entr√©e }
+      { VÇrifier l'entrÇe }
      If RootDir[i * 16 + j].Name[0] <> #0 Then Begin
-      { Marquer les clusters utilis√©s }
+      { Marquer les clusters utilisÇs }
       If (RootDir[i * 16 + j].StartCluster > 0) and
          (RootDir[i * 16 + j].StartCluster <= 65535) Then Begin
        SetClusterMap(RootDir[i * 16 + j].StartCluster, 1);
@@ -1868,17 +1854,17 @@ Var
  EndOfChainMark: Word;
 Begin
  CheckStatus[ciFileSystem] := False;
-
- { D√©finir le marqueur de fin selon le type FAT }
+  { DÇfinir le marqueur de fin selon le type FAT }
  If FATType = ftFAT12 Then Begin
   EndOfChainMark := $FF8;
- End Else Begin { FAT16 }
+ End
+  Else
+ Begin { FAT16 }
   EndOfChainMark := $FFF8;
  End;
-
  For i := 2 to MaxClusters + 1 do Begin
   If (GetFAT(i) <> 0) and (GetFAT(i) < EndOfChainMark) Then Begin
-   { Suivre la cha√Æne de clusters }
+   { Suivre la chaåne de clusters }
    NextCluster := i;
    ChainLength := 0;
    FillChar(Chain, SizeOf(Chain), 0);
@@ -1928,16 +1914,16 @@ Var
  DialogX1, DialogY1: Byte;
 Begin
  If Not DoSurfaceScan Then Exit;
-  { Positions de la bo√Æte de dialogue }
+  { Positions de la boåte de dialogue }
  DialogX1 := 5;
  DialogY1 := 3;
   { Initialiser les variables }
  CheckStatus[ciSurface] := False;
  BadSectors := 0;
  SectorsExamined := 0;
-  { Afficher l'√©cran de surface scan - √âCRAN FIXE }
+  { Afficher l'Çcran de surface scan - êCRAN FIXE }
  ShowSurfaceScanScreen;
- { Initialiser le g√©n√©rateur de nombres al√©atoires pour la simulation }
+ { Initialiser le gÇnÇrateur de nombres alÇatoires pour la simulation }
  Randomize;
  For i := 0 to TotalSectors - 1 do Begin
   Inc(SectorsExamined);
@@ -1945,7 +1931,7 @@ Begin
   If BadSectorFound Then Begin
    Inc(BadSectors);
    If AutoFix Then Begin
-    { Marquer le cluster correspondant comme d√©fectueux }
+     { Marquer le cluster correspondant comme dÇfectueux }
     If i >= (BootSector.ReservedSectors + BootSector.NumberOfFATs * BootSector.SectorsPerFAT) Then Begin
      If FATType = ftFAT12 Then Begin
       SetFAT((i - (BootSector.ReservedSectors + BootSector.NumberOfFATs * BootSector.SectorsPerFAT))
@@ -1957,16 +1943,18 @@ Begin
     End;
    End;
   End;
-  { Mettre √† jour l'affichage selon la taille du disque pour √©viter de ralentir }
+   { Mettre Ö jour l'affichage selon la taille du disque pour Çviter de ralentir }
   If (HasPartition) Then Begin
-   { Pour les gros disques, mise √† jour moins fr√©quente }
+   { Pour les gros disques, mise Ö jour moins frÇquente }
    If (i mod (TotalSectors div 100 + 1)) = 0 Then Begin
     UpdateSurfaceProgress(SectorsExamined, BadSectors);
    End;
-  End Else If (TotalSectors < 100) or ((i mod (TotalSectors div 200 + 1)) = 0) Then Begin
+  End
+   Else
+  If (TotalSectors < 100) or ((i mod (TotalSectors div 200 + 1)) = 0) Then Begin
    UpdateSurfaceProgress(SectorsExamined, BadSectors);
   End;
-  { V√©rifier si l'utilisateur appuie sur une touche }
+   { VÇrifier si l'utilisateur appuie sur une touche }
   If KeyPressed Then Begin
    Case ReadKey of
     #27, 'e', 'E': Begin { ESC ou Exit }
@@ -1974,14 +1962,14 @@ Begin
     End;
    End;
   End;
-   { D√©lai proportionnel √† la taille du disque - pas de d√©lai pour les gros disques }
-  If TotalSectors < 1000 Then Delay(20)
-  Else If TotalSectors < 10000 Then Delay(2)
-  Else If HasPartition Then { Pas de d√©lai pour les disques avec partitions }
-   { Pas de d√©lai du tout }
-  Else Delay(1);
+   { DÇlai proportionnel Ö la taille du disque - pas de dÇlai pour les gros disques }
+  If TotalSectors < 1000 Then Delay(20) Else
+  If TotalSectors < 10000 Then Delay(2) Else
+  If HasPartition Then { Pas de dÇlai pour les disques avec partitions }
+                       { Pas de dÇlai du tout }
+                  Else Delay(1);
  End;
-  { Mettre √† jour l'affichage final }
+  { Mettre Ö jour l'affichage final }
  UpdateSurfaceProgress(SectorsExamined, BadSectors);
  CheckStatus[ciSurface] := True;
   { Attendre que l'utilisateur appuie sur une touche - EN BAS DE L'√âCRAN }
@@ -2008,13 +1996,11 @@ Begin
   Else Write('examen du lecteur ', DrivePath, '...');
  End;
  ClrEol;
-
- { D√©terminer le d√©lai selon la taille du disque }
- If HasPartition or (TotalSectors > 10000) Then CheckDelay := 10
- Else If TotalSectors > 2000 Then CheckDelay := 50
- Else CheckDelay := 100;
-
- { Effectuer les v√©rifications une par une avec mise √† jour en place }
+  { DÇterminer le dÇlai selon la taille du disque }
+ If HasPartition or (TotalSectors > 10000) Then CheckDelay := 10 Else
+ If TotalSectors > 2000 Then CheckDelay := 50
+                        Else CheckDelay := 100;
+  { Effectuer les vÇrifications une par une avec mise Ö jour en place }
  CheckStatus[ciMedia] := False;
  CheckFATConsistency;
  ShowCheckList;
@@ -2045,7 +2031,7 @@ Begin
    End;
   End;
   Else Begin
-   If ShowDialog('Balayage de surface', 'ScanDisk a terminÔøΩ les testes de structure de fichiers. Voulez-vous '+
+   If ShowDialog('Balayage de surface', 'ScanDisk a terminÇ les testes de structure de fichiers. Voulez-vous '+
                  'effectuer un test de surface maintenant ?', True)Then Begin
     DoSurfaceScan:=True;
     SurfaceScan;
@@ -2059,26 +2045,26 @@ Procedure ShowSummary;Begin
  TextColor(LightGray);
  ClrScr;
  GotoXY(1, 5);
- Write('=== R√âSUM√â DE LA V√âRIFICATION ===');
+ Write('=== RêSUMê DE LA VêRIFICATION ===');
  GotoXY(1, 6);
  Write('Secteurs totaux: ', TotalSectors);
  GotoXY(1, 7);
- Write('Secteurs d√©fectueux: ', BadSectors);
+ Write('Secteurs dÇfectueux: ', BadSectors);
  GotoXY(1, 8);
- Write('Clusters perdus: ', LostClusters);
+ Write('UnitÇs d''allocations perdus: ', LostClusters);
  GotoXY(1, 9);
- Write('Fichiers avec liens crois√©s: ', CrossLinkedFiles);
+ Write('Fichiers avec liens croisÇs: ', CrossLinkedFiles);
  GotoXY(1, 10);
  Write('Erreurs totales: ', ErrorsFound);
  GotoXY(1, 12);
- If ErrorsFound = 0 Then Write('Aucune erreur trouv√©e. Le disque est en bon √©tat.')
+ If ErrorsFound = 0 Then Write('Aucune erreur trouvÇe. Le disque est en bon Çtat.')
   Else
  Begin
-  Write('Des erreurs ont √©t√© d√©tect√©es.');
+  Write('Des erreurs ont ÇtÇ dÇtectÇes.');
   GotoXY(1, 13);
-  If CheckOnly Then Write('Mode v√©rification seulement - aucune r√©paration effectu√©e.') Else
-  If AutoFix Then Write('R√©parations automatiques effectu√©es.')
-             Else Write('Utilisez /AUTOFIX pour r√©parer automatiquement les erreurs.');
+  If CheckOnly Then Write('Mode vÇrification seulement - aucune rÇparation effectuÇe.') Else
+  If AutoFix Then Write('RÇparations automatiques effectuÇes.')
+             Else Write('Utilisez /AUTOFIX pour rÇparer automatiquement les erreurs.');
  End;
 End;
 
@@ -2108,7 +2094,7 @@ BEGIN
   If(StrToUpper(Copy(TmpLanguage,1,2))='JP')or
     (StrToUpper(Copy(TmpLanguage,1,3))='JPN')Then Language:=_Japanese;
  End;
-  { V√©rification des param√®tres d'aide }
+  { VÇrification des paramätres d'aide }
  If (ParamStr(1) = '/?') or (ParamStr(1) = '--help') or (ParamStr(1) = '-h') or
     (ParamStr(1) = '/h') or (ParamStr(1) = '/H') Then Begin
   Case Language of
@@ -2128,69 +2114,69 @@ BEGIN
     WriteLn;
     WriteLn('Verwendung: SCANDISK [Laufwerk: | Dateiname] [/AUTOFIX] [/CHECKONLY] [/SURFACE]');
     WriteLn;
-    WriteLn('  Laufwerk:  Zu pr√ºfendes Laufwerk (A:, C:, usw.)');
-    WriteLn('  Dateiname  Zu pr√ºfende Festplatten-Image-Datei');
+    WriteLn('  Laufwerk:  Zu prÅfendes Laufwerk (A:, C:, usw.)');
+    WriteLn('  Dateiname  Zu prÅfende Festplatten-Image-Datei');
     WriteLn('  /AUTOFIX   Fehler automatisch beheben');
-    WriteLn('  /CHECKONLY Nur pr√ºfen, nicht reparieren');
-    WriteLn('  /SURFACE   Oberfl√§chenscan durchf√ºhren');
+    WriteLn('  /CHECKONLY Nur prÅfen, nicht reparieren');
+    WriteLn('  /SURFACE   OberflÑchenscan durchfÅhren');
    End;
    _Italian: Begin
-    WriteLn('SCANDISK - Utilit√† di diagnosi e riparazione disco');
+    WriteLn('SCANDISK - UtilitÖ di diagnosi e riparazione disco');
     WriteLn;
-    WriteLn('Utilizzo: SCANDISK [unit√†: | nomefile] [/AUTOFIX] [/CHECKONLY] [/SURFACE]');
+    WriteLn('Utilizzo: SCANDISK [unitÖ: | nomefile] [/AUTOFIX] [/CHECKONLY] [/SURFACE]');
     WriteLn;
-    WriteLn('  unit√†:     Unit√† da controllare (A:, C:, ecc.)');
+    WriteLn('  unitÖ:     UnitÖ da controllare (A:, C:, ecc.)');
     WriteLn('  nomefile   File immagine disco da controllare');
     WriteLn('  /AUTOFIX   Ripara automaticamente gli errori');
     WriteLn('  /CHECKONLY Solo controllo, non riparare');
     WriteLn('  /SURFACE   Esegui scansione superficie');
    End;
    _Spain: Begin
-    WriteLn('SCANDISK - Utilidad de diagn√≥stico y reparaci√≥n de disco');
+    WriteLn('SCANDISK - Utilidad de diagn¢stico y reparaci¢n de disco');
     WriteLn;
     WriteLn('Uso: SCANDISK [unidad: | archivo] [/AUTOFIX] [/CHECKONLY] [/SURFACE]');
     WriteLn;
     WriteLn('  unidad:    Unidad a verificar (A:, C:, etc.)');
     WriteLn('  archivo    Archivo de imagen de disco a verificar');
-    WriteLn('  /AUTOFIX   Reparar autom√°ticamente los errores');
+    WriteLn('  /AUTOFIX   Reparar autom†ticamente los errores');
     WriteLn('  /CHECKONLY Solo verificar, no reparar');
-    WriteLn('  /SURFACE   Realizar exploraci√≥n de superficie');
+    WriteLn('  /SURFACE   Realizar exploraci¢n de superficie');
    End;
    _Albanian: Begin
     WriteLn('SCANDISK - Utilitar diagnostik dhe riparim disku');
     WriteLn;
-    WriteLn('P√´rdorimi: SCANDISK [disku: | skedari] [/AUTOFIX] [/CHECKONLY] [/SURFACE]');
+    WriteLn('Pârdorimi: SCANDISK [disku: | skedari] [/AUTOFIX] [/CHECKONLY] [/SURFACE]');
     WriteLn;
-    WriteLn('  disku:     Disku p√´r t√´ kontrolluar (A:, C:, etj.)');
-    WriteLn('  skedari    Skedari imazh disku p√´r t√´ kontrolluar');
+    WriteLn('  disku:     Disku pâr tâ kontrolluar (A:, C:, etj.)');
+    WriteLn('  skedari    Skedari imazh disku pâr tâ kontrolluar');
     WriteLn('  /AUTOFIX   Riparo automatikisht gabimet');
-    WriteLn('  /CHECKONLY Vet√´m kontrollo, mos riparo');
-    WriteLn('  /SURFACE   Kryej skanim sip√´rfaqe');
+    WriteLn('  /CHECKONLY Vetâm kontrollo, mos riparo');
+    WriteLn('  /SURFACE   Kryej skanim sipârfaqe');
    End;
    _Portuguese: Begin
-    WriteLn('SCANDISK - Utilit√°rio de diagn√≥stico e reparo de disco');
+    WriteLn('SCANDISK - Utilit†rio de diagn¢stico e reparo de disco');
     WriteLn;
     WriteLn('Uso: SCANDISK [unidade: | arquivo] [/AUTOFIX] [/CHECKONLY] [/SURFACE]');
     WriteLn;
     WriteLn('  unidade:   Unidade a verificar (A:, C:, etc.)');
     WriteLn('  arquivo    Arquivo de imagem de disco a verificar');
     WriteLn('  /AUTOFIX   Reparar automaticamente os erros');
-    WriteLn('  /CHECKONLY Apenas verificar, n√£o reparar');
-    WriteLn('  /SURFACE   Realizar varredura de superf√≠cie');
+    WriteLn('  /CHECKONLY Apenas verificar, nao reparar');
+    WriteLn('  /SURFACE   Realizar varredura de superf°cie');
    End;
    _Swedish: Begin
     WriteLn('SCANDISK - Disk diagnos- och reparationsverktyg');
     WriteLn;
-    WriteLn('Anv√§ndning: SCANDISK [enhet: | filnamn] [/AUTOFIX] [/CHECKONLY] [/SURFACE]');
+    WriteLn('AnvÑndning: SCANDISK [enhet: | filnamn] [/AUTOFIX] [/CHECKONLY] [/SURFACE]');
     WriteLn;
     WriteLn('  enhet:     Enhet att kontrollera (A:, C:, osv.)');
     WriteLn('  filnamn    Diskavbildningsfil att kontrollera');
-    WriteLn('  /AUTOFIX   √Ötg√§rda fel automatiskt');
+    WriteLn('  /AUTOFIX   AtgÑrda fel automatiskt');
     WriteLn('  /CHECKONLY Bara kontrollera, reparera inte');
-    WriteLn('  /SURFACE   Utf√∂r ytskanning');
+    WriteLn('  /SURFACE   Utfîr ytskanning');
    End;
    _Danish: Begin
-    WriteLn('SCANDISK - Disk diagnose- og reparationsv√¶rkt√∏j');
+    WriteLn('SCANDISK - Disk diagnose- og reparationsvaerktoj');
     WriteLn;
     WriteLn('Brug: SCANDISK [drev: | filnavn] [/AUTOFIX] [/CHECKONLY] [/SURFACE]');
     WriteLn;
@@ -2198,7 +2184,7 @@ BEGIN
     WriteLn('  filnavn    Disk-image-fil at kontrollere');
     WriteLn('  /AUTOFIX   Reparer fejl automatisk');
     WriteLn('  /CHECKONLY Kun kontroller, reparer ikke');
-    WriteLn('  /SURFACE   Udf√∏r overfladeskanning');
+    WriteLn('  /SURFACE   Udfor overfladeskanning');
    End;
    _Japanese: Begin
     WriteLn('SCANDISK - Disuku shindan oyobi shuuri yuutiriti');
@@ -2213,28 +2199,25 @@ BEGIN
    End;
    Else Begin
     WriteLn('SCANDISK - Cette commande permet de lancer l''utilitaire ',
-                        'de diagnostic et r√©paration de disque.');
+                        'de diagnostic et rÇparation de disque.');
     WriteLn;
     WriteLn('Syntaxe : SCANDISK [lecteur: | fichier] [/AUTOFIX] [/CHECKONLY] [/SURFACE]');
     WriteLn;
-    WriteLn('  lecteur:   Lecteur √† v√©rifier (A:, C:, etc.)');
-    WriteLn('  fichier    Fichier image disque √† v√©rifier');
-    WriteLn('  /AUTOFIX   R√©parer automatiquement les erreurs');
-    WriteLn('  /CHECKONLY V√©rification seulement, pas de r√©paration');
+    WriteLn('  lecteur:   Lecteur Ö vÇrifier (A:, C:, etc.)');
+    WriteLn('  fichier    Fichier image disque Ö vÇrifier');
+    WriteLn('  /AUTOFIX   RÇparer automatiquement les erreurs');
+    WriteLn('  /CHECKONLY VÇrification seulement, pas de rÇparation');
     WriteLn('  /SURFACE   Effectuer un scan de surface');
    End;
   End;
   Halt;
  End;
-
- { Setup de l'interface graphique }
+  { Ajustement de l'interface graphique }
  CursorOff;
  SetupColors;
-
- { Allouer la m√©moire pour les tableaux FAT et ClusterMap }
+  { Allouer la mÇmoire pour les tableaux FAT et ClusterMap }
  AllocateMemory;
-
- { Si aucun param√®tre, permettre la s√©lection d'un lecteur }
+  { Si aucun param√®tre, permettre la sÇlection d'un lecteur }
  If ParamCount = 0 Then Begin
   DrivePath := SelectDrive;
   If DrivePath = '' Then Begin
@@ -2242,11 +2225,13 @@ BEGIN
    CursorOn;
    Halt(0);
   End;
- End Else Begin
-  { Analyse des param√®tres }
+ End
+  Else
+ Begin
+  { Analyse des paramätres }
   DrivePath := StrToUpper(ParamStr(1));
  End;
- { Initialisation des variables }
+  { Initialisation des variables }
  AutoFix := False;
  CheckOnly := False;
  DoSurfaceScan := False;
@@ -2257,10 +2242,9 @@ BEGIN
  ErrorsFound := 0;
  HasPartition := False;
  PartitionOffset := 0;
- { ClusterMap est maintenant initialis√© dans AllocateMemory }
+  { ClusterMap est maintenant initialis√© dans AllocateMemory }
  FillChar(CheckStatus, SizeOf(CheckStatus), 0);
-
- { D√©terminer le type de cible (lecteur ou fichier image) }
+  { DÇterminer le type de cible (lecteur ou fichier image) }
  If (Length(DrivePath) = 2) and (DrivePath[2] = ':') Then Begin
   { C'est un lecteur }
   IsImageFile := False;
@@ -2272,7 +2256,7 @@ BEGIN
    Else Begin
     Case(Language)of
      _English:ShowDialog('Error', 'Unsupported drive: ' + DrivePath, False);
-     Else ShowDialog('Erreur', 'Lecteur non support√© : ' + DrivePath, False);
+     Else ShowDialog('Erreur', 'Lecteur non supportÇ : ' + DrivePath, False);
     End;
     FreeMemory;
     Halt(1);
@@ -2306,8 +2290,7 @@ BEGIN
   End;
  End;
  ErrorsFound := 0;
-
- { D√©tecter les partitions pour les fichiers images }
+  { DÇtecter les partitions pour les fichiers images }
  If IsImageFile Then Begin
   If Not DetectPartition Then Begin
    If IsImageFile Then Close(FileHandle);
@@ -2315,7 +2298,6 @@ BEGIN
    Halt(1);
   End;
  End;
-
   { Lecture du secteur de boot }
  If Not ReadBootSector Then Begin
   Case(Language)of
@@ -2326,21 +2308,19 @@ BEGIN
   FreeMemory;
   Halt(1);
  End;
-  { Effectuer les v√©rifications avec interface graphique }
+  { Effectuer les vÇrifications avec interface graphique }
  PerformChecks;
-  { Sauvegarde si des modifications ont √©t√© faites }
+  { Sauvegarde si des modifications ont ÇtÇ faites }
  If AutoFix and (ErrorsFound > 0) and Not CheckOnly Then Begin
-  { R√©√©crire la FAT si n√©cessaire }
+  { RÇÇcrire la FAT si nÇcessaire }
  End;
   { Nettoyage }
  If IsImageFile Then Close(FileHandle);
-
- { Lib√©rer la m√©moire allou√©e }
+  { LibÇrer la mÇmoire allouÇe }
  FreeMemory;
-
- { Affichage du r√©sum√© }
+ { Affichage du rÇsumÇ }
  ShowSummary;
  CursorOn;
- { Code de sortie }
+  { Code de sortie }
  If ErrorsFound > 0 Then Halt(1) Else Halt(0);
 END.
