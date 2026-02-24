@@ -200,6 +200,10 @@ Voici la liste des différents fichiers proposés dans MSDOS-0 :
 			<td>Cette commande permet de fixer la version pour un programme.</td>
 		</tr>
 		<tr>
+			<td><b>SHARE.PAS</b></td>
+			<td>Cette commande permet d'effectuer la gestion du partage des fichiers entre logiciel et programme multitâche.</td>
+		</tr>
+		<tr>
 			<td><b>SORT.PAS</b></td>
 			<td>Cette commande permet de trier une fichier texte ASCII et de retourner le résultat. Cette commande est un équivalent de la commande du DOS.</td>
 		</tr>
