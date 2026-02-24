@@ -148,16 +148,16 @@ Var
  OldValue, TestValue: Byte;
 Begin
  DetectSerialMouse := False;
- 
+
  { Test de présence du port série }
  OldValue := PortReadByte(ComPort + 4); { Registre de contrôle modem }
  PortWriteByte(ComPort + 4, $10);       { RTS on, DTR off }
  TestValue := PortReadByte(ComPort + 6); { Registre d'état modem }
- 
+
  If (TestValue And $10) = 0 Then Begin { CTS devrait être off }
   PortWriteByte(ComPort + 4, $11);     { RTS on, DTR on }
   TestValue := PortReadByte(ComPort + 6);
-  
+
   If (TestValue And $20) <> 0 Then Begin { DSR devrait être on }
    { Initialisation basique de la souris série }
    PortWriteByte(ComPort + 3, $80);    { DLAB = 1 }
@@ -166,11 +166,11 @@ Begin
    PortWriteByte(ComPort + 3, $02);    { 7 bits, no parity, 1 stop }
    PortWriteByte(ComPort + 4, $03);    { DTR et RTS on }
    PortWriteByte(ComPort + 1, $00);    { Pas d'interruptions }
-   
+
    DetectSerialMouse := True;
   End;
  End;
- 
+
  PortWriteByte(ComPort + 4, OldValue); { Restaurer l'ancien état }
 End;
 {$ENDIF}
@@ -186,18 +186,18 @@ Var
  Status: Byte;
 Begin
  DetectPS2Mouse := False;
- 
+
  { Vérifier si le contrôleur PS/2 existe }
  Status := PortReadByte(PS2_STATUS_PORT);
  If (Status And $02) = 0 Then Begin { Buffer d'entrée vide }
   { Envoyer commande de test du port souris }
   PortWriteByte(PS2_COMMAND_PORT, $A9);
-  
+
   { Attendre la réponse }
   Repeat
    Status := PortReadByte(PS2_STATUS_PORT);
   Until (Status And $01) <> 0;
-  
+
   { Lire le résultat }
   Status := PortReadByte(PS2_DATA_PORT);
   If Status = $00 Then Begin { Test réussi }
@@ -211,13 +211,13 @@ End;
 Function DetectMouseType: Byte;
 Begin
  DetectMouseType := MOUSE_TYPE_NONE;
- 
+
  { Essayer de détecter une souris PS/2 en premier }
  If DetectPS2Mouse Then Begin
   DetectMouseType := MOUSE_TYPE_PS2;
   Exit;
  End;
- 
+
  { Essayer les ports série }
  If DetectSerialMouse(COM1_BASE) Then Begin
   DetectMouseType := MOUSE_TYPE_SERIAL;
@@ -225,7 +225,7 @@ Begin
   MouseDriver.SerialIRQ := COM1_IRQ;
   Exit;
  End;
- 
+
  If DetectSerialMouse(COM2_BASE) Then Begin
   DetectMouseType := MOUSE_TYPE_SERIAL;
   MouseDriver.SerialPort := COM2_BASE;
@@ -269,19 +269,19 @@ Begin
   Push DI
   Push DS
   Push ES
-  
+
   { Code de traitement de l'interruption série }
   { Lecture des données de la souris série }
   Mov DX, MouseDriver.SerialPort
   In AL, DX
-  
+
   { Traitement simplifié des données souris }
   { (Dans une vraie implémentation, il faudrait décoder le protocole) }
-  
+
   { Envoyer EOI au contrôleur d'interruption }
   Mov AL, $20
   Out $20, AL
-  
+
   Pop ES
   Pop DS
   Pop DI
@@ -314,18 +314,18 @@ Begin
   Push DI
   Push DS
   Push ES
-  
+
   { Lire les données de la souris PS/2 }
   In AL, PS2_DATA_PORT
-  
+
   { Traitement simplifié des données souris PS/2 }
   { (Dans une vraie implémentation, il faudrait décoder le protocole) }
-  
+
   { Envoyer EOI au contrôleur d'interruption }
   Mov AL, $20
   Out $A0, AL    { PIC esclave }
   Out $20, AL    { PIC maître }
-  
+
   Pop ES
   Pop DS
   Pop DI
@@ -358,7 +358,7 @@ Begin
   Push DI
   Push DS
   Push ES
-  
+
   { Vérifier la fonction demandée dans AX }
   Cmp AX, 0
   Je @ResetMouse
@@ -380,60 +380,61 @@ Begin
   Je @SetMickeyRatio
   Cmp AX, 36
   Je @GetDriverVersion
-  
+
   Jmp @ExitHandler
-  
+
 @ResetMouse:
   Mov AX, $FFFF          { Souris présente }
   Mov BX, 2              { 2 boutons }
   Jmp @ExitHandler
-  
+
 @ShowCursor:
   Mov MouseDriver.State.Visible, 1
   Jmp @ExitHandler
-  
+
 @HideCursor:
   Mov MouseDriver.State.Visible, 0
   Jmp @ExitHandler
-  
+
 @GetMouseStatus:
-  Mov AX, MouseDriver.State.Buttons
+  MOV AL, MouseDriver.State.Buttons
+  MOV AH, 0
   Mov CX, MouseDriver.State.X
   Mov DX, MouseDriver.State.Y
   Jmp @ExitHandler
-  
+
 @SetMousePosition:
   Mov MouseDriver.State.X, CX
   Mov MouseDriver.State.Y, DX
   Jmp @ExitHandler
-  
+
 @SetHorizontalLimits:
   Mov MouseDriver.State.MinX, CX
   Mov MouseDriver.State.MaxX, DX
   Jmp @ExitHandler
-  
+
 @SetVerticalLimits:
   Mov MouseDriver.State.MinY, CX
   Mov MouseDriver.State.MaxY, DX
   Jmp @ExitHandler
-  
+
 @ReadMouseMotion:
   Mov CX, MouseDriver.State.DeltaX
   Mov DX, MouseDriver.State.DeltaY
   Mov MouseDriver.State.DeltaX, 0
   Mov MouseDriver.State.DeltaY, 0
   Jmp @ExitHandler
-  
+
 @SetMickeyRatio:
   Mov MouseDriver.State.MickeyX, CX
   Mov MouseDriver.State.MickeyY, DX
   Jmp @ExitHandler
-  
+
 @GetDriverVersion:
   Mov AX, MOUSE_DRIVER_VERSION
   Mov BX, 0              { Pas de gestionnaire utilisateur }
   Jmp @ExitHandler
-  
+
 @ExitHandler:
   Pop ES
   Pop DS
@@ -455,55 +456,44 @@ End;
 Function InstallMouseDriver: Boolean;
 Begin
  InstallMouseDriver := False;
- 
+
  { Détecter le type de souris }
  MouseDriver.MouseType := DetectMouseType;
  If MouseDriver.MouseType = MOUSE_TYPE_NONE Then Exit;
- 
+
  { Initialiser l'état de la souris }
  InitMouseState;
- 
+
  { Sauvegarder l'ancien gestionnaire INT 33h }
  GetIntVec(MOUSE_INT, MouseDriver.OldInt33Handler);
- 
+
  { Installer le nouveau gestionnaire }
  SetIntVec(MOUSE_INT, @MouseInt33Handler);
- 
+
  { Installer les gestionnaires d'interruption matériel }
  Case MouseDriver.MouseType Of
   MOUSE_TYPE_SERIAL: Begin
    GetIntVec($0C + MouseDriver.SerialIRQ, MouseDriver.OldSerialHandler);
    SetIntVec($0C + MouseDriver.SerialIRQ, @SerialMouseHandler);
-   
+
    {$IFNDEF FPC}
    { Activer l'IRQ dans le PIC }
-   Asm
-    In AL, $21
-    And AL, Not (1 Shl MouseDriver.SerialIRQ)
-    Out $21, AL
-   End;
+   Port[$21] := Port[$21] And Not (1 Shl MouseDriver.SerialIRQ);
    {$ENDIF}
   End;
-  
+
   MOUSE_TYPE_PS2: Begin
    GetIntVec($74, MouseDriver.OldPS2Handler); { IRQ 12 = INT 74h }
    SetIntVec($74, @PS2MouseHandler);
-   
+
    {$IFNDEF FPC}
    { Activer l'IRQ 12 dans le PIC }
-   Asm
-    In AL, $A1     { PIC esclave }
-    And AL, $EF    { Bit 4 = IRQ 12 }
-    Out $A1, AL
-    
-    In AL, $21     { PIC maître }
-    And AL, $FB    { Bit 2 = IRQ cascade }
-    Out $21, AL
-   End;
+   Port[$A1] := Port[$A1] And $EF;  { PIC esclave - Bit 4 = IRQ 12 }
+   Port[$21] := Port[$21] And $FB;  { PIC maître - Bit 2 = IRQ cascade }
    {$ENDIF}
   End;
  End;
- 
+
  MouseDriver.Installed := True;
  MouseDriver.InitializedHardware := True;
  InstallMouseDriver := True;
@@ -515,35 +505,27 @@ Begin
  If MouseDriver.Installed Then Begin
   { Restaurer les anciens gestionnaires }
   SetIntVec(MOUSE_INT, MouseDriver.OldInt33Handler);
-  
+
   Case MouseDriver.MouseType Of
    MOUSE_TYPE_SERIAL: Begin
     SetIntVec($0C + MouseDriver.SerialIRQ, MouseDriver.OldSerialHandler);
-    
+
     {$IFNDEF FPC}
     { Désactiver l'IRQ dans le PIC }
-    Asm
-     In AL, $21
-     Or AL, (1 Shl MouseDriver.SerialIRQ)
-     Out $21, AL
-    End;
+    Port[$21] := Port[$21] Or (1 Shl MouseDriver.SerialIRQ);
     {$ENDIF}
    End;
-   
+
    MOUSE_TYPE_PS2: Begin
     SetIntVec($74, MouseDriver.OldPS2Handler);
-    
+
     {$IFNDEF FPC}
     { Désactiver l'IRQ 12 dans le PIC }
-    Asm
-     In AL, $A1
-     Or AL, $10
-     Out $A1, AL
-    End;
+    Port[$A1] := Port[$A1] Or $10;
     {$ENDIF}
    End;
   End;
-  
+
   MouseDriver.Installed := False;
  End;
 End;
@@ -553,7 +535,7 @@ Procedure ResetMouseDriver;
 Begin
  If MouseDriver.Installed Then Begin
   InitMouseState;
-  
+
   If Not MouseDriver.SilentMode Then Begin
    Case Language Of
     _English: WriteLn('Mouse driver reset successfully.');
@@ -576,13 +558,13 @@ Var
  DetectedType: Byte;
 Begin
  DetectedType := DetectMouseType;
- 
+
  Case Language Of
   _English: Begin
    WriteLn('Hardware detection results:');
    Case DetectedType Of
     MOUSE_TYPE_NONE: WriteLn('  No mouse detected');
-    MOUSE_TYPE_SERIAL: WriteLn('  Serial mouse detected on COM', 
+    MOUSE_TYPE_SERIAL: WriteLn('  Serial mouse detected on COM',
                               (MouseDriver.SerialPort - COM1_BASE) Div 8 + 1);
     MOUSE_TYPE_PS2: WriteLn('  PS/2 mouse detected');
     MOUSE_TYPE_BUS: WriteLn('  Bus mouse detected');
@@ -592,7 +574,7 @@ Begin
    WriteLn('Hardware-Erkennungsergebnisse:');
    Case DetectedType Of
     MOUSE_TYPE_NONE: WriteLn('  Keine Maus erkannt');
-    MOUSE_TYPE_SERIAL: WriteLn('  Serielle Maus an COM', 
+    MOUSE_TYPE_SERIAL: WriteLn('  Serielle Maus an COM',
                               (MouseDriver.SerialPort - COM1_BASE) Div 8 + 1, ' erkannt');
     MOUSE_TYPE_PS2: WriteLn('  PS/2-Maus erkannt');
     MOUSE_TYPE_BUS: WriteLn('  Bus-Maus erkannt');
@@ -602,7 +584,7 @@ Begin
    WriteLn('Résultats de la détection matérielle:');
    Case DetectedType Of
     MOUSE_TYPE_NONE: WriteLn('  Aucune souris détectée');
-    MOUSE_TYPE_SERIAL: WriteLn('  Souris série détectée sur COM', 
+    MOUSE_TYPE_SERIAL: WriteLn('  Souris série détectée sur COM',
                               (MouseDriver.SerialPort - COM1_BASE) Div 8 + 1);
     MOUSE_TYPE_PS2: WriteLn('  Souris PS/2 détectée');
     MOUSE_TYPE_BUS: WriteLn('  Souris bus détectée');
@@ -814,30 +796,30 @@ BEGIN
   If Not MouseDriver.SilentMode Then Begin
    Case Language Of
     _English: Begin
-     WriteLn('Microsoft Mouse Driver v', MOUSE_DRIVER_VERSION Shr 8, '.', 
+     WriteLn('Microsoft Mouse Driver v', MOUSE_DRIVER_VERSION Shr 8, '.',
              MOUSE_DRIVER_VERSION And $FF, ' loaded successfully.');
      Case MouseDriver.MouseType Of
-      MOUSE_TYPE_SERIAL: WriteLn('Serial mouse detected on COM', 
+      MOUSE_TYPE_SERIAL: WriteLn('Serial mouse detected on COM',
                                 (MouseDriver.SerialPort - COM1_BASE) Div 8 + 1, '.');
       MOUSE_TYPE_PS2: WriteLn('PS/2 mouse detected.');
       MOUSE_TYPE_BUS: WriteLn('Bus mouse detected.');
      End;
     End;
     _Germany: Begin
-     WriteLn('Microsoft Maustreiber v', MOUSE_DRIVER_VERSION Shr 8, '.', 
+     WriteLn('Microsoft Maustreiber v', MOUSE_DRIVER_VERSION Shr 8, '.',
              MOUSE_DRIVER_VERSION And $FF, ' erfolgreich geladen.');
      Case MouseDriver.MouseType Of
-      MOUSE_TYPE_SERIAL: WriteLn('Serielle Maus an COM', 
+      MOUSE_TYPE_SERIAL: WriteLn('Serielle Maus an COM',
                                 (MouseDriver.SerialPort - COM1_BASE) Div 8 + 1, ' erkannt.');
       MOUSE_TYPE_PS2: WriteLn('PS/2-Maus erkannt.');
       MOUSE_TYPE_BUS: WriteLn('Bus-Maus erkannt.');
      End;
     End;
     Else Begin { Français }
-     WriteLn('Pilote souris Microsoft v', MOUSE_DRIVER_VERSION Shr 8, '.', 
+     WriteLn('Pilote souris Microsoft v', MOUSE_DRIVER_VERSION Shr 8, '.',
              MOUSE_DRIVER_VERSION And $FF, ' chargé avec succès.');
      Case MouseDriver.MouseType Of
-      MOUSE_TYPE_SERIAL: WriteLn('Souris série détectée sur COM', 
+      MOUSE_TYPE_SERIAL: WriteLn('Souris série détectée sur COM',
                                 (MouseDriver.SerialPort - COM1_BASE) Div 8 + 1, '.');
       MOUSE_TYPE_PS2: WriteLn('Souris PS/2 détectée.');
       MOUSE_TYPE_BUS: WriteLn('Souris bus détectée.');
@@ -845,7 +827,7 @@ BEGIN
     End;
    End;
   End;
-  
+
   { Rester résident en mémoire }
   Keep(0);
  End Else Begin
