@@ -56,6 +56,24 @@ Type
   Size: LongInt;                         { Taille du fichier en octets }
  End;
 
+ { Master Boot Record }
+ TMBR = Record
+  BootCode: Array[0..445] of Byte;       { Code de boot }
+  Partition: Array[0..3] of Record       { Table des partitions }
+   Status: Byte;                         { 00=inactive, 80=active }
+   StartHead: Byte;                      { Tête de début }
+   StartSector: Byte;                    { Secteur de début (bits 0-5) + cylindre haut (bits 6-7) }
+   StartCylinder: Byte;                  { Cylindre de début (bits bas) }
+   PartType: Byte;                       { Type de partition (01=FAT12, 04=FAT16, etc.) }
+   EndHead: Byte;                        { Tête de fin }
+   EndSector: Byte;                      { Secteur de fin }
+   EndCylinder: Byte;                    { Cylindre de fin }
+   StartLBA: LongInt;                    { Secteur de début (LBA) }
+   SizeLBA: LongInt;                     { Taille en secteurs }
+  End;
+  Signature: Word;                       { Signature 55AA }
+ End;
+
  { Fragment de FAT }
  PFATFragment = ^TFATFragment;
  TFATFragment = Array[0..8191] of Word;
@@ -64,16 +82,63 @@ Var
  Language:(_French,_English,_Germany,_Italian,_Spain,_Albanian,_Portuguese,_Swedish,_Danish,_Japanese);
  TmpLanguage: String;
  BootSector: TBootSector;
+ MBR: TMBR;
  RootDir: Array[0..511] of TDirEntry;
  SectorBuffer: Array[0..511] of Byte;
  FAT: PFATFragment;
  FileHandle: File;
  TotalClusters, BadClusters: Word;
  RecoveredFiles: Integer;
+ DriveNumber: Byte;
  DriveLetter: Char;
  TargetPath: String;
  FileName: String;
  RecoverWholeDisk: Boolean;
+
+{ Conversion lettre de lecteur vers numéro }
+Function DriveLetterToNumber(Letter: Char): Byte;
+Begin
+ If Letter in ['a'..'z'] Then Letter := Chr(Ord(Letter) - 32);
+ DriveLetterToNumber := Ord(Letter) - Ord('A');
+End;
+
+{ Lecture d'un secteur physique }
+Function ReadSector(Drive: Byte; Sector: LongInt; Buffer: Pointer): Boolean;
+Var
+ Regs: Registers;
+Begin
+ ReadSector := False;
+ 
+ { Utiliser l'interruption 25h pour la lecture directe }
+ Regs.AL := Drive;          { Numéro de lecteur (0=A:, 1=B:, 2=C:, etc.) }
+ Regs.CX := 1;              { Nombre de secteurs à lire }
+ Regs.DX := Sector;         { Numéro de secteur (partie basse) }
+ Regs.DS := Seg(Buffer^);   { Segment du buffer }
+ Regs.BX := Ofs(Buffer^);   { Offset du buffer }
+ 
+ Intr($25, Regs);           { Int 25h - Lecture secteur absolu }
+ 
+ If (Regs.Flags and 1) = 0 Then ReadSector := True;
+End;
+
+{ Écriture d'un secteur physique }
+Function WriteSector(Drive: Byte; Sector: LongInt; Buffer: Pointer): Boolean;
+Var
+ Regs: Registers;
+Begin
+ WriteSector := False;
+ 
+ { Utiliser l'interruption 26h pour l'écriture directe }
+ Regs.AL := Drive;          { Numéro de lecteur }
+ Regs.CX := 1;              { Nombre de secteurs à écrire }
+ Regs.DX := Sector;         { Numéro de secteur }
+ Regs.DS := Seg(Buffer^);   { Segment du buffer }
+ Regs.BX := Ofs(Buffer^);   { Offset du buffer }
+ 
+ Intr($26, Regs);           { Int 26h - Écriture secteur absolu }
+ 
+ If (Regs.Flags and 1) = 0 Then WriteSector := True;
+End;
 
 { Conversion entier vers chaîne }
 Function IntToStr(Value: Integer): String;
@@ -136,28 +201,13 @@ End;
 { Lecture du secteur de boot }
 Function ReadBootSector(Drive: Char): Boolean;
 Var
- F: File;
- DrivePath: String;
- Result: Integer;
+ DriveNum: Byte;
 Begin
  ReadBootSector := False;
- DrivePath := Drive + ':';
-
- {$I-}
- Assign(F, DrivePath);
- Reset(F, 1);
- {$I+}
- Result := IOResult;
-
- If Result <> 0 Then Exit;
-
- {$I-}
- BlockRead(F, BootSector, SizeOf(TBootSector));
- {$I+}
- Result := IOResult;
- Close(F);
-
- If Result = 0 Then Begin
+ DriveNum := DriveLetterToNumber(Drive);
+ 
+ { Lire le secteur 0 (secteur de boot) }
+ If ReadSector(DriveNum, 0, @BootSector) Then Begin
   { Vérification de la validité du secteur de boot }
   If (BootSector.BytesPerSector = 512) and
      (BootSector.SectorsPerCluster > 0) and
@@ -169,36 +219,28 @@ End;
 { Lecture de la FAT }
 Function ReadFAT(Drive: Char): Boolean;
 Var
- F: File;
- DrivePath: String;
+ DriveNum: Byte;
  FATSector: LongInt;
  I: Integer;
- Result: Integer;
+ Buffer: Array[0..511] of Byte;
 Begin
  ReadFAT := False;
+ DriveNum := DriveLetterToNumber(Drive);
 
  { Calcul du secteur de début de la FAT }
  FATSector := BootSector.ReservedSectors;
 
  New(FAT);
- DrivePath := Drive + ':';
 
- {$I-}
- Assign(F, DrivePath);
- Reset(F, 1);
- {$I+}
- Result := IOResult;
+ { Lire tous les secteurs de la FAT }
+ For I := 0 to BootSector.SectorsPerFAT - 1 Do Begin
+  If Not ReadSector(DriveNum, FATSector + I, @Buffer) Then Exit;
+  
+  { Copier le secteur dans la FAT }
+  Move(Buffer, PByte(FAT)[I * 512], 512);
+ End;
 
- If Result <> 0 Then Exit;
-
- {$I-}
- Seek(F, FATSector * 512);
- BlockRead(F, FAT^, BootSector.SectorsPerFAT * 512);
- {$I+}
- Result := IOResult;
- Close(F);
-
- ReadFAT := (Result = 0);
+ ReadFAT := True;
 End;
 
 { Marquer un cluster comme défectueux dans la FAT }
@@ -214,37 +256,27 @@ End;
 { Écriture de la FAT }
 Function WriteFAT(Drive: Char): Boolean;
 Var
- F: File;
- DrivePath: String;
+ DriveNum: Byte;
  FATSector: LongInt;
- I: Integer;
- Result: Integer;
+ I, J: Integer;
+ Buffer: Array[0..511] of Byte;
 Begin
  WriteFAT := False;
-
+ DriveNum := DriveLetterToNumber(Drive);
  FATSector := BootSector.ReservedSectors;
- DrivePath := Drive + ':';
-
- {$I-}
- Assign(F, DrivePath);
- Reset(F, 1);
- {$I+}
- Result := IOResult;
-
- If Result <> 0 Then Exit;
 
  { Écrire toutes les copies de la FAT }
  For I := 0 to BootSector.NumberOfFATs - 1 Do Begin
-  {$I-}
-  Seek(F, (FATSector + I * BootSector.SectorsPerFAT) * 512);
-  BlockWrite(F, FAT^, BootSector.SectorsPerFAT * 512);
-  {$I+}
-  Result := IOResult;
-  If Result <> 0 Then Break;
+  For J := 0 to BootSector.SectorsPerFAT - 1 Do Begin
+   { Copier un secteur de la FAT dans le buffer }
+   Move(PByte(FAT)[J * 512], Buffer, 512);
+   
+   { Écrire le secteur }
+   If Not WriteSector(DriveNum, FATSector + I * BootSector.SectorsPerFAT + J, @Buffer) Then Exit;
+  End;
  End;
 
- Close(F);
- WriteFAT := (Result = 0);
+ WriteFAT := True;
 End;
 
 { Récupération d'un fichier spécifique }
@@ -504,7 +536,7 @@ End;
 
 { Programme principal }
 BEGIN
-  { Initialisation }
+ { Initialisation }
  Language := _French;
  TmpLanguage := GetEnv('LANGUAGE');
  If TmpLanguage<>''Then Begin
@@ -526,6 +558,7 @@ BEGIN
  End;
  RecoveredFiles := 0;
  RecoverWholeDisk := False;
+ DriveNumber := 0;
   { Traitement des paramètres }
  If (ParamCount = 0) or (StrToUpper(ParamStr(1)) = '/?') or
     (StrToUpper(ParamStr(1)) = '--HELP') or (StrToUpper(ParamStr(1)) = '-H') or
@@ -667,8 +700,8 @@ BEGIN
     WriteLn('  RECOVER C:DATA.TXT Tokutei no fairu wo fukugen');
    End;
    Else Begin
-    WriteLn('RECOVER - Cette comande permet de r�cup�rer des fichiers ',
-                       'd''un disque endommag�.');
+    WriteLn('RECOVER - Cette comande permet de r�cup�rer des fichiers ',
+                       'd''un disque endommag�.');
     WriteLn;
     WriteLn('Syntaxe :');
     WriteLn('  RECOVER lecteur:');
@@ -693,6 +726,7 @@ BEGIN
   If TargetPath[2] = ':' Then Begin
    { Format "X:" - récupérer tout le lecteur }
    DriveLetter := TargetPath[1];
+   DriveNumber := DriveLetterToNumber(DriveLetter);
    RecoverWholeDisk := True;
   End Else Begin
    Case Language of
@@ -714,6 +748,7 @@ BEGIN
   { Format avec nom de fichier }
   If (Length(TargetPath) > 2) and (TargetPath[2] = ':') Then Begin
    DriveLetter := TargetPath[1];
+   DriveNumber := DriveLetterToNumber(DriveLetter);
    FileName := Copy(TargetPath, 3, Length(TargetPath));
    RecoverWholeDisk := False;
   End Else Begin
