@@ -149,7 +149,7 @@ Begin
  { Titre principal }
  GotoXY(1, 1);
  TextColor(Yellow);
- Write('ScanDisk');
+ Write('Microsoft ScanDisk');
  TextColor(White);
   { Barre cyan en dessous du titre }
  TextColor(Cyan);
@@ -160,6 +160,17 @@ Begin
  GotoXY(1, 24);
  For i := 1 to 80 do Write(#196);
  TextColor(White);
+End;
+
+Procedure ShowMainButtons;
+Begin
+ { Afficher les trois boutons principaux }
+ GotoXY(2, 22);
+ ShowButton('Pause', True);
+ Write('  ');
+ ShowButton('More Info', False);
+ Write('  ');
+ ShowButton('Exit', False);
 End;
 
 Procedure ShowCheckList;
@@ -174,7 +185,7 @@ Begin
  { Effacer le reste de la ligne }
  ClrEol;
  For i := ciMedia to ciSurface do Begin
-  If CheckStatus[i] Then CheckMark := #251 Else CheckMark := #16;
+  If CheckStatus[i] Then CheckMark := #251 Else CheckMark := #175;
   Case i of
    ciMedia: Begin
     GotoXY(1, 6);
@@ -212,6 +223,9 @@ Begin
    End;
   End;
  End;
+ 
+ { Afficher les boutons principaux }
+ ShowMainButtons;
 End;
 
 Function ShowDialog(Title,Message:String;ShowYesNo:Boolean):Boolean;
@@ -834,7 +848,7 @@ Procedure PerformChecks;Begin
    End;
   End;
   Else Begin
-   If ShowDialog('Balayage de surface', 'ScanDisk a termin‚ les testes de structure de fichiers. Voulez-vous '+
+   If ShowDialog('Balayage de surface', 'ScanDisk a terminï¿½ les testes de structure de fichiers. Voulez-vous '+
                  'effectuer un test de surface maintenant ?', True)Then Begin
     DoSurfaceScan:=True;
     SurfaceScan;
