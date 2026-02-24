@@ -10,6 +10,10 @@ Program SCANDISK;
 
 Uses DOS,Crt;
 
+Const
+ MapWidth = 41;
+ MapHeight = 15;
+
 Type
  TBootSector = Record
   JumpCode: Array[0..2] of Byte;
@@ -57,6 +61,27 @@ Var
  DriveNum: Byte;
  ErrorsFound: Integer;
  CheckStatus: Array[TCheckItem] of Boolean;
+
+{$IFNDEF FPC}
+ Procedure CursorOff;
+ Var
+  Regs:Registers;
+ Begin
+  Regs.AH:=1;
+  Regs.CH:=32;
+  Regs.CL:=0;
+  Intr($10,Regs);
+ End;
+
+ Procedure CursorOn;
+ Var
+  Regs:Registers;
+ Begin
+  Regs.AX:=$0100;
+  Regs.CX:=(7 shl 8)+9;
+  Intr($10,Regs);
+ End;
+{$ENDIF}
 
 Function StrToUpper(S: String): String;
 Var I: Byte;
@@ -136,7 +161,7 @@ Begin
   { Ombre à droite }
  For i := Y1 + 1 to Y2 + 1 do Begin
   GotoXY(X2 + 1, i);
-  Write(' ');
+  Write('  ');
  End;
  TextColor(Black);
  TextBackground(LightGray);
@@ -149,7 +174,7 @@ Begin
  { Titre principal }
  GotoXY(1, 1);
  TextColor(Yellow);
- Write('Microsoft ScanDisk');
+ Write('ScanDisk');
  TextColor(White);
   { Barre cyan en dessous du titre }
  TextColor(Cyan);
@@ -157,20 +182,25 @@ Begin
  For i := 1 to 80 do Write(#196);
   { Barre cyan en bas }
  TextColor(Cyan);
- GotoXY(1, 24);
+ GotoXY(1, 23);
  For i := 1 to 80 do Write(#196);
  TextColor(White);
 End;
 
-Procedure ShowMainButtons;
-Begin
+Procedure ShowMainButtons;Begin
  { Afficher les trois boutons principaux }
  GotoXY(2, 22);
  ShowButton('Pause', True);
  Write('  ');
- ShowButton('More Info', False);
+ Case(Language)of
+  _English:ShowButton('More Info', False);
+  Else ShowButton('Plus Info',False);
+ End;
  Write('  ');
- ShowButton('Exit', False);
+ Case(Language)of
+  _English:ShowButton('Exit',False);
+  Else ShowButton('Quitter',False);
+ End;
 End;
 
 Procedure ShowCheckList;
@@ -189,12 +219,17 @@ Begin
   Case i of
    ciMedia: Begin
     GotoXY(1, 6);
-    Write('   ', CheckMark, '    Media descriptor');
+    Write('   ', CheckMark,'    ');
+    Case(Language)of
+     _English:Write('Media descriptor');
+     Else Write('Descripteur de m�dia');
+    End;
     ClrEol;
    End;
    ciFAT: Begin
     GotoXY(1, 7);
-    Write('   ', CheckMark, '    File allocation tables');
+    Write('   ', CheckMark, '    ');
+    Write('File allocation tables');
     ClrEol;
    End;
    ciDirectory: Begin
@@ -223,7 +258,7 @@ Begin
    End;
   End;
  End;
- 
+
  { Afficher les boutons principaux }
  ShowMainButtons;
 End;
@@ -321,24 +356,24 @@ Begin
  SetupColors;
  ShowTitle;
  ShowCheckList;
- GotoXY(1, 15);
+ GotoXY(1, 24);
  Write('examining drive ', DrivePath, '...');
  ClrEol;
 End;
 
 Procedure ShowSurfaceScanScreen;
-Var SectorsPerBlock: LongInt;
-    X, Y, BlockNum: Integer;
-    CurrentSector: LongInt;
-    MapWidth, MapHeight: Integer;
-    i, j: Byte;
-    DialogX1, DialogY1, DialogX2, DialogY2: Byte;
+Var
+ SectorsPerBlock: LongInt;
+ X, Y, BlockNum: Integer;
+ CurrentSector: LongInt;
+ i, j: Byte;
+ DialogX1, DialogY1, DialogX2, DialogY2: Byte;
 Begin
  { Dimensions de la boîte de dialogue centrée - PLUS PETITE }
  DialogX1 := 5;
- DialogY1 := 4;
+ DialogY1 := 3;
  DialogX2 := 75;
- DialogY2 := 20;
+ DialogY2 := 21;
  { Sauvegarder les couleurs actuelles et créer le fond gris de la boîte }
  TextBackground(LightGray);
  TextColor(Black);
@@ -353,15 +388,11 @@ Begin
  TextColor(Black);
  TextBackground(LightGray);
  { Titre du surface scan centré }
- GotoXY(DialogX1 + 30, DialogY1 + 1);
- TextColor(Black);
+ GotoXY(DialogX1 + 30, DialogY1);
+ TextColor(White);
  TextBackground(LightGray);
  Write('Surface Scan');
- { Boîte pour la carte du disque - position relative à la boîte de dialogue }
- DrawBox(DialogX1 + 2, DialogY1 + 3, DialogX1 + 45, DialogY1 + 13);
  { Calculer les secteurs par bloc selon la taille totale }
- MapWidth := 41;  { Largeur réduite pour s'adapter dans la boîte }
- MapHeight := 9;  { Hauteur réduite }
  SectorsPerBlock := (TotalSectors + (MapWidth * MapHeight - 1)) div (MapWidth * MapHeight);
  If SectorsPerBlock < 1 Then SectorsPerBlock := 1;
   { Dessiner IMMÉDIATEMENT la carte COMPLÈTE du disque selon l'utilisation réelle }
@@ -370,22 +401,22 @@ Begin
    BlockNum := Y * MapWidth + X;
    CurrentSector := BlockNum * SectorsPerBlock;
    If CurrentSector < TotalSectors Then Begin
-    GotoXY(DialogX1 + 3 + X, DialogY1 + 4 + Y);
+    GotoXY(DialogX1 + 2 + X, DialogY1 + 1 + Y);
      { Déterminer le TYPE de secteur (système/données/libre) }
     If CurrentSector < (BootSector.ReservedSectors + BootSector.NumberOfFATs * BootSector.SectorsPerFAT) Then Begin
      { Zone système - toujours utilisée }
      TextColor(Yellow);
-     Write(#219); { Bloc plein jaune = secteur utilisé }
+     Write(#10); { Bloc plein jaune = secteur utilisé }
     End Else Begin
      { Zone de données - vérifier si utilisé via FAT }
      If Random(10) < 3 Then Begin
       { Secteur utilisé par des fichiers }
       TextColor(Yellow);
-      Write(#219); { Bloc plein jaune = secteur utilisé }
+      Write(#10); { Bloc plein jaune = secteur utilisé }
      End Else Begin
       { Secteur libre }
       TextColor(Cyan);
-      Write(#219); { Bloc plein cyan = secteur libre }
+      Write(#176); { Bloc plein cyan = secteur libre }
      End;
     End;
    End;
@@ -395,10 +426,8 @@ Begin
  TextBackground(LightGray);
  { Informations du fichier/lecteur - position relative }
  GotoXY(DialogX1 + 47, DialogY1 + 2);
- If IsImageFile Then
-  Write('File: ', FileName)
- Else
-  Write('Drive ', DrivePath, ':');
+ If IsImageFile Then Write('File: ', FileName)
+                Else Write('Drive ', DrivePath, ':');
  { Statistiques - position relative à droite de la boîte }
  GotoXY(DialogX1 + 47, DialogY1 + 5);
  Write(TotalSectors, ' sectors');
@@ -410,14 +439,14 @@ Begin
  GotoXY(DialogX1 + 47, DialogY1 + 8);
  TextColor(Cyan);
  TextBackground(Black);
- Write(#219);
+ Write(#176);
  TextColor(Black);
  TextBackground(LightGray);
  Write(' = ', SectorsPerBlock, ' sectors');
  GotoXY(DialogX1 + 47, DialogY1 + 10);
  TextColor(Cyan);
  TextBackground(Black);
- Write(#219);
+ Write(#176);
  TextColor(Black);
  TextBackground(LightGray);
  Write(' unused sectors');
@@ -431,7 +460,7 @@ Begin
  GotoXY(DialogX1 + 47, DialogY1 + 12);
  TextColor(Yellow);
  TextBackground(Black);
- Write(#219);
+ Write(#254);
  TextColor(Black);
  TextBackground(LightGray);
  Write(' used sectors');
@@ -442,7 +471,7 @@ Begin
  TextColor(Black);
  TextBackground(LightGray);
  Write(' some bad sectors');
- GotoXY(DialogX1 + 20, DialogY1 + 15);
+ GotoXY(DialogX1 + 20, DialogY1 + 17);
  ShowButton('More Info',True);
  Write('   ');
  ShowButton('Exit',False);
@@ -454,7 +483,6 @@ Var
  X, Y, BlockNum, i: Integer;
  SectorsPerBlock, CurrentSector: LongInt;
  BlockColor: Byte;
- MapWidth, MapHeight: Integer;
  BlockChar: Char;
  IsScanned: Boolean;
  DialogX1, DialogY1: Byte;
@@ -462,9 +490,6 @@ Begin
  { Positions de la boîte de dialogue }
  DialogX1 := 5;
  DialogY1 := 3;
-  { Dimensions de la carte du disque }
- MapWidth := 41;
- MapHeight := 9;
   { Calculer les secteurs représentés par chaque bloc }
  SectorsPerBlock := (TotalSectors + (MapWidth * MapHeight - 1)) div (MapWidth * MapHeight);
  If SectorsPerBlock < 1 Then SectorsPerBlock := 1;
@@ -476,7 +501,6 @@ Begin
  GotoXY(DialogX1 + 47, DialogY1 + 8);
  Write(BadFound, ' found bad     ');
  { Mettre à jour SEULEMENT les attributs visuels des blocs déjà scannés }
- { CARACTÈRES IDENTIQUES (#219), SEULES LES COULEURS CHANGENT ! }
  For Y := 0 to MapHeight - 1 do Begin
   For X := 0 to MapWidth - 1 do Begin
    BlockNum := Y * MapWidth + X;
@@ -484,18 +508,18 @@ Begin
    If CurrentSector < TotalSectors Then Begin
     { Vérifier si ce bloc a été scanné }
     IsScanned := CurrentSector < SectorsChecked;
-    GotoXY(DialogX1 + 3 + X, DialogY1 + 4 + Y);
+    GotoXY(DialogX1 + 2 + X, DialogY1 + 1 + Y);
     { Déterminer le type de secteur (même logique qu'avant) }
     If CurrentSector < (BootSector.ReservedSectors + BootSector.NumberOfFATs * BootSector.SectorsPerFAT) Then Begin
      { Zone système }
      If IsScanned Then Begin
-      { Scanné - couleur brillante }
+      { Balayage - couleur brillante }
       TextColor(Yellow);
      End Else Begin
       { Pas encore scanné - couleur atténuée }
-      TextColor(Brown);
+      TextColor(Cyan);
      End;
-     Write(#219); { TOUJOURS LE MÊME CARACTÈRE }
+     Write(#254); { TOUJOURS LE MÊME CARACTÈRE }
     End
      Else
     Begin
@@ -507,19 +531,23 @@ Begin
        TextColor(Yellow);
       End Else Begin
        { Pas encore scanné - couleur atténuée }
-       TextColor(Brown);
+       TextColor(Cyan);
       End;
-      Write(#219); { TOUJOURS LE MÊME CARACTÈRE }
-     End Else Begin
-      { Secteur libre }
+      Write(#254); { TOUJOURS LE MÊME CARACTÈRE }
+     End
+      Else
+     Begin
+       { Secteur libre }
       If IsScanned Then Begin
        { Scanné - couleur brillante }
-       TextColor(Cyan);
-      End Else Begin
+       TextColor(Yellow);
+      End
+       Else
+      Begin
        { Pas encore scanné - couleur atténuée }
        TextColor(DarkGray);
       End;
-      Write(#219); { TOUJOURS LE MÊME CARACTÈRE }
+      Write(#254); { TOUJOURS LE MÊME CARACTÈRE }
      End;
     End;
    End;
@@ -531,11 +559,11 @@ Begin
  TextColor(White);
  Percentage := (SectorsChecked * 100) div TotalSectors;
  If Percentage > 100 Then Percentage := 100;
- GotoXY(1, 25);
+ GotoXY(1, 24);
  Write(Percentage, '% complete  ');
   { Barre de progression graphique }
  For i := 15 to 65 do Begin
-  GotoXY(i, 25);
+  GotoXY(i, 24);
   If i <= (15 + (Percentage * 50 div 100)) Then Begin
    TextColor(White);
    TextBackground(Blue);
@@ -804,7 +832,7 @@ Begin
   { Attendre que l'utilisateur appuie sur une touche - EN BAS DE L'ÉCRAN }
  TextBackground(Blue);
  TextColor(White);
- GotoXY(70, 25);
+ GotoXY(20, 24);
  Write('Press any key to continue...');
  ReadKey;
 End;
@@ -813,31 +841,30 @@ Procedure PerformChecks;Begin
  ClrScr;
  ShowTitle;
  ShowCheckList;
- GotoXY(1, 15);
+ GotoXY(1, 24);
  Write('examining drive ', DrivePath, '...');
  ClrEol;
  { Effectuer les vérifications une par une avec mise à jour en place }
  CheckStatus[ciMedia] := False;
  CheckFATConsistency;
  ShowCheckList;
- Delay(300);
+ Delay(100);
  CheckStatus[ciFAT] := False;
  ReadFAT;
  ShowCheckList;
- Delay(300);
+ Delay(100);
  CheckStatus[ciDirectory] := False;
  CheckDirectoryStructure;
  ShowCheckList;
- Delay(300);
+ Delay(100);
  CheckStatus[ciFileSystem] := False;
  CheckFileAllocation;
  ShowCheckList;
- Delay(300);
+ Delay(100);
  CheckStatus[ciFreeSpace] := False;
  CheckLostClusters;
  ShowCheckList;
- Delay(300);
-
+ Delay(100);
  { Demander pour le surface scan }
  Case(Language)of
   _English:Begin
@@ -858,8 +885,9 @@ Procedure PerformChecks;Begin
 End;
 
 Procedure ShowSummary;Begin
+ TextBackground(Black);
+ TextColor(LightGray);
  ClrScr;
- ShowTitle;
  GotoXY(1, 5);
  Write('=== RÉSUMÉ DE LA VÉRIFICATION ===');
  GotoXY(1, 6);
@@ -873,17 +901,14 @@ Procedure ShowSummary;Begin
  GotoXY(1, 10);
  Write('Erreurs totales: ', ErrorsFound);
  GotoXY(1, 12);
- If ErrorsFound = 0 Then
-  Write('Aucune erreur trouvée. Le disque est en bon état.')
- Else Begin
+ If ErrorsFound = 0 Then Write('Aucune erreur trouvée. Le disque est en bon état.')
+  Else
+ Begin
   Write('Des erreurs ont été détectées.');
   GotoXY(1, 13);
-  If CheckOnly Then
-   Write('Mode vérification seulement - aucune réparation effectuée.')
-  Else If AutoFix Then
-   Write('Réparations automatiques effectuées.')
-  Else
-   Write('Utilisez /AUTOFIX pour réparer automatiquement les erreurs.');
+  If CheckOnly Then Write('Mode vérification seulement - aucune réparation effectuée.') Else
+  If AutoFix Then Write('Réparations automatiques effectuées.')
+             Else Write('Utilisez /AUTOFIX pour réparer automatiquement les erreurs.');
  End;
 End;
 
@@ -893,8 +918,7 @@ BEGIN
    SetUseACP(False);
   {$ENDIF}
  {$ENDIF}
-
- { Initialisation }
+  { Initialisation }
  Language := _French;
  TmpLanguage := GetEnv('LANGUAGE');
  If TmpLanguage <> '' Then Begin
@@ -922,7 +946,7 @@ BEGIN
    Else Begin
     WriteLn('SCANDISK - Utilitaire de diagnostic et réparation de disque');
     WriteLn;
-    WriteLn('Syntaxe: SCANDISK [lecteur: | fichier] [/AUTOFIX] [/CHECKONLY] [/SURFACE]');
+    WriteLn('Syntaxe : SCANDISK [lecteur: | fichier] [/AUTOFIX] [/CHECKONLY] [/SURFACE]');
     WriteLn;
     WriteLn('  lecteur:   Lecteur à vérifier (A:, C:, etc.)');
     WriteLn('  fichier    Fichier image disque à vérifier');
@@ -934,6 +958,7 @@ BEGIN
   Halt;
  End;
   { Setup de l'interface graphique }
+ CursorOff;
  SetupColors;
   { Initialisation des variables }
  AutoFix := False;
@@ -961,7 +986,9 @@ BEGIN
     Halt(1);
    End;
   End;
- End Else Begin
+ End
+  Else
+ Begin
   { C'est un fichier image }
   IsImageFile := True;
   FileName := ParamStr(1);
@@ -999,6 +1026,7 @@ BEGIN
  If IsImageFile Then Close(FileHandle);
   { Affichage du résumé }
  ShowSummary;
+ CursorOn;
   { Code de sortie }
  If ErrorsFound > 0 Then Halt(1) Else Halt(0);
 END.
