@@ -8,7 +8,7 @@ Program SCANDISK;
 
 {$A-}
 
-Uses DOS, Crt;
+Uses DOS,Crt;
 
 Type
  TBootSector = Record
@@ -79,70 +79,83 @@ Begin
  IntToStr := S;
 End;
 
-Procedure SetupColors;
-Begin
+Procedure SetupColors;Begin
  TextBackground(Blue);
  TextColor(White);
  ClrScr;
 End;
 
+Procedure ShowButton(Button:String;Selected:Boolean);
+Var
+ CurrAttr:Byte;
+Begin
+ CurrAttr:=TextAttr;
+ TextBackground(DarkGray);
+ TextColor(LightGray);
+ If(Selected)Then Write(#17,' ',Button,' ',#16)
+             Else Write('< ',Button,' >');
+ TextAttr:=CurrAttr;
+End;
+
 Procedure DrawBox(X1, Y1, X2, Y2: Byte);
-Var i: Byte;
+Var
+ i: Byte;
 Begin
  GotoXY(X1, Y1);
  Write(#218);
  For i := X1 + 1 to X2 - 1 do Write(#196);
  Write(#191);
-
  For i := Y1 + 1 to Y2 - 1 do Begin
   GotoXY(X1, i); Write(#179);
   GotoXY(X2, i); Write(#179);
  End;
-
- GotoXY(X1, Y2);
+ GotoXY(X1,Y2-2);
+ Write(#195);
+ For i := X1 + 1 to X2 - 1 do Write(#196);
+ Write(#180);
+ GotoXY(X1,Y2);
  Write(#192);
  For i := X1 + 1 to X2 - 1 do Write(#196);
  Write(#217);
 End;
 
 Procedure DrawBoxWithShadow(X1, Y1, X2, Y2: Byte);
-Var i: Byte;
+Var
+ i: Byte;
 Begin
+  { Dessiner la boîte principale }
+ TextColor(White);
+ TextBackground(LightGray);
+ DrawBox(X1, Y1, X2, Y2);
  { Dessiner l'ombre d'abord (en bas et à droite) }
- TextColor(Black);
- TextBackground(Blue);
- 
- { Ombre en bas }
+ TextColor(Blue);
+ TextBackground(Black);
+  { Ombre en bas }
  GotoXY(X1 + 1, Y2 + 1);
  For i := X1 + 1 to X2 + 1 do Write(' ');
- 
- { Ombre à droite }
+  { Ombre à droite }
  For i := Y1 + 1 to Y2 + 1 do Begin
   GotoXY(X2 + 1, i);
   Write(' ');
  End;
- 
- { Dessiner la boîte principale }
  TextColor(Black);
  TextBackground(LightGray);
- DrawBox(X1, Y1, X2, Y2);
 End;
 
 Procedure ShowTitle;
-Var i: Byte;
+Var
+ i: Byte;
 Begin
  { Titre principal }
  GotoXY(1, 1);
  TextColor(Yellow);
- Write('Microsoft ScanDisk');
+ Write('ScanDisk');
  TextColor(White);
- 
- { Barre cyan en dessous du titre }
+  { Barre cyan en dessous du titre }
  TextColor(Cyan);
  GotoXY(1, 2);
  For i := 1 to 80 do Write(#196);
- 
- { Barre cyan en bas }
+  { Barre cyan en bas }
  TextColor(Cyan);
  GotoXY(1, 24);
  For i := 1 to 80 do Write(#196);
@@ -158,13 +171,10 @@ Begin
   Write('ScanDisk is now checking the following areas of file ', FileName, ':')
  Else
   Write('ScanDisk is now checking the following areas of drive ', DrivePath, ':');
- 
  { Effacer le reste de la ligne }
  ClrEol;
-
  For i := ciMedia to ciSurface do Begin
   If CheckStatus[i] Then CheckMark := #251 Else CheckMark := #16;
-
   Case i of
    ciMedia: Begin
     GotoXY(1, 6);
@@ -194,8 +204,8 @@ Begin
    ciSurface: Begin
     GotoXY(1, 11);
     Write('   ');
-    If CheckStatus[ciSurface] Then Write(#251) 
-    Else If DoSurfaceScan Then Write(#16) 
+    If CheckStatus[ciSurface] Then Write(#251)
+    Else If DoSurfaceScan Then Write(#16)
     Else Write(' ');
     Write('    Surface scan');
     ClrEol;
@@ -204,7 +214,7 @@ Begin
  End;
 End;
 
-Function ShowDialog(Title, Message: String; ShowYesNo: Boolean): Boolean;
+Function ShowDialog(Title,Message:String;ShowYesNo:Boolean):Boolean;
 Var Key: Char;
     BoxWidth, BoxHeight, X1, Y1, i, j: Byte;
     Lines: Array[0..10] of String;
@@ -214,66 +224,70 @@ Begin
  BoxHeight := 8;
  X1 := (80 - BoxWidth) div 2;
  Y1 := (25 - BoxHeight) div 2;
- 
- { Découper le message en lignes }
+  { Découper le message en lignes }
  LineCount := 0;
  CurrentLine := 1;
  MaxLineLen := BoxWidth - 4; { Marge de 2 caractères de chaque côté }
- 
  While (CurrentLine <= Length(Message)) and (LineCount < 10) do Begin
   If (CurrentLine + MaxLineLen - 1) <= Length(Message) Then Begin
-   { Chercher un espace pour couper proprement }
+    { Chercher un espace pour couper proprement }
    j := CurrentLine + MaxLineLen - 1;
    While (j > CurrentLine) and (Message[j] <> ' ') do Dec(j);
    If j = CurrentLine Then j := CurrentLine + MaxLineLen - 1; { Pas d'espace trouvé, couper au max }
-   
    Lines[LineCount] := Copy(Message, CurrentLine, j - CurrentLine + 1);
    CurrentLine := j + 1;
    If Message[j] = ' ' Then Inc(CurrentLine); { Passer l'espace }
-  End Else Begin
+  End
+   Else
+  Begin
    Lines[LineCount] := Copy(Message, CurrentLine, Length(Message) - CurrentLine + 1);
    CurrentLine := Length(Message) + 1;
   End;
   Inc(LineCount);
  End;
-
- { Ajuster la hauteur de la boîte selon le nombre de lignes }
+  { Ajuster la hauteur de la boîte selon le nombre de lignes }
  BoxHeight := 5 + LineCount;
  Y1 := (25 - BoxHeight) div 2;
-
  { Sauvegarder et changer les couleurs }
  TextBackground(LightGray);
  TextColor(Black);
-
  { Remplir la boîte avec l'arrière-plan }
  For i := Y1 to Y1 + BoxHeight do Begin
   GotoXY(X1, i);
   For j := X1 to X1 + BoxWidth do Write(' ');
  End;
-
  { Dessiner le cadre avec ombre }
  DrawBoxWithShadow(X1, Y1, X1 + BoxWidth, Y1 + BoxHeight);
-
  { Afficher le titre }
  GotoXY(X1 + 2, Y1 + 1);
  Write(Title);
-
  { Afficher le message ligne par ligne }
  For i := 0 to LineCount - 1 do Begin
   GotoXY(X1 + 2, Y1 + 3 + i);
   Write(Lines[i]);
  End;
-
  { Afficher les boutons }
  If ShowYesNo Then Begin
-  GotoXY(X1 + 18, Y1 + BoxHeight - 2);
-  Write('< Yes >   < No >');
- End Else Begin
-  GotoXY(X1 + 25, Y1 + BoxHeight - 2);
-  Write('< OK >');
+  GotoXY(X1 + 23, Y1 + BoxHeight - 1);
+  Case(Language)of
+   _English:Begin
+    ShowButton('Yes',True);
+    Write('  ');
+    ShowButton('No',False);
+   End;
+   Else Begin
+    ShowButton('Oui',True);
+    Write('  ');
+    ShowButton('Non',False);
+   End;
+  End;
+ End
+  Else
+ Begin
+  GotoXY(X1 + 25, Y1 + BoxHeight - 1);
+  ShowButton('OK',True);
  End;
-
- { Attendre la réponse }
+  { Attendre la réponse }
  Repeat
   Key := ReadKey;
   If Key = #13 Then Begin
@@ -284,12 +298,11 @@ Begin
    ShowDialog := False;
    Break;
   End;
-  If ShowYesNo and (UpCase(Key) = 'Y') Then Begin
+  If ShowYesNo and (UpCase(Key) in ['Y','O'])Then Begin
    ShowDialog := True;
    Break;
   End;
  Until False;
-
  { Restaurer les couleurs et redessiner l'écran }
  SetupColors;
  ShowTitle;
@@ -312,49 +325,39 @@ Begin
  DialogY1 := 4;
  DialogX2 := 75;
  DialogY2 := 20;
- 
  { Sauvegarder les couleurs actuelles et créer le fond gris de la boîte }
  TextBackground(LightGray);
  TextColor(Black);
- 
  { Remplir la boîte avec l'arrière-plan gris }
  For i := DialogY1 to DialogY2 do Begin
   GotoXY(DialogX1, i);
   For j := DialogX1 to DialogX2 do Write(' ');
  End;
- 
  { Dessiner le cadre noir de la boîte de dialogue avec ombre }
  DrawBoxWithShadow(DialogX1, DialogY1, DialogX2, DialogY2);
- 
  { Rétablir les couleurs pour le contenu de la boîte }
  TextColor(Black);
  TextBackground(LightGray);
- 
  { Titre du surface scan centré }
  GotoXY(DialogX1 + 30, DialogY1 + 1);
  TextColor(Black);
  TextBackground(LightGray);
  Write('Surface Scan');
- 
  { Boîte pour la carte du disque - position relative à la boîte de dialogue }
  DrawBox(DialogX1 + 2, DialogY1 + 3, DialogX1 + 45, DialogY1 + 13);
- 
  { Calculer les secteurs par bloc selon la taille totale }
  MapWidth := 41;  { Largeur réduite pour s'adapter dans la boîte }
  MapHeight := 9;  { Hauteur réduite }
  SectorsPerBlock := (TotalSectors + (MapWidth * MapHeight - 1)) div (MapWidth * MapHeight);
  If SectorsPerBlock < 1 Then SectorsPerBlock := 1;
- 
- { Dessiner IMMÉDIATEMENT la carte COMPLÈTE du disque selon l'utilisation réelle }
+  { Dessiner IMMÉDIATEMENT la carte COMPLÈTE du disque selon l'utilisation réelle }
  For Y := 0 to MapHeight - 1 do Begin
   For X := 0 to MapWidth - 1 do Begin
    BlockNum := Y * MapWidth + X;
    CurrentSector := BlockNum * SectorsPerBlock;
-   
    If CurrentSector < TotalSectors Then Begin
     GotoXY(DialogX1 + 3 + X, DialogY1 + 4 + Y);
-    
-    { Déterminer le TYPE de secteur (système/données/libre) }
+     { Déterminer le TYPE de secteur (système/données/libre) }
     If CurrentSector < (BootSector.ReservedSectors + BootSector.NumberOfFATs * BootSector.SectorsPerFAT) Then Begin
      { Zone système - toujours utilisée }
      TextColor(Yellow);
@@ -374,24 +377,22 @@ Begin
    End;
   End;
  End;
- 
  TextColor(Black);
  TextBackground(LightGray);
- 
  { Informations du fichier/lecteur - position relative }
- GotoXY(DialogX1 + 2, DialogY1 + 13);
+ GotoXY(DialogX1 + 47, DialogY1 + 2);
  If IsImageFile Then
   Write('File: ', FileName)
  Else
   Write('Drive ', DrivePath, ':');
-  
  { Statistiques - position relative à droite de la boîte }
  GotoXY(DialogX1 + 47, DialogY1 + 5);
  Write(TotalSectors, ' sectors');
  GotoXY(DialogX1 + 47, DialogY1 + 6);
- Write('0 examined     0 found bad     ');
- 
- { Légende avec la proportion correcte - position relative }
+ Write('0 examined');
+ GotoXY(DialogX1 + 47, DialogY1 + 7);
+ Write('0 found bad');
+  { Légende avec la proportion correcte - position relative }
  GotoXY(DialogX1 + 47, DialogY1 + 8);
  TextColor(Cyan);
  TextBackground(Black);
@@ -399,7 +400,6 @@ Begin
  TextColor(Black);
  TextBackground(LightGray);
  Write(' = ', SectorsPerBlock, ' sectors');
- 
  GotoXY(DialogX1 + 47, DialogY1 + 10);
  TextColor(Cyan);
  TextBackground(Black);
@@ -428,61 +428,49 @@ Begin
  TextColor(Black);
  TextBackground(LightGray);
  Write(' some bad sectors');
- 
- { Boutons avec style gris foncé sur blanc et espacement correct - position relative en bas }
- GotoXY(DialogX1 + 40, DialogY1 + 13);
- TextColor(Black);
- TextBackground(White);
- Write(' More Info ');
- TextColor(Black);
- TextBackground(LightGray);
- Write('   ');  { 3 espaces entre les boutons }
- TextColor(Black);
- TextBackground(White);
- Write(' Exit ');
+ GotoXY(DialogX1 + 20, DialogY1 + 15);
+ ShowButton('More Info',True);
+ Write('   ');
+ ShowButton('Exit',False);
 End;
 
 Procedure UpdateSurfaceProgress(SectorsChecked: LongInt; BadFound: LongInt);
-Var Percentage: Integer;
-    X, Y, BlockNum, i: Integer;
-    SectorsPerBlock, CurrentSector: LongInt;
-    BlockColor: Byte;
-    MapWidth, MapHeight: Integer;
-    BlockChar: Char;
-    IsScanned: Boolean;
-    DialogX1, DialogY1: Byte;
+Var
+ Percentage: Integer;
+ X, Y, BlockNum, i: Integer;
+ SectorsPerBlock, CurrentSector: LongInt;
+ BlockColor: Byte;
+ MapWidth, MapHeight: Integer;
+ BlockChar: Char;
+ IsScanned: Boolean;
+ DialogX1, DialogY1: Byte;
 Begin
  { Positions de la boîte de dialogue }
  DialogX1 := 5;
  DialogY1 := 3;
- 
- { Dimensions de la carte du disque }
- MapWidth := 41;  
- MapHeight := 9; 
- 
- { Calculer les secteurs représentés par chaque bloc }
+  { Dimensions de la carte du disque }
+ MapWidth := 41;
+ MapHeight := 9;
+  { Calculer les secteurs représentés par chaque bloc }
  SectorsPerBlock := (TotalSectors + (MapWidth * MapHeight - 1)) div (MapWidth * MapHeight);
  If SectorsPerBlock < 1 Then SectorsPerBlock := 1;
- 
  { Mettre à jour les statistiques - position relative }
- GotoXY(DialogX1 + 47, DialogY1 + 6);
+ GotoXY(DialogX1 + 47, DialogY1 + 7);
  TextColor(Black);
  TextBackground(LightGray);
- Write(SectorsChecked, ' examined     ', BadFound, ' found bad     ');
- 
+ Write(SectorsChecked, ' examined     ');
+ GotoXY(DialogX1 + 47, DialogY1 + 8);
+ Write(BadFound, ' found bad     ');
  { Mettre à jour SEULEMENT les attributs visuels des blocs déjà scannés }
  { CARACTÈRES IDENTIQUES (#219), SEULES LES COULEURS CHANGENT ! }
  For Y := 0 to MapHeight - 1 do Begin
   For X := 0 to MapWidth - 1 do Begin
    BlockNum := Y * MapWidth + X;
    CurrentSector := BlockNum * SectorsPerBlock;
-   
    If CurrentSector < TotalSectors Then Begin
     { Vérifier si ce bloc a été scanné }
     IsScanned := CurrentSector < SectorsChecked;
-    
     GotoXY(DialogX1 + 3 + X, DialogY1 + 4 + Y);
-    
     { Déterminer le type de secteur (même logique qu'avant) }
     If CurrentSector < (BootSector.ReservedSectors + BootSector.NumberOfFATs * BootSector.SectorsPerFAT) Then Begin
      { Zone système }
@@ -494,7 +482,9 @@ Begin
       TextColor(Brown);
      End;
      Write(#219); { TOUJOURS LE MÊME CARACTÈRE }
-    End Else Begin
+    End
+     Else
+    Begin
      { Zone de données }
      If Random(10) < 3 Then Begin
       { Secteur utilisé }
@@ -521,20 +511,15 @@ Begin
    End;
   End;
  End;
- 
  TextColor(Black);
  TextBackground(LightGray);
- 
- { Barre de progression - MAINTENANT EN DEHORS DE LA BOÎTE SUR LIGNE 25 }
  TextBackground(Blue);
  TextColor(White);
  Percentage := (SectorsChecked * 100) div TotalSectors;
  If Percentage > 100 Then Percentage := 100;
- 
  GotoXY(1, 25);
  Write(Percentage, '% complete  ');
- 
- { Barre de progression graphique }
+  { Barre de progression graphique }
  For i := 15 to 65 do Begin
   GotoXY(i, 25);
   If i <= (15 + (Percentage * 50 div 100)) Then Begin
@@ -545,32 +530,6 @@ Begin
    TextColor(DarkGray);
    TextBackground(Blue);
    Write(#177);
-  End;
- End;
-End;
-
-Procedure ShowHelp;
-Begin
- Case Language of
-  _English: Begin
-   WriteLn('SCANDISK - Disk diagnostic and repair utility');
-   WriteLn('Usage: SCANDISK [drive: | filename] [/AUTOFIX] [/CHECKONLY] [/SURFACE]');
-   WriteLn('  drive:     Drive to check (A:, C:, etc.)');
-   WriteLn('  filename   Disk image file to check');
-   WriteLn('  /AUTOFIX   Automatically fix errors');
-   WriteLn('  /CHECKONLY Check only, do not fix');
-   WriteLn('  /SURFACE   Perform surface scan');
-  End;
-  Else Begin
-   WriteLn('SCANDISK - Utilitaire de diagnostic et réparation de disque');
-   WriteLn;
-   WriteLn('Syntaxe: SCANDISK [lecteur: | fichier] [/AUTOFIX] [/CHECKONLY] [/SURFACE]');
-   WriteLn;
-   WriteLn('  lecteur:   Lecteur à vérifier (A:, C:, etc.)');
-   WriteLn('  fichier    Fichier image disque à vérifier');
-   WriteLn('  /AUTOFIX   Réparer automatiquement les erreurs');
-   WriteLn('  /CHECKONLY Vérification seulement, pas de réparation');
-   WriteLn('  /SURFACE   Effectuer un scan de surface');
   End;
  End;
 End;
@@ -643,27 +602,22 @@ Begin
 End;
 {$ENDIF}
 
-Function ReadBootSector: Boolean;
-Begin
+Function ReadBootSector:Boolean;Begin
  If ReadSector(0) Then Begin
   Move(SectorBuffer, BootSector, SizeOf(BootSector));
-
   TotalSectors := BootSector.TotalSectors;
   If TotalSectors = 0 Then TotalSectors := BootSector.TotalSectorsBig;
-
-  { Vérifications de sanité }
+   { Vérifications de sanité }
   If (BootSector.SectorsPerFAT = 0) or (BootSector.SectorsPerFAT > 255) Then Begin
    ShowDialog('Error', 'Invalid sectors per FAT: ' + IntToStr(BootSector.SectorsPerFAT), False);
    ReadBootSector := False;
    Exit;
   End;
-
   If (BootSector.BytesPerSector <> 512) Then Begin
    ShowDialog('Error', 'Unsupported sector size: ' + IntToStr(BootSector.BytesPerSector), False);
    ReadBootSector := False;
    Exit;
   End;
-
   ReadBootSector := True;
  End Else ReadBootSector := False;
 End;
@@ -675,7 +629,6 @@ Begin
  CheckStatus[ciFAT] := False;
  MaxFATEntries := High(FAT) + 1;
  MaxSectors := MaxFATEntries div 256;
-
  For i := 0 to Min(BootSector.SectorsPerFAT - 1, MaxSectors - 1) do Begin
   If ReadSector(BootSector.ReservedSectors + i) Then Begin
    For j := 0 to 255 do Begin
@@ -694,7 +647,8 @@ Begin
 End;
 
 Procedure CheckFATConsistency;
-Var i, j: Integer;
+Var
+ i, j: Integer;
 Begin
  CheckStatus[ciMedia] := True;
 End;
@@ -706,17 +660,14 @@ Var
  FirstDataSector: Integer;
 Begin
  CheckStatus[ciDirectory] := False;
-
  RootSectors := (BootSector.RootEntries * 32 + 511) div 512;
  FirstDataSector := BootSector.ReservedSectors + (BootSector.NumberOfFATs * BootSector.SectorsPerFAT);
-
  For i := 0 to RootSectors - 1 do Begin
   If ReadSector(FirstDataSector + i) Then Begin
    For j := 0 to 15 do Begin { 16 entrées par secteur }
     If (i * 16 + j) <= High(RootDir) Then Begin
      Move(SectorBuffer[j * 32], RootDir[i * 16 + j], 32);
-
-     { Vérifier l'entrée }
+      { Vérifier l'entrée }
      If RootDir[i * 16 + j].Name[0] <> #0 Then Begin
       { Marquer les clusters utilisés }
       If (RootDir[i * 16 + j].StartCluster > 0) and
@@ -726,7 +677,9 @@ Begin
      End;
     End;
    End;
-  End Else Begin
+  End
+   Else
+  Begin
    Exit;
   End;
  End;
@@ -740,20 +693,17 @@ Var
  ChainLength: Integer;
 Begin
  CheckStatus[ciFileSystem] := False;
-
  For i := 2 to High(FAT) do Begin
   If (FAT[i] <> 0) and (FAT[i] < $FF8) Then Begin
    { Suivre la chaîne de clusters }
    NextCluster := i;
    ChainLength := 0;
    FillChar(Chain, SizeOf(Chain), 0);
-
    Repeat
     If ChainLength < High(Chain) Then Begin
      Chain[ChainLength] := NextCluster;
      Inc(ChainLength);
     End;
-
     If NextCluster <= High(ClusterMap) Then Begin
      If ClusterMap[NextCluster] = 1 Then
       ClusterMap[NextCluster] := 1
@@ -764,12 +714,8 @@ Begin
       ClusterMap[NextCluster] := 3;
      End;
     End;
-
-    If NextCluster <= High(FAT) Then
-     NextCluster := FAT[NextCluster]
-    Else
-     Break;
-
+    If NextCluster <= High(FAT) Then NextCluster := FAT[NextCluster]
+                                Else Break;
     If ChainLength > 1000 Then Break; { Protection contre les boucles infinies }
    Until (NextCluster >= $FF8) or (NextCluster = 0);
   End;
@@ -778,10 +724,10 @@ Begin
 End;
 
 Procedure CheckLostClusters;
-Var i: Integer;
+Var
+ i: Integer;
 Begin
  CheckStatus[ciFreeSpace] := False;
-
  For i := 2 to High(FAT) do Begin
   If (i <= High(ClusterMap)) and (FAT[i] <> 0) and (ClusterMap[i] = 0) Then Begin
    Inc(LostClusters);
@@ -799,41 +745,34 @@ Var
  DialogX1, DialogY1: Byte;
 Begin
  If Not DoSurfaceScan Then Exit;
-
- { Positions de la boîte de dialogue }
+  { Positions de la boîte de dialogue }
  DialogX1 := 5;
  DialogY1 := 3;
-
- { Initialiser les variables }
+  { Initialiser les variables }
  CheckStatus[ciSurface] := False;
  BadSectors := 0;
  SectorsExamined := 0;
- 
- { Afficher l'écran de surface scan - ÉCRAN FIXE }
+  { Afficher l'écran de surface scan - ÉCRAN FIXE }
  ShowSurfaceScanScreen;
- 
  { Initialiser le générateur de nombres aléatoires pour la simulation }
  Randomize;
-
  For i := 0 to TotalSectors - 1 do Begin
   Inc(SectorsExamined);
   BadSectorFound := Not ReadSector(i);
-
-  If BadSectorFound Then Begin
+   If BadSectorFound Then Begin
    Inc(BadSectors);
    If AutoFix Then Begin
     { Marquer le cluster correspondant comme défectueux }
     If i >= (BootSector.ReservedSectors + BootSector.NumberOfFATs * BootSector.SectorsPerFAT) Then Begin
-     FAT[(i - (BootSector.ReservedSectors + BootSector.NumberOfFATs * BootSector.SectorsPerFAT)) div BootSector.SectorsPerCluster + 2] := $FF7;
+     FAT[(i - (BootSector.ReservedSectors + BootSector.NumberOfFATs * BootSector.SectorsPerFAT))
+           div BootSector.SectorsPerCluster + 2] := $FF7;
     End;
    End;
   End;
-
   { Mettre à jour l'affichage toutes les quelques secteurs selon la taille }
   If (TotalSectors < 100) or ((i mod (TotalSectors div 200 + 1)) = 0) Then Begin
    UpdateSurfaceProgress(SectorsExamined, BadSectors);
   End;
-  
   { Vérifier si l'utilisateur appuie sur une touche }
   If KeyPressed Then Begin
    Case ReadKey of
@@ -842,16 +781,13 @@ Begin
     End;
    End;
   End;
-  
-  { Délai proportionnel à la taille du disque }
+   { Délai proportionnel à la taille du disque }
   If TotalSectors < 1000 Then Delay(20) Else Delay(5);
  End;
- 
- { Mettre à jour l'affichage final }
+  { Mettre à jour l'affichage final }
  UpdateSurfaceProgress(SectorsExamined, BadSectors);
  CheckStatus[ciSurface] := True;
- 
- { Attendre que l'utilisateur appuie sur une touche - EN BAS DE L'ÉCRAN }
+  { Attendre que l'utilisateur appuie sur une touche - EN BAS DE L'ÉCRAN }
  TextBackground(Blue);
  TextColor(White);
  GotoXY(70, 25);
@@ -859,54 +795,57 @@ Begin
  ReadKey;
 End;
 
-Procedure PerformChecks;
-Begin
+Procedure PerformChecks;Begin
  ClrScr;
  ShowTitle;
  ShowCheckList;
-
  GotoXY(1, 15);
  Write('examining drive ', DrivePath, '...');
  ClrEol;
-
  { Effectuer les vérifications une par une avec mise à jour en place }
  CheckStatus[ciMedia] := False;
  CheckFATConsistency;
  ShowCheckList;
- Delay(800);
-
- CheckStatus[ciFAT] := False; 
+ Delay(300);
+ CheckStatus[ciFAT] := False;
  ReadFAT;
  ShowCheckList;
- Delay(800);
-
+ Delay(300);
  CheckStatus[ciDirectory] := False;
  CheckDirectoryStructure;
  ShowCheckList;
- Delay(800);
-
+ Delay(300);
  CheckStatus[ciFileSystem] := False;
  CheckFileAllocation;
  ShowCheckList;
- Delay(800);
-
+ Delay(300);
  CheckStatus[ciFreeSpace] := False;
  CheckLostClusters;
  ShowCheckList;
- Delay(800);
+ Delay(300);
 
  { Demander pour le surface scan }
- If ShowDialog('ScanDisk', 'ScanDisk has finished testing the file structure. Do you want to perform a surface scan now?', True) Then Begin
-  DoSurfaceScan := True;
-  SurfaceScan;
+ Case(Language)of
+  _English:Begin
+   If ShowDialog('ScanDisk', 'ScanDisk has finished testing the file structure. Do you want to '+
+                             'perform a surface scan now?', True)Then Begin
+    DoSurfaceScan:=True;
+    SurfaceScan;
+   End;
+  End;
+  Else Begin
+   If ShowDialog('Balayage de surface', 'ScanDisk a termin� les testes de structure de fichiers. Voulez-vous '+
+                 'effectuer un test de surface maintenant ?', True)Then Begin
+    DoSurfaceScan:=True;
+    SurfaceScan;
+   End;
+  End;
  End;
 End;
 
-Procedure ShowSummary;
-Begin
+Procedure ShowSummary;Begin
  ClrScr;
  ShowTitle;
- 
  GotoXY(1, 5);
  Write('=== RÉSUMÉ DE LA VÉRIFICATION ===');
  GotoXY(1, 6);
@@ -919,7 +858,6 @@ Begin
  Write('Fichiers avec liens croisés: ', CrossLinkedFiles);
  GotoXY(1, 10);
  Write('Erreurs totales: ', ErrorsFound);
-
  GotoXY(1, 12);
  If ErrorsFound = 0 Then
   Write('Aucune erreur trouvée. Le disque est en bon état.')
@@ -952,18 +890,38 @@ BEGIN
   If StrToUpper(Copy(TmpLanguage, 1, 2)) = 'IT' Then Language := _Italian Else
   If StrToUpper(Copy(TmpLanguage, 1, 2)) = 'SP' Then Language := _Spain;
  End;
-
- { Vérification des paramètres d'aide }
+  { Vérification des paramètres d'aide }
  If (ParamStr(1) = '/?') or (ParamStr(1) = '--help') or (ParamStr(1) = '-h') or
     (ParamStr(1) = '/h') or (ParamStr(1) = '/H') or (ParamCount = 0) Then Begin
-  ShowHelp;
+  Case Language of
+   _English: Begin
+    WriteLn('SCANDISK - Disk diagnostic and repair utility');
+    WriteLn;
+    WriteLn('Usage: SCANDISK [drive: | filename] [/AUTOFIX] [/CHECKONLY] [/SURFACE]');
+    WriteLn;
+    WriteLn('  drive:     Drive to check (A:, C:, etc.)');
+    WriteLn('  filename   Disk image file to check');
+    WriteLn('  /AUTOFIX   Automatically fix errors');
+    WriteLn('  /CHECKONLY Check only, do not fix');
+    WriteLn('  /SURFACE   Perform surface scan');
+   End;
+   Else Begin
+    WriteLn('SCANDISK - Utilitaire de diagnostic et réparation de disque');
+    WriteLn;
+    WriteLn('Syntaxe: SCANDISK [lecteur: | fichier] [/AUTOFIX] [/CHECKONLY] [/SURFACE]');
+    WriteLn;
+    WriteLn('  lecteur:   Lecteur à vérifier (A:, C:, etc.)');
+    WriteLn('  fichier    Fichier image disque à vérifier');
+    WriteLn('  /AUTOFIX   Réparer automatiquement les erreurs');
+    WriteLn('  /CHECKONLY Vérification seulement, pas de réparation');
+    WriteLn('  /SURFACE   Effectuer un scan de surface');
+   End;
+  End;
   Halt;
  End;
-
- { Setup de l'interface graphique }
+  { Setup de l'interface graphique }
  SetupColors;
-
- { Initialisation des variables }
+  { Initialisation des variables }
  AutoFix := False;
  CheckOnly := False;
  DoSurfaceScan := False;
@@ -974,10 +932,8 @@ BEGIN
  ErrorsFound := 0;
  FillChar(ClusterMap, SizeOf(ClusterMap), 0);
  FillChar(CheckStatus, SizeOf(CheckStatus), 0);
-
- { Analyse des paramètres }
+  { Analyse des paramètres }
  DrivePath := StrToUpper(ParamStr(1));
-
  If (Length(DrivePath) = 2) and (DrivePath[2] = ':') Then Begin
   { C'est un lecteur }
   IsImageFile := False;
@@ -996,9 +952,7 @@ BEGIN
   IsImageFile := True;
   FileName := ParamStr(1);
   DrivePath := 'file';
-
-  {$I-}
-  Assign(FileHandle, FileName);
+  {$I-} Assign(FileHandle, FileName);
   Reset(FileHandle, 1);
   {$I+}
   If IOResult <> 0 Then Begin
@@ -1006,8 +960,7 @@ BEGIN
    Halt(1);
   End;
  End;
-
- { Traitement des options }
+  { Traitement des options }
  If ParamCount > 1 Then Begin
   For ErrorsFound := 2 to ParamCount do Begin
    If StrToUpper(ParamStr(ErrorsFound)) = '/AUTOFIX' Then AutoFix := True;
@@ -1016,28 +969,22 @@ BEGIN
   End;
  End;
  ErrorsFound := 0;
-
- { Lecture du secteur de boot }
+  { Lecture du secteur de boot }
  If Not ReadBootSector Then Begin
   ShowDialog('Error', 'Cannot read boot sector', False);
   If IsImageFile Then Close(FileHandle);
   Halt(1);
  End;
-
- { Effectuer les vérifications avec interface graphique }
+  { Effectuer les vérifications avec interface graphique }
  PerformChecks;
-
- { Sauvegarde si des modifications ont été faites }
+  { Sauvegarde si des modifications ont été faites }
  If AutoFix and (ErrorsFound > 0) and Not CheckOnly Then Begin
   { Réécrire la FAT si nécessaire }
  End;
-
- { Nettoyage }
+  { Nettoyage }
  If IsImageFile Then Close(FileHandle);
-
- { Affichage du résumé }
+  { Affichage du résumé }
  ShowSummary;
-
- { Code de sortie }
+  { Code de sortie }
  If ErrorsFound > 0 Then Halt(1) Else Halt(0);
 END.
