@@ -12,51 +12,51 @@ Program MSMOUSE;
 Uses DOS;
 
 Const
- { Version du pilote souris }
- MOUSE_DRIVER_VERSION = $0806;  { Version 8.06 }
+ { Version du pilote souris - Compatible Microsoft Mouse Driver }
+ MOUSE_DRIVER_VERSION = $0806;  { Version 8.06 - Format: version majeure.mineure }
 
- { Codes d'erreur }
- ERR_SUCCESS = 0;
- ERR_INVALID_FUNCTION = 1;
- ERR_NO_MOUSE = 2;
- ERR_DRIVER_NOT_INSTALLED = 3;
- ERR_INVALID_PARAMETER = 4;
+ { Codes d'erreur pour les opérations souris }
+ ERR_SUCCESS = 0;               { Opération réussie }
+ ERR_INVALID_FUNCTION = 1;      { Fonction non supportée }
+ ERR_NO_MOUSE = 2;              { Aucune souris détectée }
+ ERR_DRIVER_NOT_INSTALLED = 3;  { Pilote non installé }
+ ERR_INVALID_PARAMETER = 4;     { Paramètre invalide }
 
- { Interruption souris }
- MOUSE_INT = $33;
+ { Interruption logicielle souris - Standard MS-DOS }
+ MOUSE_INT = $33;               { INT 33h - Interface standard souris }
 
- { Ports série pour souris série }
- COM1_BASE = $3F8;
- COM2_BASE = $2F8;
- COM3_BASE = $3E8;
- COM4_BASE = $2E8;
+ { Ports série pour souris série Microsoft/compatibles }
+ COM1_BASE = $3F8;              { Port série COM1 - Adresse de base }
+ COM2_BASE = $2F8;              { Port série COM2 - Adresse de base }
+ COM3_BASE = $3E8;              { Port série COM3 - Adresse de base }
+ COM4_BASE = $2E8;              { Port série COM4 - Adresse de base }
 
- { Ports PS/2 pour souris PS/2 }
- PS2_DATA_PORT = $60;
- PS2_STATUS_PORT = $64;
- PS2_COMMAND_PORT = $64;
+ { Ports PS/2 pour souris PS/2 (contrôleur clavier 8042) }
+ PS2_DATA_PORT = $60;           { Port de données PS/2 }
+ PS2_STATUS_PORT = $64;         { Port de statut PS/2 (lecture) }
+ PS2_COMMAND_PORT = $64;        { Port de commande PS/2 (écriture) }
 
- { IRQ pour souris }
- PS2_IRQ = 12;           { IRQ 12 pour souris PS/2 }
- COM1_IRQ = 4;           { IRQ 4 pour COM1 }
- COM2_IRQ = 3;           { IRQ 3 pour COM2 }
+ { Numéros IRQ pour interruptions matérielles souris }
+ PS2_IRQ = 12;                  { IRQ 12 - Souris PS/2 (PIC esclave) }
+ COM1_IRQ = 4;                  { IRQ 4 - Port série COM1 }
+ COM2_IRQ = 3;                  { IRQ 3 - Port série COM2 }
 
- { Types de souris }
- MOUSE_TYPE_NONE = 0;
- MOUSE_TYPE_SERIAL = 1;
- MOUSE_TYPE_PS2 = 2;
- MOUSE_TYPE_BUS = 3;
+ { Types de souris supportés par le pilote }
+ MOUSE_TYPE_NONE = 0;           { Aucune souris détectée }
+ MOUSE_TYPE_SERIAL = 1;         { Souris série (COM1-COM4) }
+ MOUSE_TYPE_PS2 = 2;            { Souris PS/2 (port auxiliaire) }
+ MOUSE_TYPE_BUS = 3;            { Souris bus (IBM PC/InPort) }
 
- { États des boutons }
- BUTTON_LEFT = 1;
- BUTTON_RIGHT = 2;
- BUTTON_MIDDLE = 4;
+ { Masques de bits pour l'état des boutons souris }
+ BUTTON_LEFT = 1;               { Bit 0 - Bouton gauche }
+ BUTTON_RIGHT = 2;              { Bit 1 - Bouton droit }
+ BUTTON_MIDDLE = 4;             { Bit 2 - Bouton central }
 
- { Limites de position souris }
- DEFAULT_MIN_X = 0;
- DEFAULT_MAX_X = 639;
- DEFAULT_MIN_Y = 0;
- DEFAULT_MAX_Y = 199;
+ { Limites par défaut de la zone de travail souris }
+ DEFAULT_MIN_X = 0;             { Coordonnée X minimale }
+ DEFAULT_MAX_X = 639;           { Coordonnée X maximale (mode 640x200) }
+ DEFAULT_MIN_Y = 0;             { Coordonnée Y minimale }
+ DEFAULT_MAX_Y = 199;           { Coordonnée Y maximale (mode 640x200) }
 
 Type
  { Structure d'état de la souris }
@@ -380,6 +380,8 @@ Begin
   Je @SetMickeyRatio
   Cmp AX, 36
   Je @GetDriverVersion
+  Cmp AX, 109
+  Je @MicrosoftDetection
 
   Jmp @ExitHandler
 
@@ -435,6 +437,15 @@ Begin
   Mov BX, 0              { Pas de gestionnaire utilisateur }
   Jmp @ExitHandler
 
+@MicrosoftDetection:
+  { Fonction 6Dh (109) - Détection pilote Microsoft }
+  { Retourne la signature Microsoft dans les registres }
+  Mov AX, $006D          { Code de fonction confirmé }
+  Mov BX, $4D53          { Signature "MS" }
+  Mov CX, $002E          { Version majeure.mineure }
+  Mov DX, $0000          { Réservé }
+  Jmp @ExitHandler
+
 @ExitHandler:
   Pop ES
   Pop DS
@@ -453,8 +464,7 @@ End;
 {$ENDIF}
 
 { Installer le pilote souris }
-Function InstallMouseDriver: Boolean;
-Begin
+Function InstallMouseDriver:Boolean;Begin
  InstallMouseDriver := False;
 
  { Détecter le type de souris }
@@ -682,7 +692,7 @@ BEGIN
   If (Param = '/?') Or (Param = '/H') Or (Param = '--HELP') Then Begin
    Case Language Of
     _English: Begin
-     WriteLn('MSMOUSE - Microsoft Mouse Driver');
+     WriteLn('MSMOUSE - MS Mouse Driver');
      WriteLn;
      WriteLn('Loads the mouse driver for MS-DOS applications.');
      WriteLn;
@@ -699,7 +709,7 @@ BEGIN
      WriteLn('  /?         Display this help');
     End;
     _Germany: Begin
-     WriteLn('MSMOUSE - Microsoft Maustreiber');
+     WriteLn('MSMOUSE - MS Maustreiber');
      WriteLn;
      WriteLn('Lädt den Maustreiber für MS-DOS-Anwendungen.');
      WriteLn;
@@ -716,9 +726,9 @@ BEGIN
      WriteLn('  /?         Diese Hilfe anzeigen');
     End;
     Else Begin { Français }
-     WriteLn('MSMOUSE - Pilote de souris Microsoft');
+     WriteLn('MSMOUSE - Pilote de souris MS');
      WriteLn;
-     WriteLn('Charge le pilote souris pour les applications MS-DOS.');
+     WriteLn('Cette commande permet de charger le pilote souris pour les applications MS-DOS.');
      WriteLn;
      WriteLn('MSMOUSE [paramètres]');
      WriteLn;
@@ -796,7 +806,7 @@ BEGIN
   If Not MouseDriver.SilentMode Then Begin
    Case Language Of
     _English: Begin
-     WriteLn('Microsoft Mouse Driver v', MOUSE_DRIVER_VERSION Shr 8, '.',
+     WriteLn('MS Mouse Driver v', MOUSE_DRIVER_VERSION Shr 8, '.',
              MOUSE_DRIVER_VERSION And $FF, ' loaded successfully.');
      Case MouseDriver.MouseType Of
       MOUSE_TYPE_SERIAL: WriteLn('Serial mouse detected on COM',
@@ -806,7 +816,7 @@ BEGIN
      End;
     End;
     _Germany: Begin
-     WriteLn('Microsoft Maustreiber v', MOUSE_DRIVER_VERSION Shr 8, '.',
+     WriteLn('MS Maustreiber v', MOUSE_DRIVER_VERSION Shr 8, '.',
              MOUSE_DRIVER_VERSION And $FF, ' erfolgreich geladen.');
      Case MouseDriver.MouseType Of
       MOUSE_TYPE_SERIAL: WriteLn('Serielle Maus an COM',
@@ -816,7 +826,7 @@ BEGIN
      End;
     End;
     Else Begin { Français }
-     WriteLn('Pilote souris Microsoft v', MOUSE_DRIVER_VERSION Shr 8, '.',
+     WriteLn('Pilote souris MS v', MOUSE_DRIVER_VERSION Shr 8, '.',
              MOUSE_DRIVER_VERSION And $FF, ' chargé avec succès.');
      Case MouseDriver.MouseType Of
       MOUSE_TYPE_SERIAL: WriteLn('Souris série détectée sur COM',
