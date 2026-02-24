@@ -105,11 +105,47 @@ Begin
  Write(#217);
 End;
 
-Procedure ShowTitle;
+Procedure DrawBoxWithShadow(X1, Y1, X2, Y2: Byte);
+Var i: Byte;
 Begin
+ { Dessiner l'ombre d'abord (en bas et à droite) }
+ TextColor(Black);
+ TextBackground(Blue);
+ 
+ { Ombre en bas }
+ GotoXY(X1 + 1, Y2 + 1);
+ For i := X1 + 1 to X2 + 1 do Write(' ');
+ 
+ { Ombre à droite }
+ For i := Y1 + 1 to Y2 + 1 do Begin
+  GotoXY(X2 + 1, i);
+  Write(' ');
+ End;
+ 
+ { Dessiner la boîte principale }
+ TextColor(Black);
+ TextBackground(LightGray);
+ DrawBox(X1, Y1, X2, Y2);
+End;
+
+Procedure ShowTitle;
+Var i: Byte;
+Begin
+ { Titre principal }
  GotoXY(1, 1);
  TextColor(Yellow);
  Write('Microsoft ScanDisk');
+ TextColor(White);
+ 
+ { Barre cyan en dessous du titre }
+ TextColor(Cyan);
+ GotoXY(1, 2);
+ For i := 1 to 80 do Write(#196);
+ 
+ { Barre cyan en bas }
+ TextColor(Cyan);
+ GotoXY(1, 25);
+ For i := 1 to 80 do Write(#196);
  TextColor(White);
 End;
 
@@ -117,7 +153,7 @@ Procedure ShowCheckList;
 Var i: TCheckItem;
     CheckMark: Char;
 Begin
- GotoXY(1, 3);
+ GotoXY(1, 4);
  If IsImageFile Then
   Write('ScanDisk is now checking the following areas of file ', FileName, ':')
  Else
@@ -131,32 +167,32 @@ Begin
 
   Case i of
    ciMedia: Begin
-    GotoXY(1, 5);
+    GotoXY(1, 6);
     Write('   ', CheckMark, '    Media descriptor');
     ClrEol;
    End;
    ciFAT: Begin
-    GotoXY(1, 6);
+    GotoXY(1, 7);
     Write('   ', CheckMark, '    File allocation tables');
     ClrEol;
    End;
    ciDirectory: Begin
-    GotoXY(1, 7);
+    GotoXY(1, 8);
     Write('   ', CheckMark, '    Directory structure');
     ClrEol;
    End;
    ciFileSystem: Begin
-    GotoXY(1, 8);
+    GotoXY(1, 9);
     Write('   ', CheckMark, '    File system');
     ClrEol;
    End;
    ciFreeSpace: Begin
-    GotoXY(1, 9);
+    GotoXY(1, 10);
     Write('   ', CheckMark, '    Free space');
     ClrEol;
    End;
    ciSurface: Begin
-    GotoXY(1, 10);
+    GotoXY(1, 11);
     Write('   ');
     If CheckStatus[ciSurface] Then Write(#251) 
     Else If DoSurfaceScan Then Write(#16) 
@@ -215,8 +251,8 @@ Begin
   For j := X1 to X1 + BoxWidth do Write(' ');
  End;
 
- { Dessiner le cadre }
- DrawBox(X1, Y1, X1 + BoxWidth, Y1 + BoxHeight);
+ { Dessiner le cadre avec ombre }
+ DrawBoxWithShadow(X1, Y1, X1 + BoxWidth, Y1 + BoxHeight);
 
  { Afficher le titre }
  GotoXY(X1 + 2, Y1 + 1);
@@ -258,119 +294,261 @@ Begin
  SetupColors;
  ShowTitle;
  ShowCheckList;
- GotoXY(1, 14);
+ GotoXY(1, 15);
  Write('examining drive ', DrivePath, '...');
  ClrEol;
 End;
 
 Procedure ShowSurfaceScanScreen;
+Var SectorsPerBlock: LongInt;
+    X, Y, BlockNum: Integer;
+    CurrentSector: LongInt;
+    MapWidth, MapHeight: Integer;
+    i, j: Byte;
+    DialogX1, DialogY1, DialogX2, DialogY2: Byte;
 Begin
- ClrScr;
- ShowTitle;
+ { Dimensions de la boîte de dialogue centrée }
+ DialogX1 := 5;
+ DialogY1 := 3;
+ DialogX2 := 75;
+ DialogY2 := 22;
  
- { Titre du surface scan }
- GotoXY(35, 4);
- TextColor(Yellow);
+ { Sauvegarder les couleurs actuelles et créer le fond gris de la boîte }
+ TextBackground(LightGray);
+ TextColor(Black);
+ 
+ { Remplir la boîte avec l'arrière-plan gris }
+ For i := DialogY1 to DialogY2 do Begin
+  GotoXY(DialogX1, i);
+  For j := DialogX1 to DialogX2 do Write(' ');
+ End;
+ 
+ { Dessiner le cadre noir de la boîte de dialogue avec ombre }
+ DrawBoxWithShadow(DialogX1, DialogY1, DialogX2, DialogY2);
+ 
+ { Rétablir les couleurs pour le contenu de la boîte }
+ TextColor(Black);
+ TextBackground(LightGray);
+ 
+ { Titre du surface scan centré }
+ GotoXY(DialogX1 + 30, DialogY1 + 1);
+ TextColor(Black);
+ TextBackground(LightGray);
  Write('Surface Scan');
- TextColor(White);
  
- { Boîte principale pour la carte du disque }
- DrawBox(1, 6, 50, 20);
+ { Boîte pour la carte du disque - position relative à la boîte de dialogue }
+ DrawBox(DialogX1 + 2, DialogY1 + 3, DialogX1 + 45, DialogY1 + 13);
  
- { Informations du lecteur à droite }
- GotoXY(55, 8);
+ { Calculer les secteurs par bloc selon la taille totale }
+ MapWidth := 41;  { Largeur réduite pour s'adapter dans la boîte }
+ MapHeight := 9;  { Hauteur réduite }
+ SectorsPerBlock := (TotalSectors + (MapWidth * MapHeight - 1)) div (MapWidth * MapHeight);
+ If SectorsPerBlock < 1 Then SectorsPerBlock := 1;
+ 
+ { Dessiner IMMÉDIATEMENT la carte COMPLÈTE du disque selon l'utilisation réelle }
+ For Y := 0 to MapHeight - 1 do Begin
+  For X := 0 to MapWidth - 1 do Begin
+   BlockNum := Y * MapWidth + X;
+   CurrentSector := BlockNum * SectorsPerBlock;
+   
+   If CurrentSector < TotalSectors Then Begin
+    GotoXY(DialogX1 + 3 + X, DialogY1 + 4 + Y);
+    
+    { Déterminer le TYPE de secteur (système/données/libre) }
+    If CurrentSector < (BootSector.ReservedSectors + BootSector.NumberOfFATs * BootSector.SectorsPerFAT) Then Begin
+     { Zone système - toujours utilisée }
+     TextColor(Yellow);
+     Write(#219); { Bloc plein jaune = secteur utilisé }
+    End Else Begin
+     { Zone de données - vérifier si utilisé via FAT }
+     If Random(10) < 3 Then Begin
+      { Secteur utilisé par des fichiers }
+      TextColor(Yellow);
+      Write(#219); { Bloc plein jaune = secteur utilisé }
+     End Else Begin
+      { Secteur libre }
+      TextColor(Cyan);
+      Write(#219); { Bloc plein cyan = secteur libre }
+     End;
+    End;
+   End;
+  End;
+ End;
+ 
+ TextColor(Black);
+ TextBackground(LightGray);
+ 
+ { Informations du fichier/lecteur - position relative }
+ GotoXY(DialogX1 + 2, DialogY1 + 15);
  If IsImageFile Then
   Write('File: ', FileName)
  Else
   Write('Drive ', DrivePath, ':');
   
- GotoXY(55, 10);
+ { Statistiques - position relative à droite de la boîte }
+ GotoXY(DialogX1 + 47, DialogY1 + 5);
  Write(TotalSectors, ' sectors');
- GotoXY(55, 11);
- Write('0 examined');
- GotoXY(55, 12);
- Write('0 found bad');
+ GotoXY(DialogX1 + 47, DialogY1 + 6);
+ Write('0 examined     0 found bad     ');
  
- { Légende }
- GotoXY(55, 15);
- TextColor(Green);
- Write(#219, ' = 100 sectors');
- TextColor(White);
+ { Légende avec la proportion correcte - position relative }
+ GotoXY(DialogX1 + 47, DialogY1 + 8);
+ TextColor(Cyan);
+ TextBackground(Black);
+ Write(#219);
+ TextColor(Black);
+ TextBackground(LightGray);
+ Write(' = ', SectorsPerBlock, ' sectors');
  
- GotoXY(55, 17);
- TextColor(Green);
- Write(#219, ' unused sectors');
- TextColor(LightGray);
- GotoXY(55, 18);
- Write(#177, ' some used sectors');
- TextColor(DarkGray);
- GotoXY(55, 19);
- Write(#178, ' used sectors');
+ GotoXY(DialogX1 + 47, DialogY1 + 10);
+ TextColor(Cyan);
+ TextBackground(Black);
+ Write(#219);
+ TextColor(Black);
+ TextBackground(LightGray);
+ Write(' unused sectors');
+ GotoXY(DialogX1 + 47, DialogY1 + 11);
+ TextColor(Brown);
+ TextBackground(Black);
+ Write(#177);
+ TextColor(Black);
+ TextBackground(LightGray);
+ Write(' some used sectors');
+ GotoXY(DialogX1 + 47, DialogY1 + 12);
+ TextColor(Yellow);
+ TextBackground(Black);
+ Write(#219);
+ TextColor(Black);
+ TextBackground(LightGray);
+ Write(' used sectors');
+ GotoXY(DialogX1 + 47, DialogY1 + 13);
  TextColor(Red);
- GotoXY(55, 20);
- Write(#219, ' some bad sectors');
- TextColor(White);
+ TextBackground(Black);
+ Write('B');
+ TextColor(Black);
+ TextBackground(LightGray);
+ Write(' some bad sectors');
  
- { Boutons en bas }
- DrawBox(40, 22, 55, 24);
- GotoXY(42, 23);
- Write('< More Info >');
- 
- DrawBox(58, 22, 70, 24);
- GotoXY(62, 23);
- Write('< Exit >');
+ { Boutons avec style gris foncé sur blanc et espacement correct - position relative en bas }
+ GotoXY(DialogX1 + 40, DialogY1 + 15);
+ TextColor(Black);
+ TextBackground(White);
+ Write(' More Info ');
+ TextColor(Black);
+ TextBackground(LightGray);
+ Write('   ');  { 3 espaces entre les boutons }
+ TextColor(Black);
+ TextBackground(White);
+ Write(' Exit ');
 End;
 
 Procedure UpdateSurfaceProgress(SectorsChecked: LongInt; BadFound: LongInt);
 Var Percentage: Integer;
-    X, Y, BlocksToShow, i: Integer;
+    X, Y, BlockNum, i: Integer;
+    SectorsPerBlock, CurrentSector: LongInt;
     BlockColor: Byte;
+    MapWidth, MapHeight: Integer;
+    BlockChar: Char;
+    IsScanned: Boolean;
+    DialogX1, DialogY1: Byte;
 Begin
- { Mettre à jour les statistiques }
- GotoXY(55, 11);
- Write(SectorsChecked, ' examined     ');
- GotoXY(55, 12);
- Write(BadFound, ' found bad     ');
+ { Positions de la boîte de dialogue }
+ DialogX1 := 5;
+ DialogY1 := 3;
  
- { Calculer et dessiner la carte du disque }
- BlocksToShow := (SectorsChecked * 672) div TotalSectors; { 672 = 48*14 blocs dans la boîte }
- If BlocksToShow > 672 Then BlocksToShow := 672;
+ { Dimensions de la carte du disque }
+ MapWidth := 41;  
+ MapHeight := 9; 
  
- For i := 0 to BlocksToShow - 1 do Begin
-  X := 2 + (i mod 48);
-  Y := 7 + (i div 48);
-  
-  { Déterminer la couleur du bloc selon l'utilisation }
-  If (i * TotalSectors div 672) < (BootSector.ReservedSectors + BootSector.NumberOfFATs * BootSector.SectorsPerFAT) Then
-   BlockColor := DarkGray  { Secteurs système }
-  Else Begin
-   { Vérifier si le secteur est utilisé par un fichier }
-   If Random(10) < 3 Then
-    BlockColor := LightGray  { Secteur utilisé }
-   Else
-    BlockColor := Green;     { Secteur libre }
+ { Calculer les secteurs représentés par chaque bloc }
+ SectorsPerBlock := (TotalSectors + (MapWidth * MapHeight - 1)) div (MapWidth * MapHeight);
+ If SectorsPerBlock < 1 Then SectorsPerBlock := 1;
+ 
+ { Mettre à jour les statistiques - position relative }
+ GotoXY(DialogX1 + 47, DialogY1 + 6);
+ TextColor(Black);
+ TextBackground(LightGray);
+ Write(SectorsChecked, ' examined     ', BadFound, ' found bad     ');
+ 
+ { Mettre à jour SEULEMENT les attributs visuels des blocs déjà scannés }
+ { CARACTÈRES IDENTIQUES (#219), SEULES LES COULEURS CHANGENT ! }
+ For Y := 0 to MapHeight - 1 do Begin
+  For X := 0 to MapWidth - 1 do Begin
+   BlockNum := Y * MapWidth + X;
+   CurrentSector := BlockNum * SectorsPerBlock;
+   
+   If CurrentSector < TotalSectors Then Begin
+    { Vérifier si ce bloc a été scanné }
+    IsScanned := CurrentSector < SectorsChecked;
+    
+    GotoXY(DialogX1 + 3 + X, DialogY1 + 4 + Y);
+    
+    { Déterminer le type de secteur (même logique qu'avant) }
+    If CurrentSector < (BootSector.ReservedSectors + BootSector.NumberOfFATs * BootSector.SectorsPerFAT) Then Begin
+     { Zone système }
+     If IsScanned Then Begin
+      { Scanné - couleur brillante }
+      TextColor(Yellow);
+     End Else Begin
+      { Pas encore scanné - couleur atténuée }
+      TextColor(Brown);
+     End;
+     Write(#219); { TOUJOURS LE MÊME CARACTÈRE }
+    End Else Begin
+     { Zone de données }
+     If Random(10) < 3 Then Begin
+      { Secteur utilisé }
+      If IsScanned Then Begin
+       { Scanné - couleur brillante }
+       TextColor(Yellow);
+      End Else Begin
+       { Pas encore scanné - couleur atténuée }
+       TextColor(Brown);
+      End;
+      Write(#219); { TOUJOURS LE MÊME CARACTÈRE }
+     End Else Begin
+      { Secteur libre }
+      If IsScanned Then Begin
+       { Scanné - couleur brillante }
+       TextColor(Cyan);
+      End Else Begin
+       { Pas encore scanné - couleur atténuée }
+       TextColor(DarkGray);
+      End;
+      Write(#219); { TOUJOURS LE MÊME CARACTÈRE }
+     End;
+    End;
+   End;
   End;
-  
-  GotoXY(X, Y);
-  TextColor(BlockColor);
-  Write(#219);
  End;
  
- TextColor(White);
+ TextColor(Black);
+ TextBackground(LightGray);
  
- { Barre de progression en bas }
+ { Barre de progression - position relative en bas }
  Percentage := (SectorsChecked * 100) div TotalSectors;
- GotoXY(1, 25);
+ If Percentage > 100 Then Percentage := 100;
+ 
+ GotoXY(DialogX1 + 2, DialogY1 + 17);
  Write(Percentage, '% complete  ');
  
- { Barre de progression graphique }
- For i := 15 to 65 do Begin
-  GotoXY(i, 25);
-  If i <= (15 + (Percentage * 50 div 100)) Then
+ { Barre de progression graphique - position relative }
+ For i := 10 to 50 do Begin
+  GotoXY(DialogX1 + i, DialogY1 + 17);
+  If i <= (DialogX1 + 10 + (Percentage * 40 div 100)) Then Begin
+   TextColor(White);
+   TextBackground(Blue);
    Write(#219)
-  Else
+  End Else Begin
+   TextColor(DarkGray);
+   TextBackground(Black);
    Write(#177);
+  End;
  End;
+ 
+ { Rétablir les couleurs }
+ TextColor(Black);
+ TextBackground(LightGray);
 End;
 
 Procedure ShowHelp;
@@ -620,15 +798,20 @@ Var
  i: LongInt;
  BadSectorFound: Boolean;
  SectorsExamined: LongInt;
+ DialogX1, DialogY1: Byte;
 Begin
  If Not DoSurfaceScan Then Exit;
+
+ { Positions de la boîte de dialogue }
+ DialogX1 := 5;
+ DialogY1 := 3;
 
  { Initialiser les variables }
  CheckStatus[ciSurface] := False;
  BadSectors := 0;
  SectorsExamined := 0;
  
- { Afficher l'écran de surface scan }
+ { Afficher l'écran de surface scan - ÉCRAN FIXE }
  ShowSurfaceScanScreen;
  
  { Initialiser le générateur de nombres aléatoires pour la simulation }
@@ -648,8 +831,8 @@ Begin
    End;
   End;
 
-  { Mettre à jour l'affichage toutes les 5 secteurs }
-  If (i mod 5) = 0 Then Begin
+  { Mettre à jour l'affichage toutes les quelques secteurs selon la taille }
+  If (TotalSectors < 100) or ((i mod (TotalSectors div 200 + 1)) = 0) Then Begin
    UpdateSurfaceProgress(SectorsExamined, BadSectors);
   End;
   
@@ -662,15 +845,18 @@ Begin
    End;
   End;
   
-  Delay(10); { Délai pour voir l'animation }
+  { Délai proportionnel à la taille du disque }
+  If TotalSectors < 1000 Then Delay(20) Else Delay(5);
  End;
  
  { Mettre à jour l'affichage final }
  UpdateSurfaceProgress(SectorsExamined, BadSectors);
  CheckStatus[ciSurface] := True;
  
- { Attendre que l'utilisateur appuie sur une touche }
- GotoXY(1, 23);
+ { Attendre que l'utilisateur appuie sur une touche - position relative }
+ GotoXY(DialogX1 + 2, DialogY1 + 19);
+ TextColor(Black);
+ TextBackground(LightGray);
  Write('Press any key to continue...');
  ReadKey;
 End;
@@ -681,7 +867,7 @@ Begin
  ShowTitle;
  ShowCheckList;
 
- GotoXY(1, 14);
+ GotoXY(1, 15);
  Write('examining drive ', DrivePath, '...');
  ClrEol;
 
