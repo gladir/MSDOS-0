@@ -7,6 +7,7 @@
 Program SCANDISK;
 
 {$A-}
+{$M 65520,0, 100000}
 
 Uses DOS,Crt;
 
@@ -47,7 +48,7 @@ Type
  TCheckItem = (ciMedia, ciFAT, ciDirectory, ciFileSystem, ciFreeSpace, ciSurface);
 
 Var
- Language: (_French, _English, _Germany, _Italian, _Spain);
+ Language:(_French,_English,_Germany,_Italian,_Spain,_Albanian,_Portuguese,_Swedish,_Danish,_Japanese);
  TmpLanguage, DrivePath, FileName: String;
  BootSector: TBootSector;
  FAT: Array[0..8191] of Word;
@@ -208,10 +209,17 @@ Var i: TCheckItem;
     CheckMark: Char;
 Begin
  GotoXY(1, 4);
- If IsImageFile Then
-  Write('ScanDisk is now checking the following areas of file ', FileName, ':')
- Else
-  Write('ScanDisk is now checking the following areas of drive ', DrivePath, ':');
+ If IsImageFile Then Begin
+  Case(Language)of
+   _English:Write('ScanDisk is now checking the following areas of file ', FileName, ':');
+   Else Write('ScanDisk vérifie maintenant les zones suivantes du fichier ', FileName, ' :');
+  End;
+ End Else Begin
+  Case(Language)of
+   _English:Write('ScanDisk is now checking the following areas of drive ', DrivePath, ':');
+   Else Write('ScanDisk vérifie maintenant les zones suivantes du lecteur ', DrivePath, ' :');
+  End;
+ End;
  { Effacer le reste de la ligne }
  ClrEol;
  For i := ciMedia to ciSurface do Begin
@@ -229,22 +237,37 @@ Begin
    ciFAT: Begin
     GotoXY(1, 7);
     Write('   ', CheckMark, '    ');
-    Write('File allocation tables');
+    Case(Language)of
+     _English:Write('File allocation tables');
+     Else Write('Table d''allocation de fichiers');
+    End;
     ClrEol;
    End;
    ciDirectory: Begin
     GotoXY(1, 8);
-    Write('   ', CheckMark, '    Directory structure');
+    Write('   ', CheckMark, '    ');
+    Case(Language)of
+     _English:Write('Directory structure');
+     Else Write('Structure de répertoire');
+    End;
     ClrEol;
    End;
    ciFileSystem: Begin
     GotoXY(1, 9);
-    Write('   ', CheckMark, '    File system');
+    Write('   ', CheckMark, '    ');
+    Case(Language)of
+     _English:Write('File system');
+     Else Write('Système de fichiers');
+    End;
     ClrEol;
    End;
    ciFreeSpace: Begin
     GotoXY(1, 10);
-    Write('   ', CheckMark, '    Free space');
+    Write('   ', CheckMark, '    ');
+    Case(Language)of
+     _English:Write('Free space');
+     Else Write('Espace libre');
+    End;
     ClrEol;
    End;
    ciSurface: Begin
@@ -253,7 +276,10 @@ Begin
     If CheckStatus[ciSurface] Then Write(#251)
     Else If DoSurfaceScan Then Write(#16)
     Else Write(' ');
-    Write('    Surface scan');
+    Case(Language)of
+     _English:Write('    Surface scan');
+     Else Write('    Balayage de surface');
+    End;
     ClrEol;
    End;
   End;
@@ -357,7 +383,10 @@ Begin
  ShowTitle;
  ShowCheckList;
  GotoXY(1, 24);
- Write('examining drive ', DrivePath, '...');
+ Case(Language)of
+  _English:Write('examining drive ', DrivePath, '...');
+  Else Write('examen du lecteur ', DrivePath, '...');
+ End;
  ClrEol;
 End;
 
@@ -391,7 +420,10 @@ Begin
  GotoXY(DialogX1 + 30, DialogY1);
  TextColor(White);
  TextBackground(LightGray);
- Write('Surface Scan');
+ Case(Language)of
+  _English:Write('Surface Scan');
+  Else Write('Balayage Surface');
+ End;
  { Calculer les secteurs par bloc selon la taille totale }
  SectorsPerBlock := (TotalSectors + (MapWidth * MapHeight - 1)) div (MapWidth * MapHeight);
  If SectorsPerBlock < 1 Then SectorsPerBlock := 1;
@@ -426,15 +458,33 @@ Begin
  TextBackground(LightGray);
  { Informations du fichier/lecteur - position relative }
  GotoXY(DialogX1 + 47, DialogY1 + 2);
- If IsImageFile Then Write('File: ', FileName)
-                Else Write('Drive ', DrivePath, ':');
+ If IsImageFile Then Begin
+  Case(Language)of
+   _English:Write('File: ', FileName);
+   Else Write('Fichier : ', FileName);
+  End;
+ End Else Begin
+  Case(Language)of
+   _English:Write('Drive ', DrivePath, ':');
+   Else Write('Lecteur ', DrivePath, ' :');
+  End;
+ End;
  { Statistiques - position relative à droite de la boîte }
  GotoXY(DialogX1 + 47, DialogY1 + 5);
- Write(TotalSectors, ' sectors');
+ Case(Language)of
+  _English:Write(TotalSectors, ' sectors');
+  Else Write(TotalSectors, ' secteurs');
+ End;
  GotoXY(DialogX1 + 47, DialogY1 + 6);
- Write('0 examined');
+ Case(Language)of
+  _English:Write('0 examined');
+  Else Write('0 examinés');
+ End;
  GotoXY(DialogX1 + 47, DialogY1 + 7);
- Write('0 found bad');
+ Case(Language)of
+  _English:Write('0 found bad');
+  Else Write('0 défectueux');
+ End;
   { Légende avec la proportion correcte - position relative }
  GotoXY(DialogX1 + 47, DialogY1 + 8);
  TextColor(Cyan);
@@ -442,39 +492,63 @@ Begin
  Write(#176);
  TextColor(Black);
  TextBackground(LightGray);
- Write(' = ', SectorsPerBlock, ' sectors');
+ Case(Language)of
+  _English:Write(' = ', SectorsPerBlock, ' sectors');
+  Else Write(' = ', SectorsPerBlock, ' secteurs');
+ End;
  GotoXY(DialogX1 + 47, DialogY1 + 10);
  TextColor(Cyan);
  TextBackground(Black);
  Write(#176);
  TextColor(Black);
  TextBackground(LightGray);
- Write(' unused sectors');
+ Case(Language)of
+  _English:Write(' unused sectors');
+  Else Write(' secteurs libres');
+ End;
  GotoXY(DialogX1 + 47, DialogY1 + 11);
  TextColor(Brown);
  TextBackground(Black);
  Write(#177);
  TextColor(Black);
  TextBackground(LightGray);
- Write(' some used sectors');
+ Case(Language)of
+  _English:Write(' some used sectors');
+  Else Write(' secteurs partiellement utilisés');
+ End;
  GotoXY(DialogX1 + 47, DialogY1 + 12);
  TextColor(Yellow);
  TextBackground(Black);
  Write(#254);
  TextColor(Black);
  TextBackground(LightGray);
- Write(' used sectors');
+ Case(Language)of
+  _English:Write(' used sectors');
+  Else Write(' secteurs utilisés');
+ End;
  GotoXY(DialogX1 + 47, DialogY1 + 13);
  TextColor(Red);
  TextBackground(Black);
  Write('B');
  TextColor(Black);
  TextBackground(LightGray);
- Write(' some bad sectors');
+ Case(Language)of
+  _English:Write(' some bad sectors');
+  Else Write(' secteurs défectueux');
+ End;
  GotoXY(DialogX1 + 20, DialogY1 + 17);
- ShowButton('More Info',True);
- Write('   ');
- ShowButton('Exit',False);
+ Case(Language)of
+  _English:Begin
+   ShowButton('More Info',True);
+   Write('   ');
+   ShowButton('Exit',False);
+  End;
+  Else Begin
+   ShowButton('Plus Info',True);
+   Write('   ');
+   ShowButton('Quitter',False);
+  End;
+ End;
 End;
 
 Procedure UpdateSurfaceProgress(SectorsChecked: LongInt; BadFound: LongInt);
@@ -497,9 +571,15 @@ Begin
  GotoXY(DialogX1 + 47, DialogY1 + 7);
  TextColor(Black);
  TextBackground(LightGray);
- Write(SectorsChecked, ' examined     ');
+ Case(Language)of
+  _English:Write(SectorsChecked, ' examined     ');
+  Else Write(SectorsChecked, ' examinés     ');
+ End;
  GotoXY(DialogX1 + 47, DialogY1 + 8);
- Write(BadFound, ' found bad     ');
+ Case(Language)of
+  _English:Write(BadFound, ' found bad     ');
+  Else Write(BadFound, ' défectueux     ');
+ End;
  { Mettre à jour SEULEMENT les attributs visuels des blocs déjà scannés }
  For Y := 0 to MapHeight - 1 do Begin
   For X := 0 to MapWidth - 1 do Begin
@@ -560,7 +640,10 @@ Begin
  Percentage := (SectorsChecked * 100) div TotalSectors;
  If Percentage > 100 Then Percentage := 100;
  GotoXY(1, 24);
- Write(Percentage, '% complete  ');
+ Case(Language)of
+  _English:Write(Percentage, '% complete  ');
+  Else Write(Percentage, '% terminé  ');
+ End;
   { Barre de progression graphique }
  For i := 15 to 65 do Begin
   GotoXY(i, 24);
@@ -614,17 +697,17 @@ Begin
  Regs.AH := $19;
  Intr($21, Regs);
  OldDrive := Regs.AL;
- 
+
  { Essayer de changer vers le lecteur }
  Regs.AH := $0E;
  Regs.DL := Ord(UpCase(Drive)) - Ord('A');
  Intr($21, Regs);
- 
+
  { Vérifier si le changement a réussi }
  Regs.AH := $19;
  Intr($21, Regs);
  DriveExists := Regs.AL = (Ord(UpCase(Drive)) - Ord('A'));
- 
+
  { Restaurer le lecteur original }
  Regs.AH := $0E;
  Regs.DL := OldDrive;
@@ -645,31 +728,34 @@ Begin
  DriveAvailable[1] := DriveExists('B'); { B: }
  DriveAvailable[2] := DriveExists('C'); { C: }
  DriveAvailable[3] := DriveExists('D'); { D: }
- 
+
  DriveCount := 0;
  For i := 0 to 3 do
   If DriveAvailable[i] Then Inc(DriveCount);
- 
+
  If DriveCount = 0 Then Begin
-  ShowDialog('Error', 'No drives available', False);
+  Case(Language)of
+   _English:ShowDialog('Error', 'No drives available', False);
+   Else ShowDialog('Erreur', 'Aucun lecteur disponible', False);
+  End;
   SelectDrive := '';
   Exit;
  End;
- 
+
  SelectedDrive := 2; { Commencer avec C: par défaut }
  While Not DriveAvailable[SelectedDrive] do
   SelectedDrive := (SelectedDrive + 1) mod 4;
- 
+
  Repeat
   ClrScr;
   ShowTitle;
-  
+
   GotoXY(1, 4);
   Case Language of
    _English: Write('Select the drive you want to check:');
    Else Write('Sélectionnez le lecteur que vous voulez vérifier :');
   End;
-  
+
   { Afficher les lecteurs disponibles }
   For i := 0 to 3 do Begin
    If DriveAvailable[i] Then Begin
@@ -692,7 +778,7 @@ Begin
     ClrEol;
    End;
   End;
-  
+
   GotoXY(1, 15);
   Case Language of
    _English: Begin
@@ -702,7 +788,7 @@ Begin
     Write('Utilisez les flèches ↑↓ pour sélectionner, Entrée pour continuer, Échap pour quitter');
    End;
   End;
-  
+
   Key := ReadKey;
   Case Key of
    #0: Begin { Touche étendue }
@@ -807,12 +893,18 @@ Function ReadBootSector:Boolean;Begin
   If TotalSectors = 0 Then TotalSectors := BootSector.TotalSectorsBig;
    { Vérifications de sanité }
   If (BootSector.SectorsPerFAT = 0) or (BootSector.SectorsPerFAT > 255) Then Begin
-   ShowDialog('Error', 'Invalid sectors per FAT: ' + IntToStr(BootSector.SectorsPerFAT), False);
+   Case(Language)of
+    _English:ShowDialog('Error', 'Invalid sectors per FAT: ' + IntToStr(BootSector.SectorsPerFAT), False);
+    Else ShowDialog('Erreur', 'Secteurs par FAT invalide : ' + IntToStr(BootSector.SectorsPerFAT), False);
+   End;
    ReadBootSector := False;
    Exit;
   End;
   If (BootSector.BytesPerSector <> 512) Then Begin
-   ShowDialog('Error', 'Unsupported sector size: ' + IntToStr(BootSector.BytesPerSector), False);
+   Case(Language)of
+    _English:ShowDialog('Error', 'Unsupported sector size: ' + IntToStr(BootSector.BytesPerSector), False);
+    Else ShowDialog('Erreur', 'Taille de secteur non supportée : ' + IntToStr(BootSector.BytesPerSector), False);
+   End;
    ReadBootSector := False;
    Exit;
   End;
@@ -852,24 +944,28 @@ Var
  FATMismatch: Boolean;
 Begin
  CheckStatus[ciMedia] := False;
- 
+
  { Vérifier d'abord le descripteur de média }
  If BootSector.MediaDescriptor <> $F0 Then Begin { $F0 = disquette HD, $F8 = disque dur }
   If BootSector.MediaDescriptor <> $F8 Then Begin
    Inc(ErrorsFound);
    If Not CheckOnly Then Begin
-    ShowDialog('Media Error', 'Invalid media descriptor: $' + 
-               IntToStr(BootSector.MediaDescriptor), False);
+    Case(Language)of
+     _English:ShowDialog('Media Error', 'Invalid media descriptor: $' +
+                IntToStr(BootSector.MediaDescriptor), False);
+     Else ShowDialog('Erreur média', 'Descripteur de média invalide : $' +
+                IntToStr(BootSector.MediaDescriptor), False);
+    End;
    End;
   End;
  End;
- 
+
  { Vérifier que les deux copies de la FAT sont identiques }
  If BootSector.NumberOfFATs >= 2 Then Begin
   FATMismatch := False;
   MaxFATEntries := High(FAT2) + 1;
   MaxSectors := MaxFATEntries div 256;
-  
+
   { Lire la deuxième FAT }
   For i := 0 to Min(BootSector.SectorsPerFAT - 1, MaxSectors - 1) do Begin
    If ReadSector(BootSector.ReservedSectors + BootSector.SectorsPerFAT + i) Then Begin
@@ -885,7 +981,7 @@ Begin
     Exit;
    End;
   End;
-  
+
   { Comparer les deux FATs }
   For i := 0 to Min(High(FAT), High(FAT2)) do Begin
    If FAT[i] <> FAT2[i] Then Begin
@@ -894,7 +990,7 @@ Begin
     Break;
    End;
   End;
-  
+
   If FATMismatch Then Begin
    If AutoFix Then Begin
     { Réparer en copiant la première FAT sur la deuxième }
@@ -911,16 +1007,22 @@ Begin
      End;
      { Écrire le secteur corrigé dans la deuxième FAT }
      If Not WriteSector(BootSector.ReservedSectors + BootSector.SectorsPerFAT + i) Then Begin
-      ShowDialog('Write Error', 'Cannot write corrected FAT sector', False);
+      Case(Language)of
+       _English:ShowDialog('Write Error', 'Cannot write corrected FAT sector', False);
+       Else ShowDialog('Erreur d''écriture', 'Impossible d''écrire le secteur FAT corrigé', False);
+      End;
       Exit;
      End;
     End;
    End Else Begin
-    ShowDialog('FAT Error', 'FAT copies are inconsistent. Use /AUTOFIX to repair.', False);
+    Case(Language)of
+     _English:ShowDialog('FAT Error', 'FAT copies are inconsistent. Use /AUTOFIX to repair.', False);
+     Else ShowDialog('Erreur FAT', 'Les copies de FAT sont incohérentes. Utilisez /AUTOFIX pour réparer.', False);
+    End;
    End;
   End;
  End;
- 
+
  { Vérifier les entrées spéciales de la FAT }
  If High(FAT) >= 1 Then Begin
   { Les deux premières entrées doivent avoir des valeurs spéciales }
@@ -929,20 +1031,26 @@ Begin
    If AutoFix Then Begin
     FAT[0] := $0F00 or BootSector.MediaDescriptor;
    End Else Begin
-    ShowDialog('FAT Error', 'Invalid FAT[0] entry', False);
+    Case(Language)of
+     _English:ShowDialog('FAT Error', 'Invalid FAT[0] entry', False);
+     Else ShowDialog('Erreur FAT', 'Entrée FAT[0] invalide', False);
+    End;
    End;
   End;
-  
+
   If (FAT[1] and $0FFF) <> $0FFF Then Begin
    Inc(ErrorsFound);
    If AutoFix Then Begin
     FAT[1] := $0FFF;
    End Else Begin
-    ShowDialog('FAT Error', 'Invalid FAT[1] entry', False);
+    Case(Language)of
+     _English:ShowDialog('FAT Error', 'Invalid FAT[1] entry', False);
+     Else ShowDialog('Erreur FAT', 'Entrée FAT[1] invalide', False);
+    End;
    End;
   End;
  End;
- 
+
  { Vérifier les chaînes de clusters pour détecter les boucles infinies }
  For i := 2 to High(FAT) do Begin
   If (FAT[i] <> 0) and (FAT[i] < $FF8) Then Begin
@@ -951,20 +1059,26 @@ Begin
    While (NextCluster < $FF8) and (NextCluster <> 0) and (j < 1000) do Begin
     If NextCluster > High(FAT) Then Begin
      Inc(ErrorsFound);
-     ShowDialog('FAT Error', 'Invalid cluster chain at cluster ' + IntToStr(i), False);
+     Case(Language)of
+      _English:ShowDialog('FAT Error', 'Invalid cluster chain at cluster ' + IntToStr(i), False);
+      Else ShowDialog('Erreur FAT', 'Chaîne de cluster invalide au cluster ' + IntToStr(i), False);
+     End;
      Break;
     End;
     NextCluster := FAT[NextCluster];
     Inc(j);
    End;
-   
+
    If j >= 1000 Then Begin
     Inc(ErrorsFound);
-    ShowDialog('FAT Error', 'Infinite loop detected in cluster chain starting at cluster ' + IntToStr(i), False);
+    Case(Language)of
+     _English:ShowDialog('FAT Error', 'Infinite loop detected in cluster chain starting at cluster ' + IntToStr(i), False);
+     Else ShowDialog('Erreur FAT', 'Boucle infinie détectée dans la chaîne de cluster commençant au cluster ' + IntToStr(i), False);
+    End;
    End;
   End;
  End;
- 
+
  CheckStatus[ciMedia] := True;
 End;
 
@@ -1106,7 +1220,10 @@ Begin
  TextBackground(Blue);
  TextColor(White);
  GotoXY(20, 24);
- Write('Press any key to continue...');
+ Case(Language)of
+  _English:Write('Press any key to continue...');
+  Else Write('Appuyez sur une touche pour continuer...');
+ End;
  ReadKey;
 End;
 
@@ -1115,7 +1232,10 @@ Procedure PerformChecks;Begin
  ShowTitle;
  ShowCheckList;
  GotoXY(1, 24);
- Write('examining drive ', DrivePath, '...');
+ Case(Language)of
+  _English:Write('examining drive ', DrivePath, '...');
+  Else Write('examen du lecteur ', DrivePath, '...');
+ End;
  ClrEol;
  { Effectuer les vérifications une par une avec mise à jour en place }
  CheckStatus[ciMedia] := False;
@@ -1194,12 +1314,22 @@ BEGIN
   { Initialisation }
  Language := _French;
  TmpLanguage := GetEnv('LANGUAGE');
- If TmpLanguage <> '' Then Begin
-  If TmpLanguage[1] = '"' Then TmpLanguage := Copy(TmpLanguage, 2, 255);
-  If StrToUpper(Copy(TmpLanguage, 1, 2)) = 'EN' Then Language := _English Else
-  If StrToUpper(Copy(TmpLanguage, 1, 2)) = 'GR' Then Language := _Germany Else
-  If StrToUpper(Copy(TmpLanguage, 1, 2)) = 'IT' Then Language := _Italian Else
-  If StrToUpper(Copy(TmpLanguage, 1, 2)) = 'SP' Then Language := _Spain;
+If TmpLanguage<>''Then Begin
+  If TmpLanguage[1]='"'Then TmpLanguage:=Copy(TmpLanguage,2,255);
+  If StrToUpper(Copy(TmpLanguage,1,2))='EN'Then Language:=_English Else
+  If StrToUpper(Copy(TmpLanguage,1,2))='GR'Then Language:=_Germany Else
+  If StrToUpper(Copy(TmpLanguage,1,2))='IT'Then Language:=_Italian Else
+  If StrToUpper(Copy(TmpLanguage,1,2))='SP'Then Language:=_Spain Else
+  If(StrToUpper(Copy(TmpLanguage,1,2))='SQ')or
+    (StrToUpper(Copy(TmpLanguage,1,3))='ALB')Then Language:=_Albanian Else
+  If(StrToUpper(Copy(TmpLanguage,1,2))='PT')or
+    (StrToUpper(Copy(TmpLanguage,1,3))='PRT')Then Language:=_Portuguese Else
+  If(StrToUpper(Copy(TmpLanguage,1,2))='SE')or
+    (StrToUpper(Copy(TmpLanguage,1,3))='SWE')Then Language:=_Swedish Else
+  If(StrToUpper(Copy(TmpLanguage,1,2))='DK')or
+    (StrToUpper(Copy(TmpLanguage,1,3))='DNK')Then Language:=_Danish Else
+  If(StrToUpper(Copy(TmpLanguage,1,2))='JP')or
+    (StrToUpper(Copy(TmpLanguage,1,3))='JPN')Then Language:=_Japanese;
  End;
   { Vérification des paramètres d'aide }
  If (ParamStr(1) = '/?') or (ParamStr(1) = '--help') or (ParamStr(1) = '-h') or
@@ -1231,11 +1361,11 @@ BEGIN
   End;
   Halt;
  End;
- 
+
  { Setup de l'interface graphique }
  CursorOff;
  SetupColors;
- 
+
  { Si aucun paramètre, permettre la sélection d'un lecteur }
  If ParamCount = 0 Then Begin
   DrivePath := SelectDrive;
@@ -1269,7 +1399,10 @@ BEGIN
    'C': DriveNum := $80;
    'D': DriveNum := $81;
    Else Begin
-    ShowDialog('Error', 'Unsupported drive: ' + DrivePath, False);
+    Case(Language)of
+     _English:ShowDialog('Error', 'Unsupported drive: ' + DrivePath, False);
+     Else ShowDialog('Erreur', 'Lecteur non supporté : ' + DrivePath, False);
+    End;
     Halt(1);
    End;
   End;
@@ -1284,7 +1417,10 @@ BEGIN
   Reset(FileHandle, 1);
   {$I+}
   If IOResult <> 0 Then Begin
-   ShowDialog('Error', 'Cannot open file: ' + FileName, False);
+   Case(Language)of
+    _English:ShowDialog('Error', 'Cannot open file: ' + FileName, False);
+    Else ShowDialog('Erreur', 'Impossible d''ouvrir le fichier : ' + FileName, False);
+   End;
    Halt(1);
   End;
  End;
@@ -1299,7 +1435,10 @@ BEGIN
  ErrorsFound := 0;
   { Lecture du secteur de boot }
  If Not ReadBootSector Then Begin
-  ShowDialog('Error', 'Cannot read boot sector', False);
+  Case(Language)of
+   _English:ShowDialog('Error', 'Cannot read boot sector', False);
+   Else ShowDialog('Erreur', 'Impossible de lire le secteur de boot', False);
+  End;
   If IsImageFile Then Close(FileHandle);
   Halt(1);
  End;
