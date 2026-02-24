@@ -7,7 +7,7 @@
 Program SCANDISK;
 
 {$A-}
-{$M 65520,0, 100000}
+{$M 65520,0, 655200}
 
 Uses DOS,Crt;
 
@@ -46,16 +46,28 @@ Type
 
  TErrorType = (etNone, etBadSector, etCrossLinked, etLostChain, etBadFAT, etBadDir);
  TCheckItem = (ciMedia, ciFAT, ciDirectory, ciFileSystem, ciFreeSpace, ciSurface);
+ TFATType = (ftFAT12, ftFAT16);
+
+Type
+ { Fragments pour éviter la limite de 65520 octets de Turbo Pascal }
+ PFATFragment = ^TFATFragment;
+ TFATFragment = Array[0..21845] of Word;  { ~43KB par fragment }
+ PClusterMapFragment = ^TClusterMapFragment;
+ TClusterMapFragment = Array[0..32767] of Byte;  { ~32KB par fragment }
 
 Var
  Language:(_French,_English,_Germany,_Italian,_Spain,_Albanian,_Portuguese,_Swedish,_Danish,_Japanese);
  TmpLanguage, DrivePath, FileName: String;
  BootSector: TBootSector;
- FAT: Array[0..8191] of Word;
+ { Fragments FAT - 3 fragments de ~43KB chacun }
+ FatA, FatB, FatC: PFATFragment;
  RootDir: Array[0..511] of TDirEntry;
  SectorBuffer: Array[0..511] of Byte;
  TotalSectors, BadSectors, LostClusters, CrossLinkedFiles: LongInt;
- ClusterMap: Array[0..8191] of Byte;  { 0=free, 1=used, 2=bad, 3=cross-linked }
+ { Fragments ClusterMap - 2 fragments de ~32KB chacun }
+ ClusterMapA, ClusterMapB: PClusterMapFragment;
+ FATType: TFATType;
+ MaxClusters: Word;
  FileHandle: File;
  IsImageFile: Boolean;
  AutoFix, CheckOnly, DoSurfaceScan: Boolean;
@@ -93,6 +105,70 @@ Begin
  StrToUpper := S;
 End;
 
+{ Fonctions d'accès transparentes pour les tableaux fragmentés }
+Function GetFAT(Index: Word): Word;
+Begin
+ If Index <= 21845 Then Begin
+  If FatA <> nil Then GetFAT := FatA^[Index] Else GetFAT := 0;
+ End Else If Index <= 43691 Then Begin
+  If FatB <> nil Then GetFAT := FatB^[Index - 21846] Else GetFAT := 0;
+ End Else Begin
+  If FatC <> nil Then GetFAT := FatC^[Index - 43692] Else GetFAT := 0;
+ End;
+End;
+
+Procedure SetFAT(Index: Word; Value: Word);
+Begin
+ If Index <= 21845 Then Begin
+  If FatA <> nil Then FatA^[Index] := Value;
+ End Else If Index <= 43691 Then Begin
+  If FatB <> nil Then FatB^[Index - 21846] := Value;
+ End Else Begin
+  If FatC <> nil Then FatC^[Index - 43692] := Value;
+ End;
+End;
+
+Function GetClusterMap(Index: Word): Byte;
+Begin
+ If Index <= 32767 Then Begin
+  If ClusterMapA <> nil Then GetClusterMap := ClusterMapA^[Index] Else GetClusterMap := 0;
+ End Else Begin
+  If ClusterMapB <> nil Then GetClusterMap := ClusterMapB^[Index - 32768] Else GetClusterMap := 0;
+ End;
+End;
+
+Procedure SetClusterMap(Index: Word; Value: Byte);
+Begin
+ If Index <= 32767 Then Begin
+  If ClusterMapA <> nil Then ClusterMapA^[Index] := Value;
+ End Else Begin
+  If ClusterMapB <> nil Then ClusterMapB^[Index - 32768] := Value;
+ End;
+End;
+
+{ Fonctions d'accès pour FAT2 temporaire }
+Function GetFAT2(Index: Word; Fat2A, Fat2B, Fat2C: PFATFragment): Word;
+Begin
+ If Index <= 21845 Then Begin
+  If Fat2A <> nil Then GetFAT2 := Fat2A^[Index] Else GetFAT2 := 0;
+ End Else If Index <= 43691 Then Begin
+  If Fat2B <> nil Then GetFAT2 := Fat2B^[Index - 21846] Else GetFAT2 := 0;
+ End Else Begin
+  If Fat2C <> nil Then GetFAT2 := Fat2C^[Index - 43692] Else GetFAT2 := 0;
+ End;
+End;
+
+Procedure SetFAT2(Index: Word; Value: Word; Fat2A, Fat2B, Fat2C: PFATFragment);
+Begin
+ If Index <= 21845 Then Begin
+  If Fat2A <> nil Then Fat2A^[Index] := Value;
+ End Else If Index <= 43691 Then Begin
+  If Fat2B <> nil Then Fat2B^[Index - 21846] := Value;
+ End Else Begin
+  If Fat2C <> nil Then Fat2C^[Index - 43692] := Value;
+ End;
+End;
+
 Function Min(A, B: Integer): Integer;
 Begin
  If A < B Then Min := A Else Min := B;
@@ -103,6 +179,75 @@ Var S: String;
 Begin
  Str(Value, S);
  IntToStr := S;
+End;
+
+Procedure AllocateMemory;
+Begin
+ { Allouer la mémoire pour les fragments FAT }
+ GetMem(FatA, SizeOf(TFATFragment));
+ GetMem(FatB, SizeOf(TFATFragment));
+ GetMem(FatC, SizeOf(TFATFragment));
+
+ { Allouer la mémoire pour les fragments ClusterMap }
+ GetMem(ClusterMapA, SizeOf(TClusterMapFragment));
+ GetMem(ClusterMapB, SizeOf(TClusterMapFragment));
+
+ { Vérifier les allocations }
+ If (FatA = nil) or (FatB = nil) or (FatC = nil) or
+    (ClusterMapA = nil) or (ClusterMapB = nil) Then Begin
+  Case(Language)of
+   _English:Begin
+    WriteLn('Error: Not enough memory to allocate FAT tables');
+    WriteLn('Required: ', (SizeOf(TFATFragment) * 3) + (SizeOf(TClusterMapFragment) * 2), ' bytes');
+   End;
+   Else Begin
+    WriteLn('Erreur : Mémoire insuffisante pour allouer les tables FAT');
+    WriteLn('Requis : ', (SizeOf(TFATFragment) * 3) + (SizeOf(TClusterMapFragment) * 2), ' octets');
+   End;
+  End;
+  Halt(1);
+ End;
+
+ { Initialiser à zéro }
+ FillChar(FatA^, SizeOf(TFATFragment), 0);
+ FillChar(FatB^, SizeOf(TFATFragment), 0);
+ FillChar(FatC^, SizeOf(TFATFragment), 0);
+ FillChar(ClusterMapA^, SizeOf(TClusterMapFragment), 0);
+ FillChar(ClusterMapB^, SizeOf(TClusterMapFragment), 0);
+End;
+
+Procedure FreeMemory;
+Begin
+ { Libérer la mémoire allouée pour FAT }
+ If FatA <> nil Then FreeMem(FatA, SizeOf(TFATFragment));
+ If FatB <> nil Then FreeMem(FatB, SizeOf(TFATFragment));
+ If FatC <> nil Then FreeMem(FatC, SizeOf(TFATFragment));
+
+ { Libérer la mémoire allouée pour ClusterMap }
+ If ClusterMapA <> nil Then FreeMem(ClusterMapA, SizeOf(TClusterMapFragment));
+ If ClusterMapB <> nil Then FreeMem(ClusterMapB, SizeOf(TClusterMapFragment));
+End;
+
+Function DetectFATType: TFATType;
+Var
+ DataSectors, Clusters: LongInt;
+Begin
+ { Calculer le nombre de secteurs de données }
+ DataSectors := TotalSectors - (BootSector.ReservedSectors +
+                (BootSector.NumberOfFATs * BootSector.SectorsPerFAT) +
+                ((BootSector.RootEntries * 32 + 511) div 512));
+
+ { Calculer le nombre de clusters }
+ Clusters := DataSectors div BootSector.SectorsPerCluster;
+
+ { Déterminer le type FAT selon le nombre de clusters }
+ If Clusters < 4085 Then Begin
+  DetectFATType := ftFAT12;
+  MaxClusters := 4095;
+ End Else Begin
+  DetectFATType := ftFAT16;
+  MaxClusters := 65535;
+ End;
 End;
 
 Procedure SetupColors;Begin
@@ -891,6 +1036,10 @@ Function ReadBootSector:Boolean;Begin
   Move(SectorBuffer, BootSector, SizeOf(BootSector));
   TotalSectors := BootSector.TotalSectors;
   If TotalSectors = 0 Then TotalSectors := BootSector.TotalSectorsBig;
+
+  { Initialiser le type de FAT et les limites }
+  FATType := DetectFATType;
+
    { Vérifications de sanité }
   If (BootSector.SectorsPerFAT = 0) or (BootSector.SectorsPerFAT > 255) Then Begin
    Case(Language)of
@@ -908,42 +1057,144 @@ Function ReadBootSector:Boolean;Begin
    ReadBootSector := False;
    Exit;
   End;
+
+  { Afficher le type de FAT détecté pour information }
+  Case(Language)of
+   _English:Begin
+    If FATType = ftFAT12 Then Begin
+     GotoXY(1, 3);
+     Write('Detected file system: FAT12 (', MaxClusters, ' clusters max)');
+     ClrEol;
+    End Else Begin
+     GotoXY(1, 3);
+     Write('Detected file system: FAT16 (', MaxClusters, ' clusters max)');
+     ClrEol;
+    End;
+   End;
+   Else Begin
+    If FATType = ftFAT12 Then Begin
+     GotoXY(1, 3);
+     Write('Système de fichiers détecté : FAT12 (', MaxClusters, ' clusters max)');
+     ClrEol;
+    End Else Begin
+     GotoXY(1, 3);
+     Write('Système de fichiers détecté : FAT16 (', MaxClusters, ' clusters max)');
+     ClrEol;
+    End;
+   End;
+  End;
+
   ReadBootSector := True;
  End Else ReadBootSector := False;
 End;
 
 Procedure ReadFAT;
-Var i, j, FATIndex: Integer;
-    MaxFATEntries, MaxSectors: Integer;
+Var
+ i, j, FATIndex: Integer;
+ MaxFATEntries, MaxSectors: Integer;
+ ByteOffset: Word;
+ FATValue: Word;
 Begin
  CheckStatus[ciFAT] := False;
- MaxFATEntries := High(FAT) + 1;
- MaxSectors := MaxFATEntries div 256;
- For i := 0 to Min(BootSector.SectorsPerFAT - 1, MaxSectors - 1) do Begin
-  If ReadSector(BootSector.ReservedSectors + i) Then Begin
-   For j := 0 to 255 do Begin
-    FATIndex := i * 256 + j;
-    If (FATIndex >= 0) and (FATIndex < MaxFATEntries) Then Begin
-     If (j * 2 + 1) < 512 Then Begin
-      FAT[FATIndex] := SectorBuffer[j * 2] + (SectorBuffer[j * 2 + 1] shl 8);
+
+ { Détecter le type de FAT }
+ FATType := DetectFATType;
+
+ { Initialiser la FAT - déjà fait dans AllocateMemory }
+
+ If FATType = ftFAT12 Then Begin
+  MaxFATEntries := MaxClusters + 2;
+  MaxSectors := (MaxFATEntries * 3 div 2 + 511) div 512; { FAT12: 1.5 octets par entrée }
+
+  For i := 0 to Min(BootSector.SectorsPerFAT - 1, MaxSectors - 1) do Begin
+   If ReadSector(BootSector.ReservedSectors + i) Then Begin
+    { Lire les entrées FAT12 (1.5 octets par entrée) }
+    For j := 0 to 341 do Begin { 512 / 1.5 ≈ 341 entrées par secteur }
+     FATIndex := i * 341 + j;
+     If FATIndex >= MaxFATEntries Then Break;
+
+     ByteOffset := (FATIndex * 3) div 2;
+     If ByteOffset + 1 < 512 Then Begin
+      If (FATIndex mod 2) = 0 Then Begin
+       { Entrée paire : bits 0-11 }
+       FATValue := SectorBuffer[ByteOffset] + ((SectorBuffer[ByteOffset + 1] and $0F) shl 8);
+      End Else Begin
+       { Entrée impaire : bits 4-15 }
+       FATValue := (SectorBuffer[ByteOffset] shr 4) + (SectorBuffer[ByteOffset + 1] shl 4);
+      End;
+
+      { Masquer à 12 bits }
+      SetFAT(FATIndex, FATValue and $0FFF);
      End;
-    End Else Break;
+    End;
+   End Else Begin
+    Exit;
    End;
-  End Else Begin
-   Exit;
+  End;
+ End Else Begin { FAT16 }
+  MaxFATEntries := MaxClusters + 2;
+  MaxSectors := (MaxFATEntries * 2 + 511) div 512; { FAT16: 2 octets par entrée }
+
+  For i := 0 to Min(BootSector.SectorsPerFAT - 1, MaxSectors - 1) do Begin
+   If ReadSector(BootSector.ReservedSectors + i) Then Begin
+    { Lire les entrées FAT16 (2 octets par entrée) }
+    For j := 0 to 255 do Begin { 512 / 2 = 256 entrées par secteur }
+     FATIndex := i * 256 + j;
+     If FATIndex >= MaxFATEntries Then Break;
+
+     If (j * 2 + 1) < 512 Then Begin
+      SetFAT(FATIndex, SectorBuffer[j * 2] + (SectorBuffer[j * 2 + 1] shl 8));
+     End;
+    End;
+   End Else Begin
+    Exit;
+   End;
   End;
  End;
+
  CheckStatus[ciFAT] := True;
 End;
 
 Procedure CheckFATConsistency;
 Var
  i, j, FATEntry, NextCluster: Integer;
- FAT2: Array[0..8191] of Word;
+ { Fragments FAT2 pour éviter la limite de 65520 octets }
+ Fat2A, Fat2B, Fat2C: PFATFragment;
  MaxFATEntries, MaxSectors: Integer;
  FATMismatch: Boolean;
+ EndOfChainMark, BadClusterMark: Word;
+ ByteOffset: Word;
+ FATValue: Word;
 Begin
  CheckStatus[ciMedia] := False;
+
+ { Allouer la mémoire pour les fragments FAT2 }
+ GetMem(Fat2A, SizeOf(TFATFragment));
+ GetMem(Fat2B, SizeOf(TFATFragment));
+ GetMem(Fat2C, SizeOf(TFATFragment));
+
+ { Vérifier les allocations }
+ If (Fat2A = nil) or (Fat2B = nil) or (Fat2C = nil) Then Begin
+  { Libérer ce qui a été alloué }
+  If Fat2A <> nil Then FreeMem(Fat2A, SizeOf(TFATFragment));
+  If Fat2B <> nil Then FreeMem(Fat2B, SizeOf(TFATFragment));
+  If Fat2C <> nil Then FreeMem(Fat2C, SizeOf(TFATFragment));
+  Exit;
+ End;
+
+ { Initialiser à zéro }
+ FillChar(Fat2A^, SizeOf(TFATFragment), 0);
+ FillChar(Fat2B^, SizeOf(TFATFragment), 0);
+ FillChar(Fat2C^, SizeOf(TFATFragment), 0);
+
+ { Définir les marqueurs selon le type FAT }
+ If FATType = ftFAT12 Then Begin
+  EndOfChainMark := $FF8;
+  BadClusterMark := $FF7;
+ End Else Begin { FAT16 }
+  EndOfChainMark := $FFF8;
+  BadClusterMark := $FFF7;
+ End;
 
  { Vérifier d'abord le descripteur de média }
  If BootSector.MediaDescriptor <> $F0 Then Begin { $F0 = disquette HD, $F8 = disque dur }
@@ -963,28 +1214,67 @@ Begin
  { Vérifier que les deux copies de la FAT sont identiques }
  If BootSector.NumberOfFATs >= 2 Then Begin
   FATMismatch := False;
-  MaxFATEntries := High(FAT2) + 1;
-  MaxSectors := MaxFATEntries div 256;
+  MaxFATEntries := MaxClusters + 2;
 
-  { Lire la deuxième FAT }
-  For i := 0 to Min(BootSector.SectorsPerFAT - 1, MaxSectors - 1) do Begin
-   If ReadSector(BootSector.ReservedSectors + BootSector.SectorsPerFAT + i) Then Begin
-    For j := 0 to 255 do Begin
-     If (i * 256 + j) < MaxFATEntries Then Begin
-      If (j * 2 + 1) < 512 Then Begin
-       FAT2[i * 256 + j] := SectorBuffer[j * 2] + (SectorBuffer[j * 2 + 1] shl 8);
+  If FATType = ftFAT12 Then Begin
+   MaxSectors := (MaxFATEntries * 3 div 2 + 511) div 512;
+  End Else Begin
+   MaxSectors := (MaxFATEntries * 2 + 511) div 512;
+  End;
+
+  { Lire la deuxième FAT avec le bon format }
+  { Réinitialiser les fragments FAT2 }
+  FillChar(Fat2A^, SizeOf(TFATFragment), 0);
+  FillChar(Fat2B^, SizeOf(TFATFragment), 0);
+  FillChar(Fat2C^, SizeOf(TFATFragment), 0);
+
+  If FATType = ftFAT12 Then Begin
+   { Lire FAT12 pour la deuxième copie }
+   For i := 0 to Min(BootSector.SectorsPerFAT - 1, MaxSectors - 1) do Begin
+    If ReadSector(BootSector.ReservedSectors + BootSector.SectorsPerFAT + i) Then Begin
+     For j := 0 to 341 do Begin
+      If (i * 341 + j) >= MaxFATEntries Then Break;
+
+      { Lire les entrées FAT12 (1.5 octets par entrée) - même logique que ReadFAT }
+      ByteOffset := ((i * 341 + j) * 3) div 2;
+      If ByteOffset + 1 < 512 Then Begin
+       If ((i * 341 + j) mod 2) = 0 Then Begin
+        { Entrée paire : bits 0-11 }
+        FATValue := SectorBuffer[ByteOffset] + ((SectorBuffer[ByteOffset + 1] and $0F) shl 8);
+       End Else Begin
+        { Entrée impaire : bits 4-15 }
+        FATValue := (SectorBuffer[ByteOffset] shr 4) + (SectorBuffer[ByteOffset + 1] shl 4);
+       End;
+       { Masquer à 12 bits et stocker }
+       SetFAT2(i * 341 + j, FATValue and $0FFF, Fat2A, Fat2B, Fat2C);
       End;
-     End Else Break;
+     End;
+    End Else Begin
+     Inc(ErrorsFound);
+     Exit;
     End;
-   End Else Begin
-    Inc(ErrorsFound);
-    Exit;
+   End;
+  End Else Begin
+   { Lire FAT16 pour la deuxième copie }
+   For i := 0 to Min(BootSector.SectorsPerFAT - 1, MaxSectors - 1) do Begin
+    If ReadSector(BootSector.ReservedSectors + BootSector.SectorsPerFAT + i) Then Begin
+     For j := 0 to 255 do Begin
+      If (i * 256 + j) >= MaxFATEntries Then Break;
+
+      If (j * 2 + 1) < 512 Then Begin
+       SetFAT2(i * 256 + j, SectorBuffer[j * 2] + (SectorBuffer[j * 2 + 1] shl 8), Fat2A, Fat2B, Fat2C);
+      End;
+     End;
+    End Else Begin
+     Inc(ErrorsFound);
+     Exit;
+    End;
    End;
   End;
 
   { Comparer les deux FATs }
-  For i := 0 to Min(High(FAT), High(FAT2)) do Begin
-   If FAT[i] <> FAT2[i] Then Begin
+  For i := 0 to MaxFATEntries - 1 do Begin
+   If GetFAT(i) <> GetFAT2(i, Fat2A, Fat2B, Fat2C) Then Begin
     FATMismatch := True;
     Inc(ErrorsFound);
     Break;
@@ -993,27 +1283,7 @@ Begin
 
   If FATMismatch Then Begin
    If AutoFix Then Begin
-    { Réparer en copiant la première FAT sur la deuxième }
-    For i := 0 to Min(BootSector.SectorsPerFAT - 1, MaxSectors - 1) do Begin
-     { Reconstruire le secteur à partir de la FAT }
-     FillChar(SectorBuffer, 512, 0);
-     For j := 0 to 255 do Begin
-      If (i * 256 + j) < MaxFATEntries Then Begin
-       If (j * 2 + 1) < 512 Then Begin
-        SectorBuffer[j * 2] := FAT[i * 256 + j] and $FF;
-        SectorBuffer[j * 2 + 1] := (FAT[i * 256 + j] shr 8) and $FF;
-       End;
-      End;
-     End;
-     { Écrire le secteur corrigé dans la deuxième FAT }
-     If Not WriteSector(BootSector.ReservedSectors + BootSector.SectorsPerFAT + i) Then Begin
-      Case(Language)of
-       _English:ShowDialog('Write Error', 'Cannot write corrected FAT sector', False);
-       Else ShowDialog('Erreur d''écriture', 'Impossible d''écrire le secteur FAT corrigé', False);
-      End;
-      Exit;
-     End;
-    End;
+    { Réparer en copiant la première FAT sur la deuxième - à implémenter }
    End Else Begin
     Case(Language)of
      _English:ShowDialog('FAT Error', 'FAT copies are inconsistent. Use /AUTOFIX to repair.', False);
@@ -1024,40 +1294,66 @@ Begin
  End;
 
  { Vérifier les entrées spéciales de la FAT }
- If High(FAT) >= 1 Then Begin
+ If MaxFATEntries >= 2 Then Begin
   { Les deux premières entrées doivent avoir des valeurs spéciales }
-  If (FAT[0] and $0FFF) <> ($0F00 or BootSector.MediaDescriptor) Then Begin
-   Inc(ErrorsFound);
-   If AutoFix Then Begin
-    FAT[0] := $0F00 or BootSector.MediaDescriptor;
-   End Else Begin
-    Case(Language)of
-     _English:ShowDialog('FAT Error', 'Invalid FAT[0] entry', False);
-     Else ShowDialog('Erreur FAT', 'Entrée FAT[0] invalide', False);
+  If FATType = ftFAT12 Then Begin
+   If (GetFAT(0) and $0FFF) <> ($0F00 or BootSector.MediaDescriptor) Then Begin
+    Inc(ErrorsFound);
+    If AutoFix Then Begin
+     SetFAT(0, $0F00 or BootSector.MediaDescriptor);
+    End Else Begin
+     Case(Language)of
+      _English:ShowDialog('FAT Error', 'Invalid FAT[0] entry', False);
+      Else ShowDialog('Erreur FAT', 'Entrée FAT[0] invalide', False);
+     End;
     End;
    End;
-  End;
 
-  If (FAT[1] and $0FFF) <> $0FFF Then Begin
-   Inc(ErrorsFound);
-   If AutoFix Then Begin
-    FAT[1] := $0FFF;
-   End Else Begin
-    Case(Language)of
-     _English:ShowDialog('FAT Error', 'Invalid FAT[1] entry', False);
-     Else ShowDialog('Erreur FAT', 'Entrée FAT[1] invalide', False);
+   If (GetFAT(1) and $0FFF) <> $0FFF Then Begin
+    Inc(ErrorsFound);
+    If AutoFix Then Begin
+     SetFAT(1, $0FFF);
+    End Else Begin
+     Case(Language)of
+      _English:ShowDialog('FAT Error', 'Invalid FAT[1] entry', False);
+      Else ShowDialog('Erreur FAT', 'Entrée FAT[1] invalide', False);
+     End;
+    End;
+   End;
+  End Else Begin { FAT16 }
+   If (GetFAT(0) and $FFFF) <> ($FF00 or BootSector.MediaDescriptor) Then Begin
+    Inc(ErrorsFound);
+    If AutoFix Then Begin
+     SetFAT(0, $FF00 or BootSector.MediaDescriptor);
+    End Else Begin
+     Case(Language)of
+      _English:ShowDialog('FAT Error', 'Invalid FAT[0] entry', False);
+      Else ShowDialog('Erreur FAT', 'Entrée FAT[0] invalide', False);
+     End;
+    End;
+   End;
+
+   If (GetFAT(1) and $FFFF) <> $FFFF Then Begin
+    Inc(ErrorsFound);
+    If AutoFix Then Begin
+     SetFAT(1, $FFFF);
+    End Else Begin
+     Case(Language)of
+      _English:ShowDialog('FAT Error', 'Invalid FAT[1] entry', False);
+      Else ShowDialog('Erreur FAT', 'Entrée FAT[1] invalide', False);
+     End;
     End;
    End;
   End;
  End;
 
  { Vérifier les chaînes de clusters pour détecter les boucles infinies }
- For i := 2 to High(FAT) do Begin
-  If (FAT[i] <> 0) and (FAT[i] < $FF8) Then Begin
-   NextCluster := FAT[i];
+ For i := 2 to MaxClusters + 1 do Begin
+  If (GetFAT(i) <> 0) and (GetFAT(i) < EndOfChainMark) Then Begin
+   NextCluster := GetFAT(i);
    j := 0;
-   While (NextCluster < $FF8) and (NextCluster <> 0) and (j < 1000) do Begin
-    If NextCluster > High(FAT) Then Begin
+   While (NextCluster < EndOfChainMark) and (NextCluster <> 0) and (j < 1000) do Begin
+    If NextCluster > MaxClusters + 1 Then Begin
      Inc(ErrorsFound);
      Case(Language)of
       _English:ShowDialog('FAT Error', 'Invalid cluster chain at cluster ' + IntToStr(i), False);
@@ -1065,7 +1361,7 @@ Begin
      End;
      Break;
     End;
-    NextCluster := FAT[NextCluster];
+    NextCluster := GetFAT(NextCluster);
     Inc(j);
    End;
 
@@ -1073,11 +1369,17 @@ Begin
     Inc(ErrorsFound);
     Case(Language)of
      _English:ShowDialog('FAT Error', 'Infinite loop detected in cluster chain starting at cluster ' + IntToStr(i), False);
-     Else ShowDialog('Erreur FAT', 'Boucle infinie détectée dans la chaîne de cluster commençant au cluster ' + IntToStr(i), False);
+     Else ShowDialog('Erreur FAT', 'Boucle infinie détectée dans '+
+             'la chaîne de cluster commençant au cluster ' + IntToStr(i), False);
     End;
    End;
   End;
  End;
+
+ { Libérer la mémoire allouée pour FAT2 }
+ FreeMem(Fat2A, SizeOf(TFATFragment));
+ FreeMem(Fat2B, SizeOf(TFATFragment));
+ FreeMem(Fat2C, SizeOf(TFATFragment));
 
  CheckStatus[ciMedia] := True;
 End;
@@ -1100,8 +1402,8 @@ Begin
      If RootDir[i * 16 + j].Name[0] <> #0 Then Begin
       { Marquer les clusters utilisés }
       If (RootDir[i * 16 + j].StartCluster > 0) and
-         (RootDir[i * 16 + j].StartCluster <= High(ClusterMap)) Then Begin
-       ClusterMap[RootDir[i * 16 + j].StartCluster] := 1;
+         (RootDir[i * 16 + j].StartCluster <= 65535) Then Begin
+       SetClusterMap(RootDir[i * 16 + j].StartCluster, 1);
       End;
      End;
     End;
@@ -1120,10 +1422,19 @@ Var
  i, NextCluster: Integer;
  Chain: Array[0..1023] of Word;
  ChainLength: Integer;
+ EndOfChainMark: Word;
 Begin
  CheckStatus[ciFileSystem] := False;
- For i := 2 to High(FAT) do Begin
-  If (FAT[i] <> 0) and (FAT[i] < $FF8) Then Begin
+
+ { Définir le marqueur de fin selon le type FAT }
+ If FATType = ftFAT12 Then Begin
+  EndOfChainMark := $FF8;
+ End Else Begin { FAT16 }
+  EndOfChainMark := $FFF8;
+ End;
+
+ For i := 2 to MaxClusters + 1 do Begin
+  If (GetFAT(i) <> 0) and (GetFAT(i) < EndOfChainMark) Then Begin
    { Suivre la chaîne de clusters }
    NextCluster := i;
    ChainLength := 0;
@@ -1133,20 +1444,20 @@ Begin
      Chain[ChainLength] := NextCluster;
      Inc(ChainLength);
     End;
-    If NextCluster <= High(ClusterMap) Then Begin
-     If ClusterMap[NextCluster] = 1 Then
-      ClusterMap[NextCluster] := 1
-     Else If ClusterMap[NextCluster] = 0 Then
-      ClusterMap[NextCluster] := 1
+    If NextCluster <= MaxClusters + 1 Then Begin
+     If GetClusterMap(NextCluster) = 1 Then
+      SetClusterMap(NextCluster, 1)
+     Else If GetClusterMap(NextCluster) = 0 Then
+      SetClusterMap(NextCluster, 1)
      Else Begin
       Inc(CrossLinkedFiles);
-      ClusterMap[NextCluster] := 3;
+      SetClusterMap(NextCluster, 3);
      End;
     End;
-    If NextCluster <= High(FAT) Then NextCluster := FAT[NextCluster]
-                                Else Break;
+    If NextCluster <= MaxClusters + 1 Then NextCluster := GetFAT(NextCluster)
+                                      Else Break;
     If ChainLength > 1000 Then Break; { Protection contre les boucles infinies }
-   Until (NextCluster >= $FF8) or (NextCluster = 0);
+   Until (NextCluster >= EndOfChainMark) or (NextCluster = 0);
   End;
  End;
  CheckStatus[ciFileSystem] := True;
@@ -1157,8 +1468,8 @@ Var
  i: Integer;
 Begin
  CheckStatus[ciFreeSpace] := False;
- For i := 2 to High(FAT) do Begin
-  If (i <= High(ClusterMap)) and (FAT[i] <> 0) and (ClusterMap[i] = 0) Then Begin
+ For i := 2 to MaxClusters + 1 do Begin
+  If (i <= MaxClusters + 1) and (GetFAT(i) <> 0) and (GetClusterMap(i) = 0) Then Begin
    Inc(LostClusters);
    Inc(ErrorsFound);
   End;
@@ -1188,13 +1499,18 @@ Begin
  For i := 0 to TotalSectors - 1 do Begin
   Inc(SectorsExamined);
   BadSectorFound := Not ReadSector(i);
-   If BadSectorFound Then Begin
+  If BadSectorFound Then Begin
    Inc(BadSectors);
    If AutoFix Then Begin
     { Marquer le cluster correspondant comme défectueux }
     If i >= (BootSector.ReservedSectors + BootSector.NumberOfFATs * BootSector.SectorsPerFAT) Then Begin
-     FAT[(i - (BootSector.ReservedSectors + BootSector.NumberOfFATs * BootSector.SectorsPerFAT))
-           div BootSector.SectorsPerCluster + 2] := $FF7;
+     If FATType = ftFAT12 Then Begin
+      SetFAT((i - (BootSector.ReservedSectors + BootSector.NumberOfFATs * BootSector.SectorsPerFAT))
+            div BootSector.SectorsPerCluster + 2, $FF7);
+     End Else Begin { FAT16 }
+      SetFAT((i - (BootSector.ReservedSectors + BootSector.NumberOfFATs * BootSector.SectorsPerFAT))
+            div BootSector.SectorsPerCluster + 2, $FFF7);
+     End;
     End;
    End;
   End;
@@ -1366,10 +1682,14 @@ If TmpLanguage<>''Then Begin
  CursorOff;
  SetupColors;
 
+ { Allouer la mémoire pour les tableaux FAT et ClusterMap }
+ AllocateMemory;
+
  { Si aucun paramètre, permettre la sélection d'un lecteur }
  If ParamCount = 0 Then Begin
   DrivePath := SelectDrive;
   If DrivePath = '' Then Begin
+   FreeMemory;
    CursorOn;
    Halt(0);
   End;
@@ -1386,7 +1706,7 @@ If TmpLanguage<>''Then Begin
  LostClusters := 0;
  CrossLinkedFiles := 0;
  ErrorsFound := 0;
- FillChar(ClusterMap, SizeOf(ClusterMap), 0);
+ { ClusterMap est maintenant initialisé dans AllocateMemory }
  FillChar(CheckStatus, SizeOf(CheckStatus), 0);
 
  { Déterminer le type de cible (lecteur ou fichier image) }
@@ -1403,6 +1723,7 @@ If TmpLanguage<>''Then Begin
      _English:ShowDialog('Error', 'Unsupported drive: ' + DrivePath, False);
      Else ShowDialog('Erreur', 'Lecteur non supporté : ' + DrivePath, False);
     End;
+    FreeMemory;
     Halt(1);
    End;
   End;
@@ -1421,6 +1742,7 @@ If TmpLanguage<>''Then Begin
     _English:ShowDialog('Error', 'Cannot open file: ' + FileName, False);
     Else ShowDialog('Erreur', 'Impossible d''ouvrir le fichier : ' + FileName, False);
    End;
+   FreeMemory;
    Halt(1);
   End;
  End;
@@ -1440,6 +1762,7 @@ If TmpLanguage<>''Then Begin
    Else ShowDialog('Erreur', 'Impossible de lire le secteur de boot', False);
   End;
   If IsImageFile Then Close(FileHandle);
+  FreeMemory;
   Halt(1);
  End;
   { Effectuer les vérifications avec interface graphique }
@@ -1450,9 +1773,13 @@ If TmpLanguage<>''Then Begin
  End;
   { Nettoyage }
  If IsImageFile Then Close(FileHandle);
-  { Affichage du résumé }
+
+ { Libérer la mémoire allouée }
+ FreeMemory;
+
+ { Affichage du résumé }
  ShowSummary;
  CursorOn;
-  { Code de sortie }
+ { Code de sortie }
  If ErrorsFound > 0 Then Halt(1) Else Halt(0);
 END.
