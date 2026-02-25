@@ -83,78 +83,78 @@ INTERFACE
 Type
   { Paramètres de lecteur de disque }
   DriveParameterTable=Record
-    SectorsPerTrack:Word;     { Secteurs par piste }
-    NumberOfHeads:Word;       { Nombre de têtes }
-    NumberOfCylinders:Word;   { Nombre de cylindres }
-    BytesPerSector:Word;      { Octets par secteur }
-    SectorsPerCluster:Byte;   { Secteurs par cluster }
+   SectorsPerTrack:Word;     { Secteurs par piste }
+   NumberOfHeads:Word;       { Nombre de têtes }
+   NumberOfCylinders:Word;   { Nombre de cylindres }
+   BytesPerSector:Word;      { Octets par secteur }
+   SectorsPerCluster:Byte;   { Secteurs par cluster }
   End;
 
   { Structure pour Boot Sector (FAT12/FAT16) }
   BootSectorRec=Record
-    JmpBoot:Array[0..2] of Byte;      { Code de saut }
-    OEMName:Array[0..7] of Char;      { Nom OEM }
-    BytesPerSector:Word;              { Octets par secteur }
-    SectorsPerCluster:Byte;           { Secteurs par cluster }
-    ReservedSectors:Word;             { Secteurs réservés }
-    NumberOfFATs:Byte;                { Nombre de FATs }
-    RootDirEntries:Word;              { Entrées répertoire racine }
-    TotalSectors:Word;                { Secteurs totaux }
-    MediaDescriptor:Byte;             { Descripteur média }
-    SectorsPerFAT:Word;               { Secteurs par FAT }
-    SectorsPerTrack:Word;             { Secteurs par piste }
-    NumberOfHeads:Word;               { Nombre de têtes }
-    HiddenSectors:LongInt;            { Secteurs cachés }
-    TotalSectorsLarge:LongInt;        { Secteurs totaux (32-bit) }
-    DriveNumber:Byte;                 { Numéro de lecteur }
-    Reserved:Byte;                    { Réservé }
-    BootSignature:Byte;               { Signature de démarrage }
-    VolumeID:LongInt;                 { ID de volume }
-    VolumeLabel:Array[0..10] of Char; { Label de volume }
-    FileSystemType:Array[0..7] of Char; { Type de système de fichiers }
-    BootCode:Array[0..447] of Byte;   { Code de démarrage }
-    BootSectorSignature:Word;         { Signature 55AAh }
+   JmpBoot:Array[0..2] of Byte;      { Code de saut }
+   OEMName:Array[0..7] of Char;      { Nom OEM }
+   BytesPerSector:Word;              { Octets par secteur }
+   SectorsPerCluster:Byte;           { Secteurs par cluster }
+   ReservedSectors:Word;             { Secteurs réservés }
+   NumberOfFATs:Byte;                { Nombre de FATs }
+   RootDirEntries:Word;              { Entrées répertoire racine }
+   TotalSectors:Word;                { Secteurs totaux }
+   MediaDescriptor:Byte;             { Descripteur média }
+   SectorsPerFAT:Word;               { Secteurs par FAT }
+   SectorsPerTrack:Word;             { Secteurs par piste }
+   NumberOfHeads:Word;               { Nombre de têtes }
+   HiddenSectors:LongInt;            { Secteurs cachés }
+   TotalSectorsLarge:LongInt;        { Secteurs totaux (32-bit) }
+   DriveNumber:Byte;                 { Numéro de lecteur }
+   Reserved:Byte;                    { Réservé }
+   BootSignature:Byte;               { Signature de démarrage }
+   VolumeID:LongInt;                 { ID de volume }
+   VolumeLabel:Array[0..10] of Char; { Label de volume }
+   FileSystemType:Array[0..7] of Char; { Type de système de fichiers }
+   BootCode:Array[0..447] of Byte;   { Code de démarrage }
+   BootSectorSignature:Word;         { Signature 55AAh }
   End;
 
   { Entrée de répertoire FAT }
   DirectoryEntry=Record
-    FileName:Array[0..7] of Char;     { Nom de fichier (8 caractères) }
-    Extension:Array[0..2] of Char;    { Extension (3 caractères) }
-    Attributes:Byte;                  { Attributs de fichier }
-    Reserved:Byte;                    { Réservé }
-    CreationTimeFine:Byte;            { Création temps fin }
-    CreationTime:Word;                { Heure de création }
-    CreationDate:Word;                { Date de création }
-    LastAccessDate:Word;              { Date dernier accès }
-    FirstClusterHigh:Word;            { Cluster de départ (partie haute) }
-    LastWriteTime:Word;               { Heure dernière écriture }
-    LastWriteDate:Word;               { Date dernière écriture }
-    FirstClusterLow:Word;             { Cluster de départ (partie basse) }
-    FileSize:LongInt;                 { Taille du fichier }
+   FileName:Array[0..7] of Char;     { Nom de fichier (8 caractères) }
+   Extension:Array[0..2] of Char;    { Extension (3 caractères) }
+   Attributes:Byte;                  { Attributs de fichier }
+   Reserved:Byte;                    { Réservé }
+   CreationTimeFine:Byte;            { Création temps fin }
+   CreationTime:Word;                { Heure de création }
+   CreationDate:Word;                { Date de création }
+   LastAccessDate:Word;              { Date dernier accès }
+   FirstClusterHigh:Word;            { Cluster de départ (partie haute) }
+   LastWriteTime:Word;               { Heure dernière écriture }
+   LastWriteDate:Word;               { Date dernière écriture }
+   FirstClusterLow:Word;             { Cluster de départ (partie basse) }
+   FileSize:LongInt;                 { Taille du fichier }
   End;
 
   { Paramètres de bloc BIOS }
   BIOSParameterBlock=Record
-    BytesPerSector:Word;              { Octets par secteur }
-    SectorsPerCluster:Byte;           { Secteurs par cluster }
-    ReservedSectors:Word;             { Secteurs réservés }
-    NumberOfFATs:Byte;                { Nombre de FATs }
-    RootDirEntries:Word;              { Entrées répertoire racine }
-    TotalSectors:Word;                { Secteurs totaux }
-    MediaDescriptor:Byte;             { Descripteur média }
-    SectorsPerFAT:Word;               { Secteurs par FAT }
-    SectorsPerTrack:Word;             { Secteurs par piste }
-    NumberOfHeads:Word;               { Nombre de têtes }
-    HiddenSectors:LongInt;            { Secteurs cachés }
-    TotalSectorsLarge:LongInt;        { Secteurs totaux (32-bit) }
+   BytesPerSector:Word;              { Octets par secteur }
+   SectorsPerCluster:Byte;           { Secteurs par cluster }
+   ReservedSectors:Word;             { Secteurs réservés }
+   NumberOfFATs:Byte;                { Nombre de FATs }
+   RootDirEntries:Word;              { Entrées répertoire racine }
+   TotalSectors:Word;                { Secteurs totaux }
+   MediaDescriptor:Byte;             { Descripteur média }
+   SectorsPerFAT:Word;               { Secteurs par FAT }
+   SectorsPerTrack:Word;             { Secteurs par piste }
+   NumberOfHeads:Word;               { Nombre de têtes }
+   HiddenSectors:LongInt;            { Secteurs cachés }
+   TotalSectorsLarge:LongInt;        { Secteurs totaux (32-bit) }
   End;
 
   { Requête d'I/O disque }
   DiskIORequest=Record
-    DriveNumber:Byte;                 { Numéro de lecteur }
-    SectorNumber:LongInt;             { Numéro de secteur }
-    SectorCount:Word;                 { Nombre de secteurs }
-    BufferPtr:Pointer;                { Pointeur vers buffer }
+   DriveNumber:Byte;                 { Numéro de lecteur }
+   SectorNumber:LongInt;             { Numéro de secteur }
+   SectorCount:Word;                 { Nombre de secteurs }
+   BufferPtr:Pointer;                { Pointeur vers buffer }
   End;
 
 Procedure BEGIN_KERNEL;
@@ -314,6 +314,13 @@ Function DOS40h_WriteFile(Handle:Word;Buffer:Pointer;BytesToWrite:Word;Var Bytes
 { Forward declarations pour fonction 41h }
 Function DeleteDirectoryEntry(Drive:Byte;BootSec:BootSectorRec;DirCluster:Word;FileName:String):Boolean;Near;Forward;
 Function DOS41h_DeleteFile(PathPtr:Pointer):Word;Near;Forward;
+
+{ Forward declarations pour fonction 42h }
+Function CalculateClusterFromPosition(Drive:Byte;BootSec:BootSectorRec;
+                                      FirstCluster:Word;Position:LongInt;
+                                      Var TargetCluster:Word;
+                                      Var ClusterOffset:Word):Boolean;Near;Forward;
+Function DOS42h_SeekFile(Handle:Word;OffsetHi,OffsetLo:Word;Method:Byte):LongInt;Near;Forward;
 
 { Fonctions d'accès aux données dans Code Segment }
 Function GetCurrentDrive: Byte;Near;Forward;
@@ -657,6 +664,7 @@ Procedure Intr21h;Assembler;ASM
  DW @3Fh { Fonction 3Fh - Read File }
  DW @40h { Fonction 40h - Write File }
  DW @41h { Fonction 41h - Delete File }
+ DW @42h { Fonction 42h - Seek File }
 
  {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
  { Interruption 21h - Fonction 00h: Terminer le programme                      }
@@ -2437,6 +2445,45 @@ Procedure Intr21h;Assembler;ASM
  CLC                        { Clear Carry Flag }
 
 @41hEnd:
+ POP DI
+ POP SI
+ POP CX
+ JMP @Xit
+
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+ { Interruption 21h - Fonction 42h: Seek File                                  }
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+@42h:
+ PUSH CX                    { Sauvegarder les registres }
+ PUSH SI
+ PUSH DI
+
+ { Paramètres: BX = handle, CX:DX = offset (32-bit), AL = method }
+ PUSH AX                    { Method (AL) }
+ PUSH DX                    { Offset low }
+ PUSH CX                    { Offset high }
+ PUSH BX                    { Handle de fichier }
+
+ CALL DOS42h_SeekFile       { Appeler fonction Pascal }
+ ADD SP,8                   { Nettoyer pile (4 mots = 8 octets) }
+
+ { AX:DX contient la nouvelle position (LongInt) }
+ { Si erreur, AX = $FFFF et DX = $FFFF }
+ CMP AX,0FFFFh              { Vérifier si erreur }
+ JNE @42hSuccess            { Si pas erreur }
+ CMP DX,0FFFFh              { Double vérification }
+ JNE @42hSuccess            { Si pas erreur }
+
+ { Erreur }
+ MOV AX,6                   { Invalid handle par défaut }
+ STC                        { Set Carry Flag }
+ JMP @42hEnd
+
+@42hSuccess:
+ { Succès - AX:DX contient la nouvelle position }
+ CLC                        { Clear Carry Flag }
+
+@42hEnd:
  POP DI
  POP SI
  POP CX
@@ -5823,6 +5870,121 @@ Begin
   DOS41h_DeleteFile:=0 { Succès }
  Else
   DOS41h_DeleteFile:=5; { Access denied }
+End;
+
+{ Calculer le cluster et l'offset à partir d'une position dans le fichier }
+Function CalculateClusterFromPosition(Drive:Byte;BootSec:BootSectorRec;
+                                      FirstCluster:Word;Position:LongInt;
+                                      Var TargetCluster:Word;
+                                      Var ClusterOffset:Word):Boolean;
+Var
+ ClusterSize: Word;
+ ClustersToSkip: Word;
+ CurrentCluster: Word;
+ I: Word;
+Begin
+ CalculateClusterFromPosition:=False;
+ 
+ If FirstCluster < 2 Then Exit; { Cluster invalide }
+ 
+ ClusterSize:=BootSec.SectorsPerCluster * BootSec.BytesPerSector;
+ 
+ { Calculer combien de clusters complets à ignorer }
+ ClustersToSkip:=Position div ClusterSize;
+ ClusterOffset:=Position mod ClusterSize;
+ 
+ { Parcourir la chaîne de clusters }
+ CurrentCluster:=FirstCluster;
+ For I:=1 To ClustersToSkip Do Begin
+  CurrentCluster:=GetNextCluster(Drive, BootSec, CurrentCluster);
+  If (CurrentCluster = $FFFF) or (CurrentCluster < 2) Then Exit;
+ End;
+ 
+ TargetCluster:=CurrentCluster;
+ CalculateClusterFromPosition:=True;
+End;
+
+{ Fonction principale 42h - Seek File }
+Function DOS42h_SeekFile(Handle:Word;OffsetHi,OffsetLo:Word;Method:Byte):LongInt;
+Var
+ FileEntry: FileTableEntry;
+ NewPosition: LongInt;
+ Offset: LongInt;
+ TargetCluster: Word;
+ ClusterOffset: Word;
+ Drive: Byte;
+ BootSec: BootSectorRec;
+Begin
+ DOS42h_SeekFile:=$FFFFFFFF; { Erreur par défaut }
+ 
+ { Vérifier la validité du handle }
+ If Handle >= 20 Then Exit;
+ 
+ If Not GetFileTableEntry(Handle, FileEntry) Then Exit;
+ 
+ { Vérifier si le handle est utilisé }
+ If Not FileEntry.InUse Then Exit;
+ 
+ { Construire l'offset 32-bit }
+ Offset:=(LongInt(OffsetHi) shl 16) or OffsetLo;
+ 
+ { Calculer la nouvelle position selon la méthode }
+ Case Method Of
+  0: NewPosition:=Offset;                        { Depuis le début }
+  1: NewPosition:=FileEntry.CurrentPos + Offset; { Depuis position courante }
+  2: NewPosition:=FileEntry.FileSize + Offset;   { Depuis la fin }
+  Else Exit; { Méthode invalide }
+ End;
+ 
+ { Vérifier que la position est valide }
+ If NewPosition < 0 Then Exit;
+ 
+ { Pour les fichiers, on peut seek au-delà de la fin }
+ { Mais on ne peut pas lire/écrire au-delà sans étendre le fichier }
+ 
+ Drive:=FileEntry.Drive - 1; { Conversion en index 0-based }
+ 
+ { Lire boot sector }
+ If Not ReadBootSector(Drive, BootSec) Then Exit;
+ 
+ { Si la nouvelle position est dans le fichier, calculer le cluster }
+ If NewPosition <= FileEntry.FileSize Then Begin
+  If NewPosition = 0 Then Begin
+   { Position au début du fichier }
+   FileEntry.CurrentCluster:=FileEntry.FirstCluster;
+   FileEntry.ClusterOffset:=0;
+  End
+  Else Begin
+   { Calculer le cluster et l'offset }
+   If Not CalculateClusterFromPosition(Drive, BootSec,
+           FileEntry.FirstCluster, NewPosition, TargetCluster,
+           ClusterOffset) Then Exit;
+   FileEntry.CurrentCluster:=TargetCluster;
+   FileEntry.ClusterOffset:=ClusterOffset;
+  End;
+ End
+ Else Begin
+  { Position au-delà de la fin du fichier - utiliser le dernier cluster }
+  If FileEntry.FileSize = 0 Then Begin
+   FileEntry.CurrentCluster:=FileEntry.FirstCluster;
+   FileEntry.ClusterOffset:=0;
+  End
+  Else Begin
+   If Not CalculateClusterFromPosition(Drive, BootSec,
+           FileEntry.FirstCluster, FileEntry.FileSize - 1,
+           TargetCluster, ClusterOffset) Then Exit;
+   FileEntry.CurrentCluster:=TargetCluster;
+   { L'offset sera géré lors de la prochaine opération de lecture/écriture }
+  End;
+ End;
+ 
+ { Mettre à jour la position courante }
+ FileEntry.CurrentPos:=NewPosition;
+ 
+ { Sauvegarder l'entrée modifiée }
+ If Not SetFileTableEntry(Handle, FileEntry) Then Exit;
+ 
+ DOS42h_SeekFile:=NewPosition;
 End;
 
 Procedure SetIntVec(_AL:Byte;_DS,_DX:Word);Assembler;ASM
