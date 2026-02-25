@@ -485,6 +485,10 @@ Function DOS4Bh_ExecProgram(ExecType:Byte;ProgramPath:String;ParamBlock:ExecPara
 Function DOS4Ch_TerminateProgram(ExitCode:Byte):Word;Near;Forward;
 Function DOS4Dh_GetReturnCode:Word;Near;Forward;
 
+{ Fonctions 50h et 51h - Gestion PSP }
+Function DOS50h_SetPSPAddress(PSPSegment:Word):Word;Near;Forward;
+Function DOS51h_GetPSPAddress:Word;Near;Forward;
+
 { Fonctions utilitaires pour EXEC }
 Function LoadExeFile(FileName:String;Var LoadSegment:Word;Var ExeHdr:ExeHeader):Boolean;Near;Forward;
 Function LoadComFile(FileName:String;Var LoadSegment:Word):Boolean;Near;Forward;
@@ -875,6 +879,8 @@ Procedure Intr21h;Assembler;ASM
  DW @4Dh { Fonction 4Dh - Get Return Code }
  DW @4Eh { Fonction 4Eh - Find First File }
  DW @4Fh { Fonction 4Fh - Find Next File }
+ DW @50h { Fonction 50h - Set PSP Address }
+ DW @51h { Fonction 51h - Get PSP Address }
 
  {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
  { Interruption 21h - Fonction 00h: Terminer le programme                      }
@@ -3121,6 +3127,48 @@ Procedure Intr21h;Assembler;ASM
  POP BX
  POP DI
  POP SI
+ POP CX
+ JMP @Xit
+
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+ { Interruption 21h - Fonction 50h: Set PSP Address                           }
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+@50h:
+ PUSH CX                    { Sauvegarder les registres }
+ PUSH BX
+ 
+ { BX contient l'adresse du nouveau PSP }
+ PUSH BX                    { Segment PSP }
+ 
+ CALL DOS50h_SetPSPAddress  { Appeler fonction Pascal }
+ { AX contient le code d'erreur }
+ 
+ ADD SP,2                   { Nettoyer la pile (1 paramètre * 2) }
+ 
+ OR AX,AX                   { Tester le résultat }
+ JZ @50hSuccess
+ STC                        { Set Carry Flag si erreur }
+ JMP @50hEnd
+@50hSuccess:
+ CLC                        { Clear Carry Flag si succès }
+@50hEnd:
+
+ POP BX
+ POP CX
+ JMP @Xit
+
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+ { Interruption 21h - Fonction 51h: Get PSP Address                           }
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+@51h:
+ PUSH CX                    { Sauvegarder les registres }
+ 
+ CALL DOS51h_GetPSPAddress  { Appeler fonction Pascal }
+ { AX contient l'adresse du PSP }
+ 
+ MOV BX,AX                  { Retourner PSP dans BX }
+ CLC                        { Clear Carry Flag - toujours succès }
+ 
  POP CX
  JMP @Xit
 
@@ -8287,6 +8335,40 @@ Begin
  GetFindState(FindState);
  FindState.Active:=False;
  SetFindState(FindState);
+End;
+
+{ Fonctions 50h et 51h - Gestion PSP (Program Segment Prefix) }
+
+{ Fonction 50h - Set PSP Address }
+Function DOS50h_SetPSPAddress(PSPSegment:Word):Word;
+Begin
+ DOS50h_SetPSPAddress:=0; { Succès par défaut }
+ 
+ { Valider que le segment PSP est valide }
+ If PSPSegment < $0060 Then Begin { En-dessous de la zone conventionnelle }
+  DOS50h_SetPSPAddress:=1; { Erreur : segment invalide }
+  Exit;
+ End;
+ 
+ If PSPSegment > $A000 Then Begin { Au-dessus de 640KB }
+  DOS50h_SetPSPAddress:=1; { Erreur : segment invalide }
+  Exit;
+ End;
+ 
+ { Sauvegarder le nouveau PSP courant }
+ SetCurrentPSP(PSPSegment);
+ 
+ { Dans un vrai DOS, on pourrait aussi vérifier que le segment }
+ { contient réellement un PSP valide (signature INT 20h, etc.) }
+ 
+ DOS50h_SetPSPAddress:=0; { Succès }
+End;
+
+{ Fonction 51h - Get PSP Address }
+Function DOS51h_GetPSPAddress:Word;
+Begin
+ { Retourner l'adresse du PSP courant }
+ DOS51h_GetPSPAddress:=GetCurrentPSP;
 End;
 
 Procedure SetIntVec(_AL:Byte;_DS,_DX:Word);Assembler;ASM
