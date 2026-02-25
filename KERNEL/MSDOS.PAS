@@ -219,14 +219,14 @@ Type
 {$ENDIF}
 
 { Déclarations Forward }
-Procedure Intr20h;Forward;
-Procedure Intr21h;Forward;
-Procedure Intr25h;Forward;
-Procedure Intr26h;Forward;
-Procedure Intr28h;Forward;
-Procedure Intr2Ah;Forward;
-Procedure Intr2Fh;Forward;
-Procedure Intr33h;Forward;
+Procedure Intr20h;Interrupt;Forward;
+Procedure Intr21h;Interrupt;Forward;
+Procedure Intr25h;Interrupt;Forward;
+Procedure Intr26h;Interrupt;Forward;
+Procedure Intr28h;Interrupt;Forward;
+Procedure Intr2Ah;Interrupt;Forward;
+Procedure Intr2Fh;Interrupt;Forward;
+Procedure Intr33h;Interrupt;Forward;
 
 Procedure SetIntVec(_AL:Byte;_DS,_DX:Word);Near;Forward;
 Procedure DataCountry(CountryCode:Word;Var CountryInfo:DataCountryRec);Near;Forward;
@@ -302,6 +302,14 @@ Function ReadFromCluster(Drive:Byte;BootSec:BootSectorRec;Cluster:Word;
 Function GetNextCluster(Drive:Byte;BootSec:BootSectorRec;CurrentCluster:Word):Word;Near;Forward;
 Function ReadFileData(Handle:Word;Buffer:Pointer;BytesToRead:Word;Var BytesRead:Word):Word;Near;Forward;
 Function DOS3Fh_ReadFile(Handle:Word;Buffer:Pointer;BytesToRead:Word;Var BytesRead:Word):Word;Near;Forward;
+
+{ Forward declarations pour fonction 40h }
+Function WriteToCluster(Drive:Byte;BootSec:BootSectorRec;Cluster:Word;
+                       Offset:Word;Buffer:Pointer;BytesToWrite:Word):Word;Near;Forward;
+Function AllocateNewCluster(Drive:Byte;BootSec:BootSectorRec;PreviousCluster:Word):Word;Near;Forward;
+Function UpdateFATEntry(Drive:Byte;BootSec:BootSectorRec;Cluster:Word;NextCluster:Word):Boolean;Near;Forward;
+Function WriteFileData(Handle:Word;Buffer:Pointer;BytesToWrite:Word;Var BytesWritten:Word):Word;Near;Forward;
+Function DOS40h_WriteFile(Handle:Word;Buffer:Pointer;BytesToWrite:Word;Var BytesWritten:Word):Word;Near;Forward;
 
 { Fonctions d'accès aux données dans Code Segment }
 Function GetCurrentDrive: Byte;Near;Forward;
@@ -643,6 +651,7 @@ Procedure Intr21h;Assembler;ASM
  DW @3Dh { Fonction 3Dh - Open File }
  DW @3Eh { Fonction 3Eh - Close File }
  DW @3Fh { Fonction 3Fh - Read File }
+ DW @40h { Fonction 40h - Write File }
 
  {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
  { Interruption 21h - Fonction 00h: Terminer le programme                      }
@@ -2346,6 +2355,48 @@ Procedure Intr21h;Assembler;ASM
  STC                        { Set Carry Flag }
 
 @3FhEnd:
+ POP SI                     { Restaurer AX original (ignoré) }
+ POP DI
+ POP SI
+ POP CX
+ JMP @Xit
+
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+ { Interruption 21h - Fonction 40h: Write File                                 }
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+@40h:
+ PUSH CX                    { Sauvegarder les registres }
+ PUSH SI
+ PUSH DI
+ PUSH AX                    { Sauvegarder AX aussi }
+
+ { Paramètres: BX = handle, CX = nombre d'octets à écrire, DS:DX = buffer }
+ SUB SP,2                   { Réserver place pour BytesWritten }
+ MOV AX,SP                  { AX = pointeur vers BytesWritten }
+ PUSH AX                    { Pointeur vers BytesWritten }
+ PUSH CX                    { Nombre d'octets à écrire }
+ PUSH DX                    { Buffer (offset) }
+ PUSH DS                    { Buffer (segment) }
+ PUSH BX                    { Handle de fichier }
+
+ CALL DOS40h_WriteFile      { Appeler fonction Pascal }
+ ADD SP,10                  { Nettoyer pile (5 mots = 10 octets) }
+ 
+ { Le résultat de DOS40h_WriteFile est dans AX (0=succès, autre=erreur) }
+ CMP AX,0                   { Vérifier si erreur }
+ JNE @40hError              { Si erreur }
+
+ { Succès - récupérer le nombre d'octets écrits }
+ POP AX                     { BytesWritten de la pile }
+ CLC                        { Clear Carry Flag }
+ JMP @40hEnd
+
+@40hError:
+ ADD SP,2                   { Nettoyer BytesWritten de la pile }
+ MOV AX,6                   { Invalid handle par défaut }
+ STC                        { Set Carry Flag }
+
+@40hEnd:
  POP SI                     { Restaurer AX original (ignoré) }
  POP DI
  POP SI
@@ -5275,6 +5326,313 @@ End;
 Function DOS3Fh_ReadFile(Handle:Word;Buffer:Pointer;BytesToRead:Word;Var BytesRead:Word):Word;
 Begin
  DOS3Fh_ReadFile:=ReadFileData(Handle, Buffer, BytesToRead, BytesRead);
+End;
+
+{ Écrire des données vers un cluster spécifique }
+Function WriteToCluster(Drive:Byte;BootSec:BootSectorRec;Cluster:Word;Offset:Word;Buffer:Pointer;BytesToWrite:Word):Word;
+Var
+ FirstDataSector: LongInt;
+ ClusterSector: LongInt;
+ SectorInCluster: Word;
+ ByteInSector: Word;
+ SectorBuffer: Array[0..511] of Byte;
+ BytesThisWrite: Word;
+ BytesRemaining: Word;
+ BufferOfs: Word;
+ BufferSeg: Word;
+ I: Word;
+Begin
+ WriteToCluster:=0; { Succès par défaut }
+
+ { Calculer le premier secteur de données }
+ FirstDataSector:=BootSec.ReservedSectors + (BootSec.NumberOfFATs * BootSec.SectorsPerFAT) +
+                  ((BootSec.RootDirEntries * 32) div BootSec.BytesPerSector);
+
+ { Calculer le secteur du cluster }
+ ClusterSector:=FirstDataSector + (LongInt(Cluster - 2) * BootSec.SectorsPerCluster);
+
+ BytesRemaining:=BytesToWrite;
+ 
+ { Extraire segment et offset du pointeur }
+ ASM
+  LES DI,Buffer
+  MOV BufferSeg,ES
+  MOV BufferOfs,DI
+ END;
+
+ While BytesRemaining > 0 Do Begin
+  { Calculer secteur et offset dans le secteur }
+  SectorInCluster:=Offset div BootSec.BytesPerSector;
+  ByteInSector:=Offset mod BootSec.BytesPerSector;
+
+  { Si on n'écrit pas tout le secteur, il faut d'abord le lire }
+  If (ByteInSector <> 0) or (BytesRemaining < BootSec.BytesPerSector) Then Begin
+   If Not ReadSector(Drive, ClusterSector + SectorInCluster, @SectorBuffer) Then Begin
+    WriteToCluster:=5; { Access denied }
+    Exit;
+   End;
+  End;
+
+  { Calculer combien d'octets écrire dans ce secteur }
+  BytesThisWrite:=BootSec.BytesPerSector - ByteInSector;
+  If BytesThisWrite > BytesRemaining Then
+   BytesThisWrite:=BytesRemaining;
+
+  { Copier les données du buffer vers le secteur }
+  ASM
+   PUSH DS
+   PUSH SI
+   PUSH ES
+   PUSH DI
+   
+   MOV AX,BufferSeg
+   MOV DS,AX
+   MOV SI,BufferOfs
+   
+   LEA DI,SectorBuffer
+   ADD DI,ByteInSector
+   
+   MOV CX,BytesThisWrite
+   CLD
+   REP MOVSB
+   
+   POP DI
+   POP ES
+   POP SI
+   POP DS
+  END;
+
+  { Écrire le secteur }
+  If Not WriteSector(Drive, ClusterSector + SectorInCluster, @SectorBuffer) Then Begin
+   WriteToCluster:=5; { Access denied }
+   Exit;
+  End;
+
+  { Mettre à jour les compteurs }
+  Dec(BytesRemaining, BytesThisWrite);
+  Inc(Offset, BytesThisWrite);
+  Inc(BufferOfs, BytesThisWrite);
+
+  { Gérer le débordement de segment }
+  If BufferOfs >= $10000 Then Begin
+   Inc(BufferSeg, $1000);
+   Dec(BufferOfs, $10000);
+  End;
+
+  { Si on a dépassé la taille du cluster, sortir }
+  If Offset >= (BootSec.SectorsPerCluster * BootSec.BytesPerSector) Then
+   Break;
+ End;
+
+ WriteToCluster:=0; { Succès }
+End;
+
+{ Mettre à jour une entrée dans la FAT }
+Function UpdateFATEntry(Drive:Byte;BootSec:BootSectorRec;Cluster:Word;NextCluster:Word):Boolean;
+Var
+ FATSector: Word;
+ FATOffset: Word;
+ Buffer: Array[0..511] of Byte;
+ I: Byte;
+Begin
+ UpdateFATEntry:=False;
+
+ If BootSec.SectorsPerFAT = 0 Then Exit; { FAT32 non supportée }
+ If Cluster < 2 Then Exit; { Cluster invalide }
+
+ { Pour FAT12 }
+ If BootSec.SectorsPerFAT <= 12 Then Begin
+  FATOffset:=(Cluster * 3) div 2;
+  FATSector:=BootSec.ReservedSectors + (FATOffset div BootSec.BytesPerSector);
+  FATOffset:=FATOffset mod BootSec.BytesPerSector;
+
+  If Not ReadSector(Drive, FATSector, @Buffer) Then Exit;
+
+  If (Cluster mod 2) = 0 Then Begin
+   Buffer[FATOffset]:=NextCluster and $FF;
+   Buffer[FATOffset + 1]:=(Buffer[FATOffset + 1] and $F0) or ((NextCluster shr 8) and $0F);
+  End
+  Else Begin
+   Buffer[FATOffset]:=(Buffer[FATOffset] and $0F) or ((NextCluster and $0F) shl 4);
+   Buffer[FATOffset + 1]:=(NextCluster shr 4) and $FF;
+  End;
+ End
+ Else Begin
+  { Pour FAT16 }
+  FATOffset:=Cluster * 2;
+  FATSector:=BootSec.ReservedSectors + (FATOffset div BootSec.BytesPerSector);
+  FATOffset:=FATOffset mod BootSec.BytesPerSector;
+
+  If Not ReadSector(Drive, FATSector, @Buffer) Then Exit;
+
+  Buffer[FATOffset]:=NextCluster and $FF;
+  Buffer[FATOffset + 1]:=(NextCluster shr 8) and $FF;
+ End;
+
+ { Écrire dans toutes les copies de la FAT }
+ For I:=0 To BootSec.NumberOfFATs-1 Do Begin
+  If Not WriteSector(Drive, FATSector + (I * BootSec.SectorsPerFAT), @Buffer) Then Exit;
+ End;
+
+ UpdateFATEntry:=True;
+End;
+
+{ Allouer un nouveau cluster et le chaîner au précédent }
+Function AllocateNewCluster(Drive:Byte;BootSec:BootSectorRec;PreviousCluster:Word):Word;
+Var
+ NewCluster: Word;
+ MaxCluster: Word;
+Begin
+ AllocateNewCluster:=0; { Erreur par défaut }
+
+ { Déterminer le nombre maximum de clusters }
+ If BootSec.SectorsPerFAT <= 12 Then
+  MaxCluster:=$FF0 { FAT12 }
+ Else
+  MaxCluster:=$FFF0; { FAT16 }
+
+ { Chercher un cluster libre }
+ For NewCluster:=2 To MaxCluster Do Begin
+  If GetNextCluster(Drive, BootSec, NewCluster) = 0 Then Begin
+   { Cluster libre trouvé - le marquer comme utilisé }
+   If UpdateFATEntry(Drive, BootSec, NewCluster, $FFFF) Then Begin
+    { Si on a un cluster précédent, le chaîner }
+    If PreviousCluster <> 0 Then Begin
+     If UpdateFATEntry(Drive, BootSec, PreviousCluster, NewCluster) Then Begin
+      AllocateNewCluster:=NewCluster;
+      Exit;
+     End;
+    End
+    Else Begin
+     AllocateNewCluster:=NewCluster;
+     Exit;
+    End;
+   End;
+  End;
+ End;
+End;
+
+{ Écrire les données d'un fichier }
+Function WriteFileData(Handle:Word;Buffer:Pointer;BytesToWrite:Word;Var BytesWritten:Word):Word;
+Var
+ FileEntry: FileTableEntry;
+ Drive: Byte;
+ BootSec: BootSectorRec;
+ CurrentCluster: Word;
+ ClusterSize: Word;
+ RemainingInCluster: Word;
+ BytesToWriteNow: Word;
+ BufferOfs: Word;
+ BufferSeg: Word;
+ TotalBytesWritten: Word;
+ Result: Word;
+ NewCluster: Word;
+Begin
+ WriteFileData:=6; { Invalid handle par défaut }
+ BytesWritten:=0;
+
+ { Vérifier la validité du handle }
+ If Handle >= 20 Then Exit;
+
+ If Not GetFileTableEntry(Handle, FileEntry) Then Exit;
+
+ { Vérifier si le handle est utilisé }
+ If Not FileEntry.InUse Then Exit;
+
+ Drive:=FileEntry.Drive - 1; { Conversion en index 0-based }
+
+ { Lire boot sector }
+ If Not ReadBootSector(Drive, BootSec) Then Begin
+  WriteFileData:=5; { Access denied }
+  Exit;
+ End;
+
+ { Vérifier si on peut écrire (pas en mode lecture seule) }
+ If (FileEntry.Attributes and $02) = 0 Then Begin { Mode lecture seule }
+  WriteFileData:=5; { Access denied }
+  Exit;
+ End;
+
+ TotalBytesWritten:=0;
+ 
+ { Extraire segment et offset du pointeur }
+ ASM
+  LES DI,Buffer
+  MOV BufferSeg,ES
+  MOV BufferOfs,DI
+ END;
+ 
+ CurrentCluster:=FileEntry.CurrentCluster;
+ If CurrentCluster = 0 Then CurrentCluster:=FileEntry.FirstCluster;
+ If CurrentCluster = 0 Then Begin
+  { Premier cluster du fichier }
+  CurrentCluster:=AllocateNewCluster(Drive, BootSec, 0);
+  If CurrentCluster = 0 Then Begin
+   WriteFileData:=5; { Access denied - disque plein }
+   Exit;
+  End;
+  FileEntry.FirstCluster:=CurrentCluster;
+  FileEntry.CurrentCluster:=CurrentCluster;
+ End;
+
+ ClusterSize:=BootSec.SectorsPerCluster * BootSec.BytesPerSector;
+
+ While BytesToWrite > 0 Do Begin
+  { Calculer combien on peut écrire dans le cluster courant }
+  RemainingInCluster:=ClusterSize - FileEntry.ClusterOffset;
+  BytesToWriteNow:=BytesToWrite;
+  If BytesToWriteNow > RemainingInCluster Then
+   BytesToWriteNow:=RemainingInCluster;
+
+  { Écrire dans le cluster courant }
+  Result:=WriteToCluster(Drive, BootSec, CurrentCluster, FileEntry.ClusterOffset, Ptr(BufferSeg, BufferOfs), BytesToWriteNow);
+  If Result <> 0 Then Begin
+   WriteFileData:=Result;
+   Exit;
+  End;
+
+  { Mettre à jour les pointeurs et compteurs }
+  Inc(BufferOfs, BytesToWriteNow);
+  
+  { Gérer le débordement de segment }
+  If BufferOfs >= $10000 Then Begin
+   Inc(BufferSeg, $1000);
+   Dec(BufferOfs, $10000);
+  End;
+  
+  Inc(TotalBytesWritten, BytesToWriteNow);
+  Dec(BytesToWrite, BytesToWriteNow);
+  Inc(FileEntry.CurrentPos, BytesToWriteNow);
+  Inc(FileEntry.ClusterOffset, BytesToWriteNow);
+
+  { Mettre à jour la taille du fichier si nécessaire }
+  If FileEntry.CurrentPos > FileEntry.FileSize Then
+   FileEntry.FileSize:=FileEntry.CurrentPos;
+
+  { Si on a fini ce cluster et qu'il reste des données, allouer un nouveau cluster }
+  If (FileEntry.ClusterOffset >= ClusterSize) and (BytesToWrite > 0) Then Begin
+   NewCluster:=AllocateNewCluster(Drive, BootSec, CurrentCluster);
+   If NewCluster = 0 Then Begin
+    WriteFileData:=5; { Access denied - disque plein }
+    Exit;
+   End;
+   CurrentCluster:=NewCluster;
+   FileEntry.CurrentCluster:=CurrentCluster;
+   FileEntry.ClusterOffset:=0;
+  End;
+ End;
+
+ { Mettre à jour l'entrée de fichier }
+ SetFileTableEntry(Handle, FileEntry);
+
+ BytesWritten:=TotalBytesWritten;
+ WriteFileData:=0; { Succès }
+End;
+
+{ Fonction principale 40h }
+Function DOS40h_WriteFile(Handle:Word;Buffer:Pointer;BytesToWrite:Word;Var BytesWritten:Word):Word;
+Begin
+ DOS40h_WriteFile:=WriteFileData(Handle, Buffer, BytesToWrite, BytesWritten);
 End;
 
 Procedure SetIntVec(_AL:Byte;_DS,_DX:Word);Assembler;ASM
