@@ -81,6 +81,7 @@
   - 40h : Write File (écriture de fichier)
   - 41h : Delete File (suppression de fichier)
   - 42h : Seek File (positionnement dans fichier)
+  - 43h : Get/Set File Attributes (lecture/modification attributs fichier)
 
   @target: Turbo Pascal 7 (syntaxe assembleur Intel)
 }
@@ -330,6 +331,13 @@ Function CalculateClusterFromPosition(Drive:Byte;BootSec:BootSectorRec;
                                       Var TargetCluster:Word;
                                       Var ClusterOffset:Word):Boolean;Near;Forward;
 Function DOS42h_SeekFile(Handle:Word;OffsetHi,OffsetLo:Word;Method:Byte):LongInt;Near;Forward;
+
+{ Forward declarations pour fonction 43h }
+Function GetFileAttributes(Drive:Byte;BootSec:BootSectorRec;DirCluster:Word;
+                           FileName:String;Var Attributes:Byte):Boolean;Near;Forward;
+Function SetFileAttributes(Drive:Byte;BootSec:BootSectorRec;DirCluster:Word;
+                           FileName:String;NewAttributes:Byte):Boolean;Near;Forward;
+Function DOS43h_GetSetFileAttributes(PathPtr:Pointer;Action:Byte;NewAttributes:Byte):Word;Near;Forward;
 
 { Fonctions d'accès aux données dans Code Segment }
 Function GetCurrentDrive: Byte;Near;Forward;
@@ -674,6 +682,7 @@ Procedure Intr21h;Assembler;ASM
  DW @40h { Fonction 40h - Write File }
  DW @41h { Fonction 41h - Delete File }
  DW @42h { Fonction 42h - Seek File }
+ DW @43h { Fonction 43h - Get/Set File Attributes }
 
  {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
  { Interruption 21h - Fonction 00h: Terminer le programme                      }
@@ -2493,6 +2502,42 @@ Procedure Intr21h;Assembler;ASM
  CLC                        { Clear Carry Flag }
 
 @42hEnd:
+ POP DI
+ POP SI
+ POP CX
+ JMP @Xit
+
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+ { Interruption 21h - Fonction 43h: Get/Set File Attributes                   }
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+@43h:
+ PUSH CX                    { Sauvegarder les registres }
+ PUSH SI
+ PUSH DI
+
+ { Paramètres: DS:DX = pointeur vers nom fichier ASCIIZ, AL = action (0=get, 1=set), CX = nouveaux attributs (si set) }
+ PUSH CX                    { Nouveaux attributs }
+ PUSH AX                    { Action (AL) }
+ PUSH DX                    { Pointeur fichier (offset) }
+ PUSH DS                    { Pointeur fichier (segment) }
+
+ CALL DOS43h_GetSetFileAttributes  { Appeler fonction Pascal }
+ ADD SP,8                   { Nettoyer pile (4 mots = 8 octets) }
+
+ { AX contient le résultat : si get réussi = attributs, si set réussi = 0, si erreur = $FFFF }
+ CMP AX,0FFFFh              { Vérifier si erreur }
+ JE @43hError               { Si erreur }
+
+ { Succès }
+ CLC                        { Clear Carry Flag }
+ JMP @43hEnd
+
+@43hError:
+ { Erreur }
+ MOV AX,2                   { File not found par défaut }
+ STC                        { Set Carry Flag }
+
+@43hEnd:
  POP DI
  POP SI
  POP CX
@@ -5994,6 +6039,208 @@ Begin
  If Not SetFileTableEntry(Handle, FileEntry) Then Exit;
  
  DOS42h_SeekFile:=NewPosition;
+End;
+
+{ Obtenir les attributs d'un fichier }
+Function GetFileAttributes(Drive:Byte;BootSec:BootSectorRec;DirCluster:Word;FileName:String;Var Attributes:Byte):Boolean;
+Var
+ Buffer: Array[0..511] of Byte;
+ Entry: DirectoryEntry;
+ EntryPtr: ^DirectoryEntry;
+ FirstDataSector: LongInt;
+ DirSector: LongInt;
+ SectorsToRead: Word;
+ I, J, K: Word;
+ Found: Boolean;
+ SearchName: String;
+Begin
+ GetFileAttributes:=False;
+ Attributes:=0;
+
+ { Préparer le nom de recherche (8.3 avec espaces) }
+ SearchName:=FileName;
+ While Length(SearchName) < 11 Do SearchName:=SearchName + ' ';
+
+ { Calculer le secteur de début du répertoire }
+ If DirCluster = 0 Then Begin
+  { Répertoire racine }
+  FirstDataSector:=BootSec.ReservedSectors + (BootSec.NumberOfFATs * BootSec.SectorsPerFAT);
+  DirSector:=FirstDataSector;
+  SectorsToRead:=(BootSec.RootDirEntries * 32) div BootSec.BytesPerSector;
+ End
+ Else Begin
+  { Sous-répertoire }
+  FirstDataSector:=BootSec.ReservedSectors + (BootSec.NumberOfFATs * BootSec.SectorsPerFAT) +
+                   ((BootSec.RootDirEntries * 32) div BootSec.BytesPerSector);
+  DirSector:=FirstDataSector + (LongInt(DirCluster - 2) * BootSec.SectorsPerCluster);
+  SectorsToRead:=BootSec.SectorsPerCluster;
+ End;
+
+ { Parcourir les secteurs du répertoire }
+ For I:=0 To SectorsToRead-1 Do Begin
+  If Not ReadSector(Drive, DirSector + I, @Buffer) Then Exit;
+
+  EntryPtr:=@Buffer;
+  For J:=0 To (BootSec.BytesPerSector div 32)-1 Do Begin
+   Move(EntryPtr^, Entry, 32);
+
+   { Vérifier si c'est l'entrée recherchée }
+   Found:=True;
+   For K:=0 To 10 Do Begin
+    If Entry.FileName[K] <> SearchName[K+1] Then Begin
+     Found:=False;
+     Break;
+    End;
+   End;
+
+   If Found and (Entry.FileName[0] <> #0) and (Entry.FileName[0] <> #$E5) Then Begin
+    { Entrée trouvée - retourner les attributs }
+    Attributes:=Entry.Attributes;
+    GetFileAttributes:=True;
+    Exit;
+   End;
+
+   Inc(LongInt(EntryPtr), 32);
+  End;
+ End;
+End;
+
+{ Définir les attributs d'un fichier }
+Function SetFileAttributes(Drive:Byte;BootSec:BootSectorRec;DirCluster:Word;FileName:String;NewAttributes:Byte):Boolean;
+Var
+ Buffer: Array[0..511] of Byte;
+ Entry: DirectoryEntry;
+ EntryPtr: ^DirectoryEntry;
+ FirstDataSector: LongInt;
+ DirSector: LongInt;
+ SectorsToRead: Word;
+ I, J, K: Word;
+ Found: Boolean;
+ SearchName: String;
+Begin
+ SetFileAttributes:=False;
+
+ { Préparer le nom de recherche (8.3 avec espaces) }
+ SearchName:=FileName;
+ While Length(SearchName) < 11 Do SearchName:=SearchName + ' ';
+
+ { Ne pas permettre de changer certains attributs critiques }
+ NewAttributes:=NewAttributes and $37; { Masquer les bits réservés }
+
+ { Calculer le secteur de début du répertoire }
+ If DirCluster = 0 Then Begin
+  { Répertoire racine }
+  FirstDataSector:=BootSec.ReservedSectors + (BootSec.NumberOfFATs * BootSec.SectorsPerFAT);
+  DirSector:=FirstDataSector;
+  SectorsToRead:=(BootSec.RootDirEntries * 32) div BootSec.BytesPerSector;
+ End
+ Else Begin
+  { Sous-répertoire }
+  FirstDataSector:=BootSec.ReservedSectors + (BootSec.NumberOfFATs * BootSec.SectorsPerFAT) +
+                   ((BootSec.RootDirEntries * 32) div BootSec.BytesPerSector);
+  DirSector:=FirstDataSector + (LongInt(DirCluster - 2) * BootSec.SectorsPerCluster);
+  SectorsToRead:=BootSec.SectorsPerCluster;
+ End;
+
+ { Parcourir les secteurs du répertoire }
+ For I:=0 To SectorsToRead-1 Do Begin
+  If Not ReadSector(Drive, DirSector + I, @Buffer) Then Exit;
+
+  EntryPtr:=@Buffer;
+  For J:=0 To (BootSec.BytesPerSector div 32)-1 Do Begin
+   Move(EntryPtr^, Entry, 32);
+
+   { Vérifier si c'est l'entrée recherchée }
+   Found:=True;
+   For K:=0 To 10 Do Begin
+    If Entry.FileName[K] <> SearchName[K+1] Then Begin
+     Found:=False;
+     Break;
+    End;
+   End;
+
+   If Found and (Entry.FileName[0] <> #0) and (Entry.FileName[0] <> #$E5) Then Begin
+    { Entrée trouvée - modifier les attributs }
+    Entry.Attributes:=NewAttributes;
+
+    { Réécrire l'entrée modifiée }
+    Move(Entry, EntryPtr^, 32);
+    If Not WriteSector(Drive, DirSector + I, @Buffer) Then Exit;
+
+    SetFileAttributes:=True;
+    Exit;
+   End;
+
+   Inc(LongInt(EntryPtr), 32);
+  End;
+ End;
+End;
+
+{ Fonction principale 43h }
+Function DOS43h_GetSetFileAttributes(PathPtr:Pointer;Action:Byte;NewAttributes:Byte):Word;
+Var
+ Path: String;
+ Drive: Byte;
+ DirPath,FileName: String;
+ BootSec: BootSectorRec;
+ DirCluster: Word;
+ Attributes: Byte;
+ P: PChar;
+ I: Byte;
+Begin
+ DOS43h_GetSetFileAttributes:=$FFFF; { Erreur par défaut }
+
+ { Convertir pointeur ASCIIZ en string Pascal }
+ P:=PChar(PathPtr);
+ Path:='';
+ I:=0;
+ While (P^ <> #0) and (I < 255) Do Begin
+  Path:=Path + P^;
+  Inc(P);
+  Inc(I);
+ End;
+
+ { Analyser le chemin }
+ If Not ParseFilePath(Path,Drive,DirPath,FileName) Then Begin
+  DOS43h_GetSetFileAttributes:=$FFFF; { Invalid path }
+  Exit;
+ End;
+
+ { Lire boot sector }
+ If Not ReadBootSector(Drive,BootSec) Then Begin
+  DOS43h_GetSetFileAttributes:=$FFFF; { Invalid drive }
+  Exit;
+ End;
+
+ { Trouver le répertoire parent }
+ If DirPath = '' Then
+  DirCluster:=0 { Répertoire racine }
+ Else Begin
+  If Not FindDirectoryByPath(Drive,BootSec,DirPath,DirCluster) Then Begin
+   DOS43h_GetSetFileAttributes:=$FFFF; { Path not found }
+   Exit;
+  End;
+ End;
+
+ { Action selon le paramètre }
+ Case Action Of
+  0: Begin { Get attributes }
+   If GetFileAttributes(Drive, BootSec, DirCluster, FileName + '        ', Attributes) Then
+    DOS43h_GetSetFileAttributes:=Attributes
+   Else
+    DOS43h_GetSetFileAttributes:=$FFFF; { File not found }
+  End;
+  
+  1: Begin { Set attributes }
+   If SetFileAttributes(Drive, BootSec, DirCluster, FileName + '        ', NewAttributes) Then
+    DOS43h_GetSetFileAttributes:=0 { Succès }
+   Else
+    DOS43h_GetSetFileAttributes:=$FFFF; { File not found }
+  End;
+  
+  Else
+   DOS43h_GetSetFileAttributes:=$FFFF; { Invalid action }
+ End;
 End;
 
 Procedure SetIntVec(_AL:Byte;_DS,_DX:Word);Assembler;ASM
