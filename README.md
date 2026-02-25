@@ -168,6 +168,10 @@ Voici la liste des différents fichiers proposés dans MSDOS-0 :
 			<td>Cette commande permet de fournir des informations techniques à propos de votre ordinateur.</td>
 		</tr>
 		<tr>
+			<td><b>MSMOUSE.PAS</b></td>
+			<td>Cette commande permet de charger le pilote souris pour les applications MS-DOS.</td>
+		</tr>
+		<tr>
 			<td><b>NLSFUNC.PAS</b></td>
 			<td>Cette commande permet d'effectuer la gestion du pays et des conventions internationales du système d'exploitation.</td>
 		</tr>
