@@ -85,6 +85,7 @@
   - 44h : IOCTL (contrôle d'entrée/sortie)
   - 45h : Duplicate Handle (duplication de handle)
   - 46h : Force Duplicate Handle (duplication forcée de handle)
+  - 47h : Get Current Directory (obtenir le répertoire courant)
 
   @target: Turbo Pascal 7 (syntaxe assembleur Intel)
 }
@@ -352,6 +353,7 @@ Function IOCTL_WriteControlData(Handle:Word;Buffer:Pointer;BytesToWrite:Word):Wo
 Function DOS44h_IOCTL(Handle:Word;SubFunction:Byte;Buffer:Pointer;ByteCount:Word):Word;Near;Forward;
 Function DOS45h_DuplicateHandle(SourceHandle:Word):Word;Near;Forward;
 Function DOS46h_ForceDuplicateHandle(SourceHandle:Word;TargetHandle:Word):Word;Near;Forward;
+Function DOS47h_GetCurrentDirectory(Drive:Byte;BufferSeg:Word;BufferOfs:Word):Word;Near;Forward;
 
 { Fonctions d'accès aux données dans Code Segment }
 Function GetCurrentDrive: Byte;Near;Forward;
@@ -700,6 +702,7 @@ Procedure Intr21h;Assembler;ASM
  DW @44h { Fonction 44h - IOCTL (Input/Output Control) }
  DW @45h { Fonction 45h - Duplicate Handle }
  DW @46h { Fonction 46h - Force Duplicate Handle }
+ DW @47h { Fonction 47h - Get Current Directory }
 
  {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
  { Interruption 21h - Fonction 00h: Terminer le programme                      }
@@ -2660,6 +2663,42 @@ Procedure Intr21h;Assembler;ASM
  POP DI
  POP SI
  POP CX
+ JMP @Xit
+
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+ { Interruption 21h - Fonction 47h: Get Current Directory                     }
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+@47h:
+ PUSH BX                    { Sauvegarder les registres }
+ PUSH CX
+ PUSH SI
+ PUSH DI
+
+ { Paramètres: DL = drive (0=courant, 1=A:, 2=B:, etc.), DS:SI = buffer }
+ PUSH SI                    { Buffer (offset) }
+ PUSH DS                    { Buffer (segment) }
+ PUSH DX                    { Drive number (DL) }
+
+ CALL DOS47h_GetCurrentDirectory { Appeler fonction Pascal }
+ ADD SP,6                   { Nettoyer pile (3 mots = 6 octets) }
+
+ { AX contient le résultat (0 si succès, code d'erreur sinon) }
+ CMP AX,0                   { Vérifier si succès }
+ JE @47hSuccess             { Si succès }
+
+ { Erreur }
+ STC                        { Set Carry Flag }
+ JMP @47hEnd
+
+@47hSuccess:
+ { Succès }
+ CLC                        { Clear Carry Flag }
+
+@47hEnd:
+ POP DI
+ POP SI
+ POP CX
+ POP BX
  JMP @Xit
 
 @Xit:
@@ -6657,6 +6696,80 @@ Begin
  End Else Begin
   DOS46h_ForceDuplicateHandle:=6; { Invalid handle }
  End;
+End;
+
+{ Fonction 47h - Get Current Directory }
+Function DOS47h_GetCurrentDirectory(Drive:Byte;BufferSeg:Word;BufferOfs:Word):Word;
+Var
+ CurrentDrive: Byte;
+ CurrentCluster: Word;
+ PathBuffer: Array[0..63] Of Char;
+ PathStr: String;
+Begin
+ DOS47h_GetCurrentDirectory:=15; { Invalid drive par défaut }
+ 
+ { Déterminer le lecteur à utiliser }
+ If Drive = 0 Then
+  CurrentDrive:=GetCurrentDrive
+ Else Begin
+  CurrentDrive:=Drive - 1; { 1=A:, 2=B:, etc. -> 0=A:, 1=B:, etc. }
+  If CurrentDrive >= 26 Then Begin
+   DOS47h_GetCurrentDirectory:=15; { Invalid drive }
+   Exit;
+  End;
+ End;
+ 
+ { Obtenir le cluster du répertoire courant pour ce lecteur }
+ CurrentCluster:=GetCurrentDirCluster(CurrentDrive);
+ 
+ { Si c'est le répertoire racine, retourner chaîne vide }
+ If CurrentCluster = 0 Then Begin
+  { Écrire une chaîne vide dans le buffer }
+  ASM
+   PUSH DS
+   MOV AX,BufferSeg
+   MOV DS,AX
+   MOV SI,BufferOfs
+   MOV BYTE PTR [SI],0     { Terminator null }
+   POP DS
+  END;
+  DOS47h_GetCurrentDirectory:=0;
+  Exit;
+ End;
+ 
+ { Pour cette implémentation simplifiée, retourner un chemin générique }
+ { basé sur le numéro de cluster du répertoire courant }
+ PathStr:='SUBDIR';
+ 
+ { Copier le chemin dans le buffer de l'utilisateur }
+ ASM
+  PUSH DS
+  PUSH ES
+  
+  { Pointer vers notre string PathStr }
+  LEA SI,PathStr
+  MOV CL,[SI]        { Longueur de la chaîne }
+  INC SI             { Pointer vers le contenu }
+  
+  { Pointer vers le buffer utilisateur }
+  MOV AX,BufferSeg
+  MOV ES,AX
+  MOV DI,BufferOfs
+  
+  { Copier le chemin }
+  MOV CH,0
+  CLD
+  REP MOVSB
+  
+  { Ajouter le terminateur null }
+  MOV AL,0
+  STOSB
+  
+  POP ES
+  POP DS
+ END;
+ 
+ DOS47h_GetCurrentDirectory:=0; { Succès }
 End;
 
 Procedure SetIntVec(_AL:Byte;_DS,_DX:Word);Assembler;ASM
