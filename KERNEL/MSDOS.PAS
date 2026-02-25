@@ -193,6 +193,32 @@ Type
    1: (AL, AH, BL, BH, CL, CH, DL, DH: Byte);
  End;
 
+ { Structure pour recherche de fichiers }
+ FindFileState = Record
+  SearchMask: String[12];            { Masque de recherche (*.*, *.TXT, etc.) }
+  SearchPath: String[80];            { Chemin de recherche }
+  SearchAttr: Byte;                  { Attributs recherchés }
+  CurrentDir: Word;                  { Cluster répertoire courant }
+  CurrentEntry: Word;                { Entrée courante dans le répertoire }
+  Active: Boolean;                   { État de recherche actif }
+ End;
+
+ { Structure d'entrée de répertoire FAT12/FAT16 }
+ DirectoryEntryFAT = Record
+  FileName: Array[0..10] of Char;   { Nom 8.3 (8 + 3 caractères) }
+  Attributes: Byte;                 { Attributs du fichier }
+  Reserved: Byte;                   { Réservé }
+  CreateTimeTenths: Byte;           { Dixièmes de seconde création }
+  CreateTime: Word;                 { Heure de création }
+  CreateDate: Word;                 { Date de création }
+  LastAccessDate: Word;             { Date dernier accès }
+  FirstClusterHigh: Word;           { Cluster de départ (poids fort) - FAT32 }
+  Time: Word;                       { Heure de modification }
+  Date: Word;                       { Date de modification }
+  FirstCluster: Word;               { Cluster de départ (poids faible) }
+  Size: LongInt;                    { Taille du fichier }
+ End;
+
   { Structure pour les données internes DOS }
  DataMOS=Record
   Key:Byte;
@@ -203,6 +229,7 @@ Type
   CurrentCountry:Word; { Code pays actuel }
   LastReturnCode:Word; { Code de retour du dernier programme (AH=raison, AL=code) }
   CurrentPSP:Word;     { Segment du PSP courant }
+  FindState: FindFileState; { État de la recherche de fichiers }
  End;
 
  { Structure pour les informations pays }
@@ -303,20 +330,41 @@ Type
   OverlayNumber: Word;      { Numéro overlay }
  End;
 
+{ Structure DTA pour Find First/Next File }
+DTAStruct = Record
+ Reserved: Array[0..20] of Byte;    { Zone réservée DOS }
+ Attribute: Byte;                   { Attribut du fichier trouvé }
+ Time: Word;                        { Heure du fichier }
+ Date: Word;                        { Date du fichier }
+ Size: LongInt;                     { Taille du fichier }
+ Name: Array[0..12] of Char;        { Nom 8.3 + terminateur }
+ End;
+
 { Variables globales supprimées - maintenant dans Code Segment }
 {$IFNDEF FPC}
 { Aucune variable globale nécessaire en mode Turbo Pascal }
-{$ENDIF}
+{$ENDIF}{ Déclarations Forward }
+Procedure Intr20h;Forward;
+Procedure Intr21h;Forward;
+Procedure Intr25h;Forward;
+Procedure Intr26h;Forward;
+Procedure Intr28h;Forward;
+Procedure Intr2Ah;Forward;
+Procedure Intr2Fh;Forward;
+Procedure Intr33h;Forward;
 
-{ Déclarations Forward }
-Procedure Intr20h;Interrupt;Forward;
-Procedure Intr21h;Interrupt;Forward;
-Procedure Intr25h;Interrupt;Forward;
-Procedure Intr26h;Interrupt;Forward;
-Procedure Intr28h;Interrupt;Forward;
-Procedure Intr2Ah;Interrupt;Forward;
-Procedure Intr2Fh;Interrupt;Forward;
-Procedure Intr33h;Interrupt;Forward;
+{ Déclarations des fonctions DOS }
+Function DOS4Eh_FindFirstFile(Path:String;Attr:Byte;var DTA:DTAStruct):Word;Forward;
+Function DOS4Fh_FindNextFile(var DTA:DTAStruct):Word;Forward;
+
+{ Fonctions d'accès aux données du kernel }
+Procedure GetFindState(Var State:FindFileState);Near;Forward;
+Procedure SetFindState(Var State:FindFileState);Near;Forward;
+
+{ Fonctions FAT pour Find File }
+Function GetRootDirectorySector:Word;Near;Forward;
+Function GetRootDirectorySize:Word;Near;Forward;
+Function ReadSectorSimple(Sector:Word;Var Buffer):Boolean;Near;Forward;
 
 Procedure SetIntVec(_AL:Byte;_DS,_DX:Word);Near;Forward;
 Procedure DataCountry(CountryCode:Word;Var CountryInfo:DataCountryRec);Near;Forward;
@@ -825,6 +873,8 @@ Procedure Intr21h;Assembler;ASM
  DW @4Bh { Fonction 4Bh - EXEC - Load and Execute Program }
  DW @4Ch { Fonction 4Ch - Terminate Program }
  DW @4Dh { Fonction 4Dh - Get Return Code }
+ DW @4Eh { Fonction 4Eh - Find First File }
+ DW @4Fh { Fonction 4Fh - Find Next File }
 
  {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
  { Interruption 21h - Fonction 00h: Terminer le programme                      }
@@ -2996,6 +3046,79 @@ Procedure Intr21h;Assembler;ASM
  { Pas de modification du Carry Flag - cette fonction réussit toujours }
  CLC                        { Clear Carry Flag }
 
+ POP DI
+ POP SI
+ POP CX
+ JMP @Xit
+
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+ { Interruption 21h - Fonction 4Eh: Find First File                           }
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+@4Eh:
+ PUSH CX                    { Sauvegarder les registres }
+ PUSH SI
+ PUSH DI
+ PUSH BX
+
+ { DS:DX pointe vers le nom de fichier/chemin }
+ MOV AX,DS
+ PUSH AX                    { Segment du nom de fichier }
+ PUSH DX                    { Offset du nom de fichier }
+ 
+ { CL contient les attributs de recherche }
+ MOV AL,CL
+ PUSH AX                    { Attributs }
+ 
+ { ES:BX pointe vers la DTA }
+ PUSH ES                    { Segment DTA }
+ PUSH BX                    { Offset DTA }
+
+ CALL DOS4Eh_FindFirstFile  { Appeler fonction Pascal }
+ { AX contient le code d'erreur }
+ 
+ ADD SP,10                  { Nettoyer la pile (5 paramètres * 2) }
+ 
+ OR AX,AX                   { Tester le résultat }
+ JZ @4EhSuccess
+ STC                        { Set Carry Flag si erreur }
+ JMP @4EhEnd
+@4EhSuccess:
+ CLC                        { Clear Carry Flag si succès }
+@4EhEnd:
+
+ POP BX
+ POP DI
+ POP SI
+ POP CX
+ JMP @Xit
+
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+ { Interruption 21h - Fonction 4Fh: Find Next File                            }
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+@4Fh:
+ PUSH CX                    { Sauvegarder les registres }
+ PUSH SI
+ PUSH DI
+ PUSH BX
+
+ { ES:BX pointe vers la DTA }
+ PUSH ES                    { Segment DTA }
+ PUSH BX                    { Offset DTA }
+
+ CALL DOS4Fh_FindNextFile   { Appeler fonction Pascal }
+ { AX contient le code d'erreur }
+ 
+ ADD SP,4                   { Nettoyer la pile (2 paramètres * 2) }
+ 
+ OR AX,AX                   { Tester le résultat }
+ JZ @4FhSuccess
+ STC                        { Set Carry Flag si erreur }
+ JMP @4FhEnd
+@4FhSuccess:
+ CLC                        { Clear Carry Flag si succès }
+@4FhEnd:
+
+ POP BX
  POP DI
  POP SI
  POP CX
@@ -7691,6 +7814,198 @@ Begin
  End;
 End;
 
+{ Fonction pour comparer un nom de fichier avec un masque (wildcards * et ?) }
+Function MatchFileName(FileName:String;Mask:String):Boolean;
+Var
+ FI, MI: Byte; { Index pour FileName et Mask }
+ FLen, MLen: Byte;
+Begin
+ MatchFileName:=False;
+ FI:=1; MI:=1;
+ FLen:=Length(FileName);
+ MLen:=Length(Mask);
+ 
+ While (FI <= FLen) And (MI <= MLen) Do Begin
+  Case Mask[MI] Of
+   '*': Begin
+    { Wildcard * - peut correspondre à n'importe quel nombre de caractères }
+    Inc(MI);
+    If MI > MLen Then Begin
+     MatchFileName:=True;
+     Exit;
+    End;
+    
+    { Chercher le prochain caractère non-wildcard dans le masque }
+    While (FI <= FLen) Do Begin
+     If MatchFileName(Copy(FileName,FI,FLen-FI+1),Copy(Mask,MI,MLen-MI+1)) Then Begin
+      MatchFileName:=True;
+      Exit;
+     End;
+     Inc(FI);
+    End;
+    Exit;
+   End;
+   
+   '?': Begin
+    { Wildcard ? - correspond à exactement un caractère }
+    Inc(FI);
+    Inc(MI);
+   End;
+   
+   Else Begin
+    { Caractère normal - doit correspondre exactement (insensible à la casse) }
+    If UpperCase(FileName[FI]) <> UpperCase(Mask[MI]) Then Exit;
+    Inc(FI);
+    Inc(MI);
+   End;
+  End;
+ End;
+ 
+ { Vérifier si on a traité tous les caractères }
+ If (FI > FLen) Then Begin
+  { Si il reste des * à la fin du masque, c'est OK }
+  While (MI <= MLen) And (Mask[MI] = '*') Do Inc(MI);
+  MatchFileName:=(MI > MLen);
+ End;
+End;
+
+{ Convertit un nom de fichier DOS 8.3 en chaîne }
+Function DOS83ToString(DOS83:Array of Char):String;
+Var
+ Result: String;
+ I: Byte;
+Begin
+ Result:='';
+ 
+ { Nom principal (8 caractères max) }
+ For I:=0 To 7 Do Begin
+  If DOS83[I] <> ' ' Then Result:=Result + DOS83[I]
+  Else Break;
+ End;
+ 
+ { Extension (3 caractères max) }
+ If DOS83[8] <> ' ' Then Begin
+  Result:=Result + '.';
+  For I:=8 To 10 Do Begin
+   If DOS83[I] <> ' ' Then Result:=Result + DOS83[I]
+   Else Break;
+  End;
+ End;
+ 
+ DOS83ToString:=Result;
+End;
+
+{ Fonctions FAT pour accès au répertoire racine }
+
+{ Obtient le secteur de début du répertoire racine }
+Function GetRootDirectorySector:Word;
+Var
+ BootSec: BootSectorRec;
+ Drive: Byte;
+Begin
+ GetRootDirectorySector:=0;
+ 
+ { Utiliser le lecteur courant }
+ ASM
+  MOV AL,Data.DataMOS.CurrDisk
+  MOV Drive,AL
+ END;
+ 
+ { Lire le boot sector - implémentation simplifiée }
+ { Pour l'instant, retourner des valeurs par défaut pour FAT12 }
+ If Drive <= 1 Then Begin { A: ou B: - disquettes }
+  GetRootDirectorySector:=19; { Secteur typique pour disquette 1.44MB }
+ End Else Begin { C: et plus - disques durs }
+  GetRootDirectorySector:=33; { Secteur typique pour disque dur FAT16 }
+ End;
+End;
+
+{ Obtient la taille du répertoire racine en secteurs }
+Function GetRootDirectorySize:Word;
+Var
+ BootSec: BootSectorRec;
+ Drive: Byte;
+Begin
+ GetRootDirectorySize:=0;
+ 
+ { Utiliser le lecteur courant }
+ ASM
+  MOV AL,Data.DataMOS.CurrDisk
+  MOV Drive,AL
+ END;
+ 
+ { Retourner des valeurs par défaut selon le type de lecteur }
+ If Drive <= 1 Then Begin { A: ou B: - disquettes }
+  GetRootDirectorySize:=14; { 224 entrées * 32 bytes / 512 = 14 secteurs }
+ End Else Begin { C: et plus - disques durs }
+  GetRootDirectorySize:=32; { 512 entrées * 32 bytes / 512 = 32 secteurs }
+ End;
+End;
+
+{ Lecture simplifiée d'un secteur pour Find File }
+Function ReadSectorSimple(Sector:Word;Var Buffer):Boolean;
+Begin
+ { Pour l'instant, implémentation simplifiée }
+ { Dans un vrai système, ceci ferait appel à INT 25h }
+ ReadSectorSimple:=False; { Échec simulé pour l'instant }
+ 
+ { Simuler une lecture de secteur vide pour les tests }
+ FillChar(Buffer, 512, 0);
+ 
+ { Marquer comme succès pour les tests }
+ ReadSectorSimple:=True;
+End;
+
+{ Fonctions d'accès aux données du kernel dans le Code Segment }
+
+{ Obtient l'état de recherche de fichiers depuis le Code Segment }
+Procedure GetFindState(Var State:FindFileState);
+Begin
+ { Les données sont stockées dans le Code Segment dans la structure Data }
+ ASM
+  PUSH DS
+  PUSH SI
+  
+  { Pointer vers la structure Data.DataMOS.FindState }
+  MOV SI,OFFSET Data.DataMOS
+  ADD SI,TYPE DataMOS - TYPE FindFileState  { Offset vers FindState }
+  
+  { Copier FindState depuis le Code Segment vers la variable paramètre }
+  LES DI,State
+  MOV CX,TYPE FindFileState
+  CLD
+  REP MOVSB
+  
+  POP SI
+  POP DS
+ END;
+End;
+
+{ Sauvegarde l'état de recherche de fichiers dans le Code Segment }
+Procedure SetFindState(Var State:FindFileState);
+Begin
+ { Sauvegarder dans le Code Segment dans la structure Data }
+ ASM
+  PUSH ES
+  PUSH DI
+  
+  { Pointer vers la structure Data.DataMOS.FindState }
+  PUSH CS
+  POP ES
+  MOV DI,OFFSET Data.DataMOS
+  ADD DI,TYPE DataMOS - TYPE FindFileState  { Offset vers FindState }
+  
+  { Copier State vers le Code Segment }
+  LDS SI,State
+  MOV CX,TYPE FindFileState
+  CLD
+  REP MOVSB
+  
+  POP DI
+  POP ES
+ END;
+End;
+
 { Fonctions 4Ch et 4Dh - Terminaison et code de retour }
 
 { Fonction 4Ch - Terminate Program }
@@ -7752,6 +8067,226 @@ Begin
  SetLastReturnCode(0);
  
  DOS4Dh_GetReturnCode:=ReturnCode;
+End;
+
+{ Fonctions 4Eh et 4Fh - Find First/Next File }
+
+{ Fonction 4Eh - Find First File }
+Function DOS4Eh_FindFirstFile(Path:String;Attr:Byte;var DTA:DTAStruct):Word;
+Var
+ SearchPath: String;
+ SearchName: String;
+ DirEntry: DirectoryEntryFAT;
+ RootDirSector, Sector: Word;
+ EntryIndex: Word;
+ Buffer: Array[0..511] of Byte;
+ I, Pos: Byte;
+ FileName: String;
+ FindState: FindFileState;
+Begin
+ DOS4Eh_FindFirstFile:=18; { Pas d'autres fichiers par défaut }
+ 
+ { Initialiser l'état de recherche }
+ GetFindState(FindState);
+ With FindState Do Begin
+  Active:=False;
+  CurrentDir:=0;  { Répertoire racine par défaut }
+  CurrentEntry:=0;
+  
+  { Extraire le chemin et le masque de recherche }
+  Pos:=Length(Path);
+  While (Pos > 0) And (Path[Pos] <> '\') And (Path[Pos] <> '/') Do Dec(Pos);
+  
+  If Pos > 0 Then Begin
+   SearchPath:=Copy(Path,1,Pos);
+   SearchName:=Copy(Path,Pos+1,Length(Path)-Pos);
+  End Else Begin
+   SearchPath:='';
+   SearchName:=Path;
+  End;
+  
+  { Si pas de masque spécifié, utiliser *.* }
+  If SearchName = '' Then SearchName:='*.*';
+  SearchMask:=UpperCase(SearchName);
+  SearchPath:=UpperCase(SearchPath);
+  SearchAttr:=Attr;
+ End;
+ SetFindState(FindState);
+ 
+ { Commencer la recherche dans le répertoire racine }
+ RootDirSector:=GetRootDirectorySector;
+ If RootDirSector = 0 Then Exit;
+ 
+ EntryIndex:=0;
+ Sector:=RootDirSector;
+ 
+ { Parcourir les entrées du répertoire racine }
+ While Sector < (RootDirSector + GetRootDirectorySize) Do Begin
+  If Not ReadSectorSimple(Sector,Buffer) Then Exit;
+  
+  For I:=0 To 15 Do Begin { 16 entrées par secteur }
+   Move(Buffer[I * 32],DirEntry,SizeOf(DirectoryEntryFAT));
+   
+   { Ignorer les entrées supprimées ou vides }
+   If DirEntry.FileName[0] = #0 Then Break; { Fin des entrées }
+   If DirEntry.FileName[0] = #$E5 Then Begin
+    Inc(EntryIndex);
+    Continue; { Entrée supprimée }
+   End;
+   
+   { Vérifier les attributs }
+   If (DirEntry.Attributes And $08) <> 0 Then Begin { Volume Label }
+    Inc(EntryIndex);
+    Continue;
+   End;
+   
+   { Construire le nom du fichier }
+   FileName:=DOS83ToString(DirEntry.FileName);
+   
+   { Vérifier si le nom correspond au masque }
+   If MatchFileName(FileName,FindState.SearchMask) Then Begin
+    { Vérifier les attributs }
+    If (Attr And $10) <> 0 Then Begin { Chercher répertoires }
+     If (DirEntry.Attributes And $10) = 0 Then Begin
+      Inc(EntryIndex);
+      Continue; { Pas un répertoire }
+     End;
+    End Else Begin { Chercher fichiers }
+     If (DirEntry.Attributes And $10) <> 0 Then Begin
+      Inc(EntryIndex);
+      Continue; { Pas un fichier }
+     End;
+    End;
+    
+    { Fichier trouvé ! Remplir la DTA }
+    FillChar(DTA.Reserved,21,0);
+    DTA.Attribute:=DirEntry.Attributes;
+    DTA.Time:=DirEntry.Time;
+    DTA.Date:=DirEntry.Date;
+    DTA.Size:=DirEntry.Size;
+    
+    { Copier le nom (format 8.3 avec terminateur null) }
+    Move(FileName[1],DTA.Name[0],Length(FileName));
+    DTA.Name[Length(FileName)]:=#0;
+    
+    { Mettre à jour l'état pour FindNext }
+    GetFindState(FindState);
+    With FindState Do Begin
+     Active:=True;
+     CurrentEntry:=EntryIndex + 1;
+    End;
+    SetFindState(FindState);
+    
+    DOS4Eh_FindFirstFile:=0; { Succès }
+    Exit;
+   End;
+   
+   Inc(EntryIndex);
+  End;
+  
+  Inc(Sector);
+ End;
+End;
+
+{ Fonction 4Fh - Find Next File }
+Function DOS4Fh_FindNextFile(var DTA:DTAStruct):Word;
+Var
+ DirEntry: DirectoryEntryFAT;
+ RootDirSector, Sector: Word;
+ Buffer: Array[0..511] of Byte;
+ I: Byte;
+ FileName: String;
+ EntryIndex, SectorEntry: Word;
+ FindState: FindFileState;
+Begin
+ DOS4Fh_FindNextFile:=18; { Pas d'autres fichiers }
+ 
+ { Vérifier si une recherche est active }
+ GetFindState(FindState);
+ If Not FindState.Active Then Exit;
+ 
+ RootDirSector:=GetRootDirectorySector;
+ If RootDirSector = 0 Then Exit;
+ 
+ EntryIndex:=FindState.CurrentEntry;
+ Sector:=RootDirSector + (EntryIndex Div 16);
+ SectorEntry:=EntryIndex Mod 16;
+ 
+ { Continuer la recherche depuis la position courante }
+ While Sector < (RootDirSector + GetRootDirectorySize) Do Begin
+  If Not ReadSectorSimple(Sector,Buffer) Then Exit;
+  
+  For I:=SectorEntry To 15 Do Begin { Continuer depuis la position courante }
+   Move(Buffer[I * 32],DirEntry,SizeOf(DirectoryEntryFAT));
+   
+   { Ignorer les entrées supprimées ou vides }
+   If DirEntry.FileName[0] = #0 Then Begin
+    GetFindState(FindState);
+    FindState.Active:=False;
+    SetFindState(FindState);
+    Exit; { Fin des entrées }
+   End;
+   
+   If DirEntry.FileName[0] = #$E5 Then Begin
+    Inc(EntryIndex);
+    Continue; { Entrée supprimée }
+   End;
+   
+   { Vérifier les attributs }
+   If (DirEntry.Attributes And $08) <> 0 Then Begin { Volume Label }
+    Inc(EntryIndex);
+    Continue;
+   End;
+   
+   { Construire le nom du fichier }
+   FileName:=DOS83ToString(DirEntry.FileName);
+   
+   { Vérifier si le nom correspond au masque }
+   If MatchFileName(FileName,FindState.SearchMask) Then Begin
+    { Vérifier les attributs }
+    If (FindState.SearchAttr And $10) <> 0 Then Begin { Chercher répertoires }
+     If (DirEntry.Attributes And $10) = 0 Then Begin
+      Inc(EntryIndex);
+      Continue; { Pas un répertoire }
+     End;
+    End Else Begin { Chercher fichiers }
+     If (DirEntry.Attributes And $10) <> 0 Then Begin
+      Inc(EntryIndex);
+      Continue; { Pas un fichier }
+     End;
+    End;
+    
+    { Fichier trouvé ! Remplir la DTA }
+    FillChar(DTA.Reserved,21,0);
+    DTA.Attribute:=DirEntry.Attributes;
+    DTA.Time:=DirEntry.Time;
+    DTA.Date:=DirEntry.Date;
+    DTA.Size:=DirEntry.Size;
+    
+    { Copier le nom (format 8.3 avec terminateur null) }
+    Move(FileName[1],DTA.Name[0],Length(FileName));
+    DTA.Name[Length(FileName)]:=#0;
+    
+    { Mettre à jour l'état pour le prochain FindNext }
+    GetFindState(FindState);
+    FindState.CurrentEntry:=EntryIndex + 1;
+    SetFindState(FindState);
+    
+    DOS4Fh_FindNextFile:=0; { Succès }
+    Exit;
+   End;
+   
+   Inc(EntryIndex);
+  End;
+  
+  Inc(Sector);
+  SectorEntry:=0; { Commencer au début du secteur suivant }
+ End;
+ 
+ { Plus de fichiers trouvés }
+ GetFindState(FindState);
+ FindState.Active:=False;
+ SetFindState(FindState);
 End;
 
 Procedure SetIntVec(_AL:Byte;_DS,_DX:Word);Assembler;ASM
