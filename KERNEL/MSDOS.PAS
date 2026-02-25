@@ -33,6 +33,9 @@
   - 1Ah : Définir l'adresse DTA (Disk Transfer Area)
   - 1Bh : Obtenir les informations d'allocation du lecteur par défaut
   - 1Ch : Obtenir les informations d'allocation d'un lecteur spécifique
+  - 1Dh : Fermer tous les fichiers (fonction non documentée)
+  - 1Eh : Fonction réservée/non documentée
+  - 1Fh : Fonction réservée/non documentée
   - 20h : Terminer le programme (obsolète)
   - 21h : Lecture aléatoire avec FCB
   - 22h : Ecriture aléatoire avec FCB
@@ -55,8 +58,6 @@ INTERFACE
 Procedure BEGIN_KERNEL;
 Procedure END_KERNEL;
 
-Procedure Intr21h;Interrupt;
-
 IMPLEMENTATION
 
 Const
@@ -71,13 +72,22 @@ Type DataMOS=Record
  DTAOffset:Word;     { Offset de la DTA }
 End;
 
+Procedure Intr21h;Interrupt;Forward;
 Procedure Intr25h;Interrupt;Forward;
+Procedure Intr26h;Interrupt;Forward;
+Procedure Intr28h;Interrupt;Forward;
+Procedure Intr2Ah;Interrupt;Forward;
+Procedure Intr2Fh;Interrupt;Forward;
 
 Procedure SetIntVec(AL:Byte;DS,DX:Word);Near;Forward;
 
 Procedure BEGIN_KERNEL;Begin
  SetIntVec($21,CSeg,Ofs(Intr21h));
  SetIntVec($25,CSeg,Ofs(Intr25h));
+ SetIntVec($26,CSeg,Ofs(Intr26h));
+ SetIntVec($28,CSeg,Ofs(Intr28h));
+ SetIntVec($2A,CSeg,Ofs(Intr2Ah));
+ SetIntVec($2F,CSeg,Ofs(Intr2Fh));
   { TODO : Charger un programme COMMAND.EXE, faire un JMP sur le point d'entr�e du programme charg� en m�moire }
  ASM
   DB 'DEBUT DU NOYAU MSDOS-0';
@@ -129,9 +139,9 @@ Procedure Intr21h;Assembler;ASM
  DW @1Ah { Fonction 1Ah - Définir l'adresse DTA }
  DW @1Bh { Fonction 1Bh - Obtenir informations allocation drive par défaut }
  DW @1Ch { Fonction 1Ch - Obtenir informations allocation drive spécifique }
- DW @Xit { Fonction 1Dh - a developper }
- DW @Xit { Fonction 1Eh - a developper }
- DW @Xit { Fonction 1Fh - a developper }
+ DW @1Dh { Fonction 1Dh - Fermer tous les fichiers }
+ DW @1Eh { Fonction 1Eh - Fonction réservée/non documentée }
+ DW @1Fh { Fonction 1Fh - Fonction réservée/non documentée }
  DW @20h { Fonction 20h - Terminer le programme (obsolète) }
  DW @21h { Fonction 21h - Lecture aléatoire avec FCB }
  DW @22h { Fonction 22h - Ecriture aléatoire avec FCB }
@@ -758,6 +768,46 @@ Procedure Intr21h;Assembler;ASM
  JMP @Xit
 
  {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
+ { Interruption 21h - Fonction 1Dh: Fermer tous les fichiers                   }
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
+@1Dh:
+ { Fonction non documentée dans DOS classique, utilisée pour fermer tous les FCB ouverts }
+ { Dans une implémentation complète, il faudrait parcourir la table des FCB ouverts }
+ { et fermer chaque fichier ouvert }
+ PUSH AX                    { Sauver registres }
+ PUSH BX
+ PUSH CX
+ PUSH DX
+ { Simulation : ne rien faire car pas de table FCB active dans cette version }
+ { Dans un DOS complet, on appellerait une routine pour fermer tous les FCB }
+ MOV AL,0                   { Code de retour : succès }
+ POP DX                     { Restaurer registres }
+ POP CX
+ POP BX
+ POP AX
+ JMP @Xit
+
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
+ { Interruption 21h - Fonction 1Eh: Fonction réservée/non documentée           }
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
+@1Eh:
+ { Fonction non documentée dans DOS classique }
+ { Utilisée en interne par certaines versions de DOS pour la redirection I/O }
+ { Pour compatibilité, on retourne simplement sans erreur }
+ MOV AL,0                   { Code de retour : succès (pas d'erreur) }
+ JMP @Xit
+
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
+ { Interruption 21h - Fonction 1Fh: Fonction réservée/non documentée           }
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
+@1Fh:
+ { Fonction non documentée dans DOS classique }
+ { Utilisée en interne par certaines versions de DOS pour la configuration d'imprimante }
+ { Pour compatibilité, on retourne simplement sans erreur }
+ MOV AL,0                   { Code de retour : succès (pas d'erreur) }
+ JMP @Xit
+
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
  { Interruption 21h - Fonction 20h: Terminer le programme (obsolète)           }
  {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
 @20h:
@@ -978,18 +1028,18 @@ Procedure Intr25h;Assembler;ASM
  INT 13h
 END;
 
-Procedure Intr26h;Interrupt;Assembler;ASM
+Procedure Intr26h;Assembler;ASM
 END;
 
-Procedure Intr28h;Interrupt;Assembler;ASM
+Procedure Intr28h;Assembler;ASM
  { Vide - Executer a temps perdu! }
 END;
 
-Procedure Intr2Ah;Interrupt;Assembler;ASM
+Procedure Intr2Ah;Assembler;ASM
  XOR AX,AX
 END;
 
-Procedure Intr2Fh;Interrupt;Assembler;ASM
+Procedure Intr2Fh;Assembler;ASM
  XOR BX,BX
  XOR AX,AX
 END;
