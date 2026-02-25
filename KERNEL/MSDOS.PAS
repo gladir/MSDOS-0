@@ -211,17 +211,6 @@ Type
   ClusterOffset: Word;   { Offset dans le cluster courant }
  End;
 
-Var
- FileTable: Array[0..19] of FileTableEntry; { Max 20 fichiers ouverts }
-
-{$IFDEF FPC}
-Var
- Data:Record
-  DataMOS:DataMOS;
-  DefaultCountry:DataCountryRec;
- End;
-{$ENDIF}
-
 { Variables globales supprimées - maintenant dans Code Segment }
 {$IFNDEF FPC}
 { Aucune variable globale nécessaire en mode Turbo Pascal }
@@ -299,6 +288,24 @@ Procedure SetCurrentDirDrive(Index, Drive: Byte);Near;Forward;
 Procedure SetCurrentDirCluster(Index: Byte; Cluster: Word);Near;Forward;
 Procedure SetCurrentDirPath(Index: Byte; Path: String);Near;Forward;
 
+{ Fonctions d'accès aux données FileTable dans Code Segment }
+Function GetFileTableInUse(Index: Byte): Boolean;Near;Forward;
+Function GetFileTableDrive(Index: Byte): Byte;Near;Forward;
+Function GetFileTableFirstCluster(Index: Byte): Word;Near;Forward;
+Function GetFileTableFileSize(Index: Byte): LongInt;Near;Forward;
+Function GetFileTableCurrentPos(Index: Byte): LongInt;Near;Forward;
+Function GetFileTableAttributes(Index: Byte): Byte;Near;Forward;
+Function GetFileTableCurrentCluster(Index: Byte): Word;Near;Forward;
+Function GetFileTableClusterOffset(Index: Byte): Word;Near;Forward;
+Procedure SetFileTableInUse(Index: Byte; InUse: Boolean);Near;Forward;
+Procedure SetFileTableDrive(Index: Byte; Drive: Byte);Near;Forward;
+Procedure SetFileTableFirstCluster(Index: Byte; FirstCluster: Word);Near;Forward;
+Procedure SetFileTableFileSize(Index: Byte; FileSize: LongInt);Near;Forward;
+Procedure SetFileTableCurrentPos(Index: Byte; CurrentPos: LongInt);Near;Forward;
+Procedure SetFileTableAttributes(Index: Byte; Attributes: Byte);Near;Forward;
+Procedure SetFileTableCurrentCluster(Index: Byte; CurrentCluster: Word);Near;Forward;
+Procedure SetFileTableClusterOffset(Index: Byte; ClusterOffset: Word);Near;Forward;
+
 Procedure BEGIN_KERNEL;
 Var I:Byte;
 Begin
@@ -312,7 +319,7 @@ Begin
 
  { Initialiser table des fichiers ouverts }
  For I:=0 To 19 Do Begin
-  FileTable[I].InUse:=False;
+  SetFileTableInUse(I, False);
  End;
 
  SetIntVec($20,CSeg,Ofs(Intr21h));
@@ -508,6 +515,31 @@ Procedure Data;Assembler;ASM
  DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
  DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
  DB 0,0,0,0
+
+ { FileTable: Array[0..19] of FileTableEntry - 20 entrées de 17 octets chacune }
+ { Chaque entrée: InUse(1) + Drive(1) + FirstCluster(2) +
+                  FileSize(4) + CurrentPos(4) + Attributes(1) +
+                  CurrentCluster(2) + ClusterOffset(2) = 17 octets }
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0  { FileTable[0] }
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0  { FileTable[1] }
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0  { FileTable[2] }
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0  { FileTable[3] }
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0  { FileTable[4] }
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0  { FileTable[5] }
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0  { FileTable[6] }
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0  { FileTable[7] }
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0  { FileTable[8] }
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0  { FileTable[9] }
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0  { FileTable[10] }
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0  { FileTable[11] }
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0  { FileTable[12] }
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0  { FileTable[13] }
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0  { FileTable[14] }
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0  { FileTable[15] }
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0  { FileTable[16] }
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0  { FileTable[17] }
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0  { FileTable[18] }
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0  { FileTable[19] }
 END;
 
 Procedure Intr20h;Assembler;ASM
@@ -2765,6 +2797,195 @@ Begin
 End;
 
 {==============================================================================}
+{ FONCTIONS D'ACCÈS À LA FILETABLE DANS LE CODE SEGMENT                       }
+{==============================================================================}
+
+{ Structure FileTable : 7 + 26*131 + 20*17 = 3747 + 340 = 4087
+  Offset de FileTable dans Data = 7 + 26*131 = 3413 }
+
+{ Fonctions pour accéder aux variables FileTable dans Data }
+Function GetFileTableInUse(Index: Byte): Boolean;Assembler;
+ASM
+ MOV AL,Index
+ MOV AH,17                   { Taille d'une entrée FileTable }
+ MUL AH
+ ADD AX,3413                 { Ajouter offset de base FileTable }
+ MOV BX,AX
+ MOV AL,BYTE PTR [Data + BX] { Lire InUse }
+ CMP AL,0
+ JE @False                   { Si égal à 0, retourner False }
+ MOV AL,1                    { Sinon retourner True }
+ JMP @End
+@False:
+ MOV AL,0
+@End:
+END;
+
+Procedure SetFileTableInUse(Index: Byte; InUse: Boolean);Assembler;
+ASM
+ MOV AL,Index
+ MOV AH,17
+ MUL AH
+ ADD AX,3413
+ MOV BX,AX
+ MOV AL,InUse
+ MOV BYTE PTR [Data + BX],AL
+END;
+
+Function GetFileTableDrive(Index: Byte): Byte;Assembler;
+ASM
+ MOV AL,Index
+ MOV AH,17
+ MUL AH
+ ADD AX,3414                 { Offset + 1 pour Drive }
+ MOV BX,AX
+ MOV AL,BYTE PTR [Data + BX]
+END;
+
+Procedure SetFileTableDrive(Index: Byte; Drive: Byte);Assembler;
+ASM
+ MOV AL,Index
+ MOV AH,17
+ MUL AH
+ ADD AX,3414
+ MOV BX,AX
+ MOV AL,Drive
+ MOV BYTE PTR [Data + BX],AL
+END;
+
+Function GetFileTableFirstCluster(Index: Byte): Word;Assembler;
+ASM
+ MOV AL,Index
+ MOV AH,17
+ MUL AH
+ ADD AX,3415                 { Offset + 2 pour FirstCluster }
+ MOV BX,AX
+ MOV AX,WORD PTR [Data + BX]
+END;
+
+Procedure SetFileTableFirstCluster(Index: Byte; FirstCluster: Word);Assembler;
+ASM
+ MOV AL,Index
+ MOV AH,17
+ MUL AH
+ ADD AX,3415
+ MOV BX,AX
+ MOV AX,FirstCluster
+ MOV WORD PTR [Data + BX],AX
+END;
+
+Function GetFileTableFileSize(Index: Byte): LongInt;Assembler;
+ASM
+ MOV AL,Index
+ MOV AH,17
+ MUL AH
+ ADD AX,3417                 { Offset + 4 pour FileSize }
+ MOV BX,AX
+ MOV AX,WORD PTR [Data + BX]     { Partie basse }
+ MOV DX,WORD PTR [Data + BX + 2] { Partie haute }
+END;
+
+Procedure SetFileTableFileSize(Index: Byte; FileSize: LongInt);Assembler;
+ASM
+ MOV AL,Index
+ MOV AH,17
+ MUL AH
+ ADD AX,3417
+ MOV BX,AX
+ MOV AX,WORD PTR [FileSize]      { Partie basse }
+ MOV WORD PTR [Data + BX],AX
+ MOV AX,WORD PTR [FileSize + 2]  { Partie haute }
+ MOV WORD PTR [Data + BX + 2],AX
+END;
+
+Function GetFileTableCurrentPos(Index: Byte): LongInt;Assembler;
+ASM
+ MOV AL,Index
+ MOV AH,17
+ MUL AH
+ ADD AX,3421                 { Offset + 8 pour CurrentPos }
+ MOV BX,AX
+ MOV AX,WORD PTR [Data + BX]
+ MOV DX,WORD PTR [Data + BX + 2]
+END;
+
+Procedure SetFileTableCurrentPos(Index: Byte; CurrentPos: LongInt);Assembler;
+ASM
+ MOV AL,Index
+ MOV AH,17
+ MUL AH
+ ADD AX,3421
+ MOV BX,AX
+ MOV AX,WORD PTR [CurrentPos]
+ MOV WORD PTR [Data + BX],AX
+ MOV AX,WORD PTR [CurrentPos + 2]
+ MOV WORD PTR [Data + BX + 2],AX
+END;
+
+Function GetFileTableAttributes(Index: Byte): Byte;Assembler;
+ASM
+ MOV AL,Index
+ MOV AH,17
+ MUL AH
+ ADD AX,3425                 { Offset + 12 pour Attributes }
+ MOV BX,AX
+ MOV AL,BYTE PTR [Data + BX]
+END;
+
+Procedure SetFileTableAttributes(Index: Byte; Attributes: Byte);Assembler;
+ASM
+ MOV AL,Index
+ MOV AH,17
+ MUL AH
+ ADD AX,3425
+ MOV BX,AX
+ MOV AL,Attributes
+ MOV BYTE PTR [Data + BX],AL
+END;
+
+Function GetFileTableCurrentCluster(Index: Byte): Word;Assembler;
+ASM
+ MOV AL,Index
+ MOV AH,17
+ MUL AH
+ ADD AX,3426                 { Offset + 13 pour CurrentCluster }
+ MOV BX,AX
+ MOV AX,WORD PTR [Data + BX]
+END;
+
+Procedure SetFileTableCurrentCluster(Index: Byte; CurrentCluster: Word);Assembler;
+ASM
+ MOV AL,Index
+ MOV AH,17
+ MUL AH
+ ADD AX,3426
+ MOV BX,AX
+ MOV AX,CurrentCluster
+ MOV WORD PTR [Data + BX],AX
+END;
+
+Function GetFileTableClusterOffset(Index: Byte): Word;Assembler;
+ASM
+ MOV AL,Index
+ MOV AH,17
+ MUL AH
+ ADD AX,3428                 { Offset + 15 pour ClusterOffset }
+ MOV BX,AX
+ MOV AX,WORD PTR [Data + BX]
+END;
+
+Procedure SetFileTableClusterOffset(Index: Byte; ClusterOffset: Word);Assembler;
+ASM
+ MOV AL,Index
+ MOV AH,17
+ MUL AH
+ ADD AX,3428
+ MOV BX,AX
+ MOV AX,ClusterOffset
+ MOV WORD PTR [Data + BX],AX
+END;
+
+{==============================================================================}
 { FONCTIONS DE MANIPULATION DE CHAÎNES INTERNES                               }
 {==============================================================================}
 
@@ -4125,16 +4346,16 @@ Begin
 
  { Chercher une entrée libre dans la table des fichiers }
  For I:=0 To 19 Do Begin
-  If Not FileTable[I].InUse Then Begin
-   { Initialiser l'entrée }
-   FileTable[I].InUse:=True;
-   FileTable[I].Drive:=Drive;
-   FileTable[I].FirstCluster:=FirstCluster;
-   FileTable[I].FileSize:=FileSize;
-   FileTable[I].CurrentPos:=0;
-   FileTable[I].Attributes:=Attributes;
-   FileTable[I].CurrentCluster:=FirstCluster;
-   FileTable[I].ClusterOffset:=0;
+  If Not GetFileTableInUse(I) Then Begin
+   { Initialiser l'entrée via fonctions d'accès Code Segment }
+   SetFileTableInUse(I, True);
+   SetFileTableDrive(I, Drive);
+   SetFileTableFirstCluster(I, FirstCluster);
+   SetFileTableFileSize(I, FileSize);
+   SetFileTableCurrentPos(I, 0);
+   SetFileTableAttributes(I, Attributes);
+   SetFileTableCurrentCluster(I, FirstCluster);
+   SetFileTableClusterOffset(I, 0);
 
    Handle:=I;
    AllocateFileHandle:=True;
@@ -4332,7 +4553,7 @@ Var
  Result: Word;
 Begin
  DOS3Ch_CreateOpenFile:=$FFFF; { Erreur par défaut }
- 
+
  { Convertir pointeur ASCIIZ en string Pascal }
  P:=PChar(PathPtr);
  Path:='';
@@ -4342,22 +4563,22 @@ Begin
   Inc(P);
   Inc(I);
  End;
- 
+
  { Analyser le chemin }
  If Not ParseFilePath(Path,Drive,DirPath,FileName) Then Begin
   DOS3Ch_CreateOpenFile:=$FFFF; { Invalid path }
   Exit;
  End;
- 
+
  { Lire boot sector }
  If Not ReadBootSector(Drive,BootSec) Then Begin
   DOS3Ch_CreateOpenFile:=$FFFF; { Invalid drive }
   Exit;
  End;
- 
+
  { Trouver ou créer le fichier }
  Result:=FindOrCreateFile(Drive,BootSec,DirPath,FileName,0,FileHandle);
- 
+
  { Si succès, retourner le handle }
  If Result = 0 Then
   DOS3Ch_CreateOpenFile:=FileHandle
