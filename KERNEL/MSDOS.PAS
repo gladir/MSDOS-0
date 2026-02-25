@@ -57,7 +57,7 @@
   - 32h : Get Drive Parameter Block (DPB - paramètres lecteur)
   - 33h : Multi-fonction (Control Break, Boot Drive)
     - 00h : Get Control Break check state
-    - 01h : Set Control Break check state  
+    - 01h : Set Control Break check state
     - 05h : Get boot drive
     - 06h : Get DOS version
   - 34h : Demande l'adresse du drapeau InDos
@@ -118,6 +118,8 @@ Procedure Intr33h;Interrupt;Forward;
 Procedure SetIntVec(AL:Byte;DS,DX:Word);Near;Forward;
 Procedure DataCountry(CountryCode:Word;Var CountryInfo:DataCountryRec);Near;Forward;
 Procedure FillChar(Var Dest;Size:Word;Value:Byte);Near;Forward;
+Procedure Handle38hGetCountryInfo(CountryCode:Word;BufferPtr:Word);Near;Forward;
+Function Handle38hSetCountryInfo(NewCountryCode:Word):Word;Near;Forward;
 
 Procedure BEGIN_KERNEL;Begin
  SetIntVec($20,CSeg,Ofs(Intr21h));
@@ -1176,7 +1178,7 @@ Procedure Intr21h;Assembler;ASM
  { Convertir du BCD vers binaire si nécessaire }
  { Pour simplifier, on simule une heure fixe 12:34:56.78 }
  MOV CH,12h                 { 12 heures }
- MOV CL,34h                 { 34 minutes }  
+ MOV CL,34h                 { 34 minutes }
  MOV DH,56h                 { 56 secondes }
  MOV DL,78h                 { 78 centièmes }
  POP AX                     { Restaurer AX }
@@ -1278,42 +1280,42 @@ Procedure Intr21h;Assembler;ASM
  PUSH BX
  PUSH CX
  PUSH DX
- 
+
  { Vérifier que DX n'est pas trop grand (limite raisonnable) }
  CMP DX,1000h               { Maximum ~64KB en paragraphes }
  JA @31hError
- 
+
  { Dans un DOS complet, cette fonction devrait :
    1. Marquer les blocs mémoire comme résidents
    2. Ajuster la table des blocs mémoire (MCB - Memory Control Block)
    3. Libérer la mémoire non utilisée
    4. Sauvegarder le code de retour
    5. Retourner au programme parent sans libérer complètement le programme }
-   
+
  { Version simplifiée pour cette implémentation de base :
    On simule un TSR en gardant le programme en mémoire mais sans
    implémenter la gestion complète des MCB }
-   
+
  { Sauvegarder le code de retour (AL) dans une variable système }
  MOV BL,AL                  { Code de retour dans BL }
- 
+
  { Calculer la taille mémoire à conserver }
  { DX contient le nombre de paragraphes (16 octets chacun) }
  MOV CX,DX                  { Nombre de paragraphes à garder }
- 
+
  { Pour cette implémentation, on fait un appel à la fonction 4Ch }
  { avec le code de retour mais sans libérer complètement le programme }
  { Dans un vrai DOS, le programme resterait résident }
- 
+
  { Simulation : marquer comme résident et retourner succès }
  { En réalité, le programme devrait rester en mémoire et actif }
  MOV AL,BL                  { Récupérer le code de retour }
- 
+
  POP DX                     { Restaurer registres }
  POP CX
  POP BX
  POP AX
- 
+
  { Pour l'instant, on fait comme une terminaison normale }
  { Dans un DOS complet, le programme continuerait à s'exécuter en arrière-plan }
  MOV AH,4Ch                 { Fonction 4Ch - Terminaison avec code de retour }
@@ -1344,24 +1346,24 @@ Procedure Intr21h;Assembler;ASM
  PUSH DX
  PUSH DI
  PUSH ES
- 
+
  { Vérifier le numéro de lecteur }
  CMP DL,0                   { Lecteur par défaut ? }
  JE @32hDefaultDrive
  CMP DL,26                  { Vérifier limite (A-Z) }
  JA @32hError
- 
+
 @32hDefaultDrive:
  { Dans un DOS complet, le DPB contient les informations détaillées du lecteur :
    - Octets par secteur
-   - Secteurs par cluster  
+   - Secteurs par cluster
    - Secteurs réservés
    - Nombre de FAT
    - Entrées répertoire racine
    - Secteurs par FAT
    - Type de média
    etc. }
-   
+
  { Pour cette implémentation simplifiée, on simule un DPB basique }
  { Créer un DPB fictif en mémoire }
  PUSH CS
@@ -1396,7 +1398,7 @@ Procedure Intr21h;Assembler;ASM
  DB 0                       { Reserved }
  DB 0                       { Reserved }
  DB 0                       { Reserved }
- 
+
 @32hEnd:
  POP ES                     { Restaurer registres }
  POP DI
@@ -1488,32 +1490,32 @@ Procedure Intr21h;Assembler;ASM
  { Entrée : DL = numéro de lecteur (0=défaut, 1=A:, 2=B:, 3=C:, etc.) }
  { Sortie : AX = secteurs par cluster (-1 si erreur) }
  {         BX = clusters libres disponibles }
- {         CX = octets par secteur }  
+ {         CX = octets par secteur }
  {         DX = total clusters sur le lecteur }
  PUSH AX                    { Sauver registres }
  PUSH BX
  PUSH CX
- 
+
  { Vérifier le numéro de lecteur }
  CMP DL,0                   { Lecteur par défaut ? }
  JE @36hDefaultDrive
  CMP DL,26                  { Vérifier limite (A-Z) }
  JA @36hError
- 
+
 @36hDefaultDrive:
  { Dans un DOS complet, cette fonction interrogerait le système de fichiers }
  { Pour cette implémentation simplifiée, on simule les valeurs d'une disquette 1.44MB }
- 
+
  { Simuler les paramètres d'une disquette 1.44MB }
  MOV AX,1                   { 1 secteur par cluster }
  MOV BX,1440                { Environ 1440 clusters libres (exemple) }
  MOV CX,512                 { 512 octets par secteur }
  MOV DX,2880                { 2880 clusters total sur disquette 1.44MB }
- 
+
  POP CX                     { Restaurer les registres sauvés }
  POP BX                     { mais on va les écraser avec nos valeurs }
  POP AX
- 
+
  { Remettre nos valeurs calculées }
  MOV AX,1                   { 1 secteur par cluster }
  MOV BX,1440                { 1440 clusters libres }
@@ -1539,7 +1541,7 @@ Procedure Intr21h;Assembler;ASM
  { 01h = Set switch character }
  { 02h = Get available device list }
  { 03h = Set available device list }
- 
+
  CMP AL,00h                 { Sous-fonction 00h : Get switch character ? }
  JE @37h00h
  CMP AL,01h                 { Sous-fonction 01h : Set switch character ? }
@@ -1588,7 +1590,7 @@ Procedure Intr21h;Assembler;ASM
  { 00h = Get current country info }
  { FFh = Set country info }
  { DX = code pays (AL=FFh) ou buffer (AL=00h) }
- 
+
  CMP AL,00h                 { Sous-fonction 00h : Get country info ? }
  JE @38h00h
  CMP AL,0FFh                { Sous-fonction FFh : Set country info ? }
@@ -1604,207 +1606,19 @@ Procedure Intr21h;Assembler;ASM
  PUSH ES
  PUSH SI
  PUSH BP
- 
+
  { Obtenir le code pays actuel }
  MOV BX,Data.DataMOS.CurrentCountry { Code pays actuel }
- 
+
  { Vérifier si DX pointe vers un buffer valide }
  CMP DX,0                   { Buffer fourni ? }
  JE @38h00hNoBuf
- 
- { Remplir le buffer avec les informations pays selon le code pays actuel }
- MOV DI,DX                  { ES:DI = buffer destination }
- MOV SI,BX                  { SI = code pays }
- 
- { Remplir les informations selon le pays }
- CMP SI,1                   { États-Unis ? }
- JE @38hUSA
- CMP SI,2                   { Canada ? }
- JE @38hCanada  
- CMP SI,33                  { France ? }
- JE @38hFrance
- CMP SI,34                  { Espagne ? }
- JE @38hSpain
- { Pays non supporté - utiliser France par défaut }
- JMP @38hFrance
 
-@38hUSA:
- { États-Unis (Code 1) }
- MOV BYTE PTR ES:[DI],0     { Format USA mm/dd/yy }
- INC DI
- MOV AL,'$'                 { Dollar }
- STOSB
- XOR AL,AL
- STOSB
- STOSB
- STOSB
- STOSB                      { Padding }
- MOV AL,','                 { Virgule pour milliers }
- STOSB
- XOR AL,AL
- STOSB
- MOV AL,'.'                 { Point décimal }
- STOSB
- XOR AL,AL
- STOSB
- MOV AL,'/'                 { Séparateur date }
- STOSB
- XOR AL,AL
- STOSB
- MOV AL,':'                 { Séparateur heure }
- STOSB
- XOR AL,AL
- STOSB
- MOV BYTE PTR ES:[DI],0     { $ précède }
- INC DI
- MOV BYTE PTR ES:[DI],2     { 2 chiffres }
- INC DI
- MOV BYTE PTR ES:[DI],0     { Format 12h }
- INC DI
- XOR AX,AX                  { Adresse routine }
- STOSW
- STOSW
- MOV AL,','                 { Séparateur liste }
- STOSB
- XOR AL,AL
- STOSB
- JMP @38hFillRest
-
-@38hCanada:
- { Canada (Code 2) }
- MOV BYTE PTR ES:[DI],1     { Format européen dd/mm/yy }
- INC DI
- MOV AL,'$'                 { Dollar }
- STOSB
- XOR AL,AL
- STOSB
- STOSB
- STOSB
- STOSB                      { Padding }
- MOV AL,' '                 { Espace pour milliers }
- STOSB
- XOR AL,AL
- STOSB
- MOV AL,','                 { Virgule décimale }
- STOSB
- XOR AL,AL
- STOSB
- MOV AL,'/'                 { Séparateur date }
- STOSB
- XOR AL,AL
- STOSB
- MOV AL,':'                 { Séparateur heure }
- STOSB
- XOR AL,AL
- STOSB
- MOV BYTE PTR ES:[DI],0     { $ précède }
- INC DI
- MOV BYTE PTR ES:[DI],2     { 2 chiffres }
- INC DI
- MOV BYTE PTR ES:[DI],1     { Format 24h }
- INC DI
- XOR AX,AX                  { Adresse routine }
- STOSW
- STOSW
- MOV AL,';'                 { Point-virgule }
- STOSB
- XOR AL,AL
- STOSB
- JMP @38hFillRest
-
-@38hFrance:
- { France (Code 33) }
- MOV BYTE PTR ES:[DI],1     { Format européen dd/mm/yy }
- INC DI
- MOV AL,'F'                 { Franc }
- STOSB
- MOV AL,'R'
- STOSB
- XOR AL,AL
- STOSB
- STOSB
- STOSB                      { Padding }
- MOV AL,' '                 { Espace pour milliers }
- STOSB
- XOR AL,AL
- STOSB
- MOV AL,','                 { Virgule décimale }
- STOSB
- XOR AL,AL
- STOSB
- MOV AL,'/'                 { Séparateur date }
- STOSB
- XOR AL,AL
- STOSB
- MOV AL,':'                 { Séparateur heure }
- STOSB
- XOR AL,AL
- STOSB
- MOV BYTE PTR ES:[DI],0     { FR précède }
- INC DI
- MOV BYTE PTR ES:[DI],2     { 2 chiffres }
- INC DI
- MOV BYTE PTR ES:[DI],1     { Format 24h }
- INC DI
- XOR AX,AX                  { Adresse routine }
- STOSW
- STOSW
- MOV AL,';'                 { Point-virgule }
- STOSB
- XOR AL,AL
- STOSB
- JMP @38hFillRest
-
-@38hSpain:
- { Espagne (Code 34) }
- MOV BYTE PTR ES:[DI],1     { Format européen dd/mm/yy }
- INC DI
- MOV AL,'P'                 { Peseta }
- STOSB
- MOV AL,'t'
- STOSB
- MOV AL,'s'
- STOSB
- XOR AL,AL
- STOSB
- STOSB                      { Padding }
- MOV AL,'.'                 { Point pour milliers }
- STOSB
- XOR AL,AL
- STOSB
- MOV AL,','                 { Virgule décimale }
- STOSB
- XOR AL,AL
- STOSB
- MOV AL,'/'                 { Séparateur date }
- STOSB
- XOR AL,AL
- STOSB
- MOV AL,':'                 { Séparateur heure }
- STOSB
- XOR AL,AL
- STOSB
- MOV BYTE PTR ES:[DI],0     { Pts précède }
- INC DI
- MOV BYTE PTR ES:[DI],2     { 2 chiffres }
- INC DI
- MOV BYTE PTR ES:[DI],1     { Format 24h }
- INC DI
- XOR AX,AX                  { Adresse routine }
- STOSW
- STOSW
- MOV AL,';'                 { Point-virgule }
- STOSB
- XOR AL,AL
- STOSB
-
-@38hFillRest:
- { Remplir les 10 octets réservés }
- MOV CX,10
-@38hFillZero:
- XOR AL,AL
- STOSB
- LOOP @38hFillZero
+ { Appeler la procédure Pascal helper pour remplir le buffer }
+ PUSH BX                    { Passer CountryCode }
+ PUSH DX                    { Passer BufferPtr }
+ CALL Handle38hGetCountryInfo
+ ADD SP,4                   { Nettoyer la pile (2 paramètres Word) }
 
 @38h00hNoBuf:
  POP BP                     { Restaurer registres }
@@ -1822,41 +1636,29 @@ Procedure Intr21h;Assembler;ASM
  PUSH AX                    { Sauver registres }
  PUSH BX
  PUSH CX
- 
- { Vérifier que c'est un code pays supporté }
- CMP DX,1                   { États-Unis ? }
- JE @38hFFhValid
- CMP DX,2                   { Canada ? }
- JE @38hFFhValid
- CMP DX,33                  { France ? }
- JE @38hFFhValid
- CMP DX,34                  { Espagne ? }
- JE @38hFFhValid
- JMP @38hFFhError
 
-@38hFFhValid:
- { Code pays valide - le sauvegarder }
- MOV Data.DataMOS.CurrentCountry,DX
- MOV BX,DX                  { Retourner le code pays dans BX }
- XOR AX,AX                  { Code de succès }
+ { Appeler la fonction Pascal helper pour valider et changer le pays }
+ PUSH DX                    { Passer NewCountryCode }
+ CALL Handle38hSetCountryInfo
+ ADD SP,2                   { Nettoyer la pile (1 paramètre Word) }
+
+ { AX contient le code de retour de la fonction }
+ CMP AX,0                   { Succès ? }
+ JNE @38hFFhEnd             { Non, garder le code d'erreur }
+
+ { Succès - retourner le code pays dans BX }
+ MOV BX,DX                  { BX = code pays défini }
+
+@38hFFhEnd:
  POP CX
  POP BX
  POP AX
- JMP @Xit
-
-@38hFFhError:
- { Code pays invalide }
- POP CX
- POP BX
- POP AX
- MOV AX,2                   { Code d'erreur : Invalid country code }
  JMP @Xit
 
 @38hUnknown:
  { Sous-fonction non supportée }
  MOV AX,1                   { Code d'erreur : Invalid function }
  JMP @Xit
-
 @Xit:
  DEC Data.DataMOS.InDos
 END;
@@ -1890,33 +1692,167 @@ Procedure Intr33h;Assembler;ASM
  XOR AX,AX
 END;
 
-Procedure FillChar(Var Dest;Size:Word;Value:Byte);Assembler;
 { Procédure interne pour remplir une zone mémoire avec une valeur }
+Procedure FillChar(Var Dest;Size:Word;Value:Byte);Assembler;ASM
+ PUSH ES
+  PUSH DI
+   PUSH CX
+    PUSH AX
+     LES DI,Dest       { ES:DI pointe sur destination }
+     MOV CX,Size       { CX = nombre d'octets }
+     MOV AL,Value      { AL = valeur à remplir }
+     CLD               { Direction forward }
+     REP STOSB         { Remplir ES:[DI] avec AL, CX fois }
+    POP AX
+   POP CX
+  POP DI
+ POP ES
+END;
+
+Procedure Handle38hGetCountryInfo(CountryCode:Word;BufferPtr:Word);
+{ Procedure helper pour remplir le buffer avec les informations pays }
+Var
+ CountryInfo: DataCountryRec;
+ I: Byte;
+Begin
+ { Obtenir les informations du pays }
+ DataCountry(CountryCode, CountryInfo);
+
+ { Remplir le buffer de 38 octets au format DOS en utilisant l'assembleur inline }
  ASM
   PUSH ES
   PUSH DI
-  PUSH CX
   PUSH AX
+  PUSH CX
 
-  LES DI,Dest       { ES:DI pointe sur destination }
-  MOV CX,Size       { CX = nombre d'octets }
-  MOV AL,Value      { AL = valeur à remplir }
-  CLD               { Direction forward }
-  REP STOSB         { Remplir ES:[DI] avec AL, CX fois }
+  MOV DI,BufferPtr           { DI = adresse du buffer }
 
-  POP AX
+  { Format de date }
+  MOV AL,CountryInfo.DateFormat
+  MOV ES:[DI],AL
+  INC DI
+
+  { Symbole monétaire (5 octets) }
+  MOV AL,BYTE PTR CountryInfo.Currency[0]
+  MOV ES:[DI],AL
+  INC DI
+  MOV AL,BYTE PTR CountryInfo.Currency[1]
+  MOV ES:[DI],AL
+  INC DI
+  MOV AL,BYTE PTR CountryInfo.Currency[2]
+  MOV ES:[DI],AL
+  INC DI
+  MOV AL,BYTE PTR CountryInfo.Currency[3]
+  MOV ES:[DI],AL
+  INC DI
+  MOV AL,BYTE PTR CountryInfo.Currency[4]
+  MOV ES:[DI],AL
+  INC DI
+
+  { Séparateur milliers (2 octets) }
+  MOV AL,BYTE PTR CountryInfo.ThousandsSep[0]
+  MOV ES:[DI],AL
+  INC DI
+  MOV AL,BYTE PTR CountryInfo.ThousandsSep[1]
+  MOV ES:[DI],AL
+  INC DI
+
+  { Séparateur décimal (2 octets) }
+  MOV AL,BYTE PTR CountryInfo.DecimalSep[0]
+  MOV ES:[DI],AL
+  INC DI
+  MOV AL,BYTE PTR CountryInfo.DecimalSep[1]
+  MOV ES:[DI],AL
+  INC DI
+
+  { Séparateur date (2 octets) }
+  MOV AL,BYTE PTR CountryInfo.DateSep[0]
+  MOV ES:[DI],AL
+  INC DI
+  MOV AL,BYTE PTR CountryInfo.DateSep[1]
+  MOV ES:[DI],AL
+  INC DI
+
+  { Séparateur heure (2 octets) }
+  MOV AL,BYTE PTR CountryInfo.TimeSep[0]
+  MOV ES:[DI],AL
+  INC DI
+  MOV AL,BYTE PTR CountryInfo.TimeSep[1]
+  MOV ES:[DI],AL
+  INC DI
+
+  { Format monétaire }
+  MOV AL,CountryInfo.CurrencyFormat
+  MOV ES:[DI],AL
+  INC DI
+
+  { Chiffres après virgule }
+  MOV AL,CountryInfo.DecimalDigits
+  MOV ES:[DI],AL
+  INC DI
+
+  { Format heure }
+  MOV AL,CountryInfo.TimeFormat
+  MOV ES:[DI],AL
+  INC DI
+
+  { Adresse routine conversion (4 octets) - non utilisé }
+  XOR AL,AL
+  MOV ES:[DI],AL
+  INC DI
+  MOV ES:[DI],AL
+  INC DI
+  MOV ES:[DI],AL
+  INC DI
+  MOV ES:[DI],AL
+  INC DI
+
+  { Séparateur liste (2 octets) }
+  MOV AL,BYTE PTR CountryInfo.DataListSep[0]
+  MOV ES:[DI],AL
+  INC DI
+  MOV AL,BYTE PTR CountryInfo.DataListSep[1]
+  MOV ES:[DI],AL
+  INC DI
+
+  { Réservé (10 octets) }
+  MOV CX,10
+  XOR AL,AL
+@FillLoop:
+  MOV ES:[DI],AL
+  INC DI
+  LOOP @FillLoop
+
   POP CX
+  POP AX
   POP DI
   POP ES
  END;
+End;
 
+ { Fonction helper pour valider et changer le code pays }
+Function Handle38hSetCountryInfo(NewCountryCode:Word):Word;Begin
+ { Valider que c'est un code pays supporté }
+ Case NewCountryCode of
+  1, 2, 33, 34: Begin
+    { Code pays valide - le sauvegarder }
+    ASM
+     MOV AX,NewCountryCode
+     MOV Data.DataMOS.CurrentCountry,AX
+    END;
+    Handle38hSetCountryInfo := 0; { Succès }
+  End;
+  Else Begin
+    Handle38hSetCountryInfo := 2; { Erreur : code pays invalide }
+  End;
+ End;
+End;
 
-Procedure DataCountry(CountryCode:Word;Var CountryInfo:DataCountryRec);
-Begin
+Procedure DataCountry(CountryCode:Word;Var CountryInfo:DataCountryRec);Begin
  { Remplir les informations selon le code pays }
  FillChar(CountryInfo,SizeOf(CountryInfo),0);
  CountryInfo.CountryCode:=CountryCode;
- 
+
  Case CountryCode of
   1: Begin { États-Unis }
    CountryInfo.DateFormat:=0;          { Format USA mm/dd/yy }
