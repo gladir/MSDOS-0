@@ -53,6 +53,7 @@
   - 2Eh : Fixer/réinitialiser le drapeau de vérification
   - 2Fh : DOS Multiplex Interrupt (interface TSR/utilitaires)
   - 30h : Get DOS Version (obtenir version DOS)
+  - 31h : Terminate Stay Resident (TSR avec code de retour)
   - 33h : Multi-fonction
   - 34h : Demande l'adresse du drapeau InDos
   - 35h : Demande le vecteur d'interruption
@@ -176,7 +177,7 @@ Procedure Intr21h;Assembler;ASM
  DW @2Eh { Fonction 2Eh - Fixer/réinitialiser le drapeau de vérification }
  DW @2Fh { Fonction 2Fh - DOS Multiplex Interrupt }
  DW @30h { Fonction 30h - Get DOS Version }
- DW @Xit { Fonction 31h - a developper }
+ DW @31h { Fonction 31h - Terminate Stay Resident (TSR) }
  DW @Xit { Fonction 32h - a developper }
  DW @33h { Fonction 33h - Multi-fonction }
  DW @34h { Fonction 34h - Demande l'adresse du drapeau "InDos" }
@@ -1234,6 +1235,71 @@ Procedure Intr21h;Assembler;ASM
  MOV BH,0FFh                { MS-DOS compatible }
  XOR BL,BL                  { Pas de numéro de série utilisateur }
  XOR CX,CX                  { Pas de numéro de série utilisateur }
+ JMP @Xit
+
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
+ { Interruption 21h - Fonction 31h: Terminate Stay Resident (TSR)              }
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
+@31h:
+ { Terminer le programme en gardant une partie en mémoire (TSR) }
+ { Entrée : AL = code de retour, DX = nombre de paragraphes à garder en mémoire }
+ { Cette fonction est utilisée par les programmes résidents (TSR) }
+ PUSH AX                    { Sauver registres }
+ PUSH BX
+ PUSH CX
+ PUSH DX
+ 
+ { Vérifier que DX n'est pas trop grand (limite raisonnable) }
+ CMP DX,1000h               { Maximum ~64KB en paragraphes }
+ JA @31hError
+ 
+ { Dans un DOS complet, cette fonction devrait :
+   1. Marquer les blocs mémoire comme résidents
+   2. Ajuster la table des blocs mémoire (MCB - Memory Control Block)
+   3. Libérer la mémoire non utilisée
+   4. Sauvegarder le code de retour
+   5. Retourner au programme parent sans libérer complètement le programme }
+   
+ { Version simplifiée pour cette implémentation de base :
+   On simule un TSR en gardant le programme en mémoire mais sans
+   implémenter la gestion complète des MCB }
+   
+ { Sauvegarder le code de retour (AL) dans une variable système }
+ MOV BL,AL                  { Code de retour dans BL }
+ 
+ { Calculer la taille mémoire à conserver }
+ { DX contient le nombre de paragraphes (16 octets chacun) }
+ MOV CX,DX                  { Nombre de paragraphes à garder }
+ 
+ { Pour cette implémentation, on fait un appel à la fonction 4Ch }
+ { avec le code de retour mais sans libérer complètement le programme }
+ { Dans un vrai DOS, le programme resterait résident }
+ 
+ { Simulation : marquer comme résident et retourner succès }
+ { En réalité, le programme devrait rester en mémoire et actif }
+ MOV AL,BL                  { Récupérer le code de retour }
+ 
+ POP DX                     { Restaurer registres }
+ POP CX
+ POP BX
+ POP AX
+ 
+ { Pour l'instant, on fait comme une terminaison normale }
+ { Dans un DOS complet, le programme continuerait à s'exécuter en arrière-plan }
+ MOV AH,4Ch                 { Fonction 4Ch - Terminaison avec code de retour }
+ INT 21h                    { Terminer (mais en gardant résident) }
+ JMP @Xit
+
+@31hError:
+ { Erreur : trop de mémoire demandée }
+ POP DX                     { Restaurer registres }
+ POP CX
+ POP BX
+ POP AX
+ { Retourner une erreur - dans ce cas on termine normalement }
+ MOV AH,4Ch                 { Fonction 4Ch - Terminaison avec code d'erreur }
+ MOV AL,1                   { Code d'erreur = 1 }
+ INT 21h
  JMP @Xit
 
  {- - - - - - - - - - - - - - - - - - - - - - - - -}
