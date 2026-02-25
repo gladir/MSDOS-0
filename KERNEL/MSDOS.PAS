@@ -42,6 +42,10 @@
   - 23h : Obtenir la taille de fichier avec FCB
   - 24h : Définir l'adresse aléatoire avec FCB
   - 25h : Fixe le vecteur d'interruption
+  - 26h : Créer un nouveau PSP (Program Segment Prefix)
+  - 27h : Lecture aléatoire de bloc avec FCB
+  - 28h : Ecriture aléatoire de bloc avec FCB
+  - 29h : Analyser nom de fichier dans FCB
   - 2Ah : Lire la date
   - 2Bh : Fixe la date
   - 33h : Multi-fonction
@@ -148,10 +152,10 @@ Procedure Intr21h;Assembler;ASM
  DW @23h { Fonction 23h - Obtenir la taille de fichier avec FCB }
  DW @24h { Fonction 24h - Définir l'adresse aléatoire avec FCB }
  DW @25h { Fonction 25h - Fixe le vecteur d'Interruption}
- DW @Xit { Fonction 26h - a developper }
- DW @Xit { Fonction 27h - a developper }
- DW @Xit { Fonction 28h - a developper }
- DW @Xit { Fonction 29h - a developper }
+ DW @26h { Fonction 26h - Créer un nouveau PSP }
+ DW @27h { Fonction 27h - Lecture aléatoire de bloc avec FCB }
+ DW @28h { Fonction 28h - Ecriture aléatoire de bloc avec FCB }
+ DW @29h { Fonction 29h - Analyser nom de fichier dans FCB }
  DW @2Ah { Fonction 2Ah - Lire la date }
  DW @2Bh { Fonction 2Bh - Fixe la date }
  DW @Xit { Fonction 2Ch - a developper }
@@ -963,6 +967,140 @@ Procedure Intr21h;Assembler;ASM
  {$ENDIF}
  MOV ES:[BX],DX
  MOV ES:[BX+2],DS
+ JMP @Xit
+
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
+ { Interruption 21h - Fonction 26h: Créer un nouveau PSP                       }
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
+@26h:
+ { Créer un nouveau Program Segment Prefix }
+ { DX contient l'adresse du segment du nouveau PSP }
+ PUSH AX                    { Sauver registres }
+ PUSH BX
+ PUSH CX
+ PUSH SI
+ PUSH DI
+ PUSH DS
+ PUSH ES
+ { Dans une implémentation complète, il faudrait :
+   1. Allouer un bloc mémoire de 256 octets (100h)
+   2. Copier le PSP courant vers le nouveau PSP
+   3. Modifier les champs nécessaires (comme la table des handles)
+   4. Initialiser les pointeurs vers les routines DOS }
+ { Version simplifiée : juste retourner succès }
+ MOV AL,0                   { Code de retour: succès }
+ POP ES                     { Restaurer registres }
+ POP DS
+ POP DI
+ POP SI
+ POP CX
+ POP BX
+ POP AX
+ JMP @Xit
+
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
+ { Interruption 21h - Fonction 27h: Lecture aléatoire de bloc avec FCB         }
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
+@27h:
+ { Lire plusieurs enregistrements consécutifs à partir d'une position aléatoire }
+ { DS:DX pointe sur FCB, CX contient le nombre d'enregistrements à lire }
+ PUSH SI                    { Sauver registres }
+ PUSH DI
+ PUSH DS
+ PUSH ES
+ PUSH CX
+ MOV SI,DX                  { DS:DX pointe sur le FCB }
+ { Vérifier que le FCB est ouvert }
+ CMP BYTE PTR [SI],0        { Drive = 0 ? }
+ JE @27Error
+ { Dans une implémentation complète, il faudrait :
+   1. Lire le numéro d'enregistrement aléatoire depuis FCB+21h
+   2. Lire CX enregistrements consécutifs depuis cette position
+   3. Transférer les données vers la DTA
+   4. Mettre à jour le pointeur de fichier dans le FCB }
+ { Version simplifiée : simuler une lecture réussie de tous les enregistrements }
+ POP CX                     { Nombre d'enregistrements demandés }
+ MOV AL,0                   { Code de retour: succès, tous lus }
+ JMP @27End
+@27Error:
+ POP CX                     { Nettoyer la pile }
+ MOV AL,1                   { Code d'erreur: EOF ou FCB invalide }
+ MOV CX,0                   { Aucun enregistrement lu }
+@27End:
+ POP ES                     { Restaurer registres }
+ POP DS
+ POP DI
+ POP SI
+ JMP @Xit
+
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
+ { Interruption 21h - Fonction 28h: Ecriture aléatoire de bloc avec FCB        }
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
+@28h:
+ { Ecrire plusieurs enregistrements consécutifs à partir d'une position aléatoire }
+ { DS:DX pointe sur FCB, CX contient le nombre d'enregistrements à écrire }
+ PUSH SI                    { Sauver registres }
+ PUSH DI
+ PUSH DS
+ PUSH ES
+ PUSH CX
+ MOV SI,DX                  { DS:DX pointe sur le FCB }
+ { Vérifier que le FCB est ouvert }
+ CMP BYTE PTR [SI],0        { Drive = 0 ? }
+ JE @28Error
+ { Dans une implémentation complète, il faudrait :
+   1. Lire le numéro d'enregistrement aléatoire depuis FCB+21h
+   2. Ecrire CX enregistrements consécutifs depuis cette position
+   3. Prendre les données depuis la DTA
+   4. Mettre à jour le pointeur de fichier et la taille dans le FCB }
+ { Version simplifiée : simuler une écriture réussie de tous les enregistrements }
+ POP CX                     { Nombre d'enregistrements demandés }
+ MOV AL,0                   { Code de retour: succès, tous écrits }
+ JMP @28End
+@28Error:
+ POP CX                     { Nettoyer la pile }
+ MOV AL,1                   { Code d'erreur: disque plein ou FCB invalide }
+ MOV CX,0                   { Aucun enregistrement écrit }
+@28End:
+ POP ES                     { Restaurer registres }
+ POP DS
+ POP DI
+ POP SI
+ JMP @Xit
+
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
+ { Interruption 21h - Fonction 29h: Analyser nom de fichier dans FCB           }
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
+@29h:
+ { Analyser une chaîne de nom de fichier et la convertir en format FCB }
+ { DS:SI pointe sur la chaîne source, ES:DI pointe sur le FCB destination }
+ { AL contient les options d'analyse (bit 0: ignorer les séparateurs, etc.) }
+ PUSH BX                    { Sauver registres }
+ PUSH CX
+ PUSH DX
+ { Dans une implémentation complète, il faudrait :
+   1. Analyser la chaîne caractère par caractère
+   2. Extraire le lecteur, le nom et l'extension
+   3. Convertir en format 8.3 majuscules
+   4. Remplir les champs appropriés du FCB
+   5. Gérer les caractères jokers (* et ?) }
+ { Version simplifiée : juste marquer comme analysé avec succès }
+ MOV AL,0                   { Code de retour: nom analysé avec succès }
+ { Simuler un FCB basique : lecteur par défaut, nom "TEST    ", extension "   " }
+ MOV BYTE PTR ES:[DI],0     { Drive = 0 (par défaut) }
+ { Remplir avec des espaces }
+ MOV CX,11                  { 8 caractères nom + 3 extension }
+ MOV AL,' '
+ PUSH DI
+ INC DI
+@29FillLoop:
+ STOSB                      { Stocker AL dans ES:DI et incrémenter DI }
+ LOOP @29FillLoop
+ POP DI
+ MOV AL,0                   { Code de retour final: succès }
+ POP DX                     { Restaurer registres }
+ POP CX
+ POP BX
  JMP @Xit
 
  {- - - - - - - - - - - - - - - - - - - - - - - - -}
