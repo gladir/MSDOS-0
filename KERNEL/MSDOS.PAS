@@ -311,6 +311,10 @@ Function UpdateFATEntry(Drive:Byte;BootSec:BootSectorRec;Cluster:Word;NextCluste
 Function WriteFileData(Handle:Word;Buffer:Pointer;BytesToWrite:Word;Var BytesWritten:Word):Word;Near;Forward;
 Function DOS40h_WriteFile(Handle:Word;Buffer:Pointer;BytesToWrite:Word;Var BytesWritten:Word):Word;Near;Forward;
 
+{ Forward declarations pour fonction 41h }
+Function DeleteDirectoryEntry(Drive:Byte;BootSec:BootSectorRec;DirCluster:Word;FileName:String):Boolean;Near;Forward;
+Function DOS41h_DeleteFile(PathPtr:Pointer):Word;Near;Forward;
+
 { Fonctions d'accès aux données dans Code Segment }
 Function GetCurrentDrive: Byte;Near;Forward;
 Procedure SetCurrentDrive(Drive: Byte);Near;Forward;
@@ -652,6 +656,7 @@ Procedure Intr21h;Assembler;ASM
  DW @3Eh { Fonction 3Eh - Close File }
  DW @3Fh { Fonction 3Fh - Read File }
  DW @40h { Fonction 40h - Write File }
+ DW @41h { Fonction 41h - Delete File }
 
  {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
  { Interruption 21h - Fonction 00h: Terminer le programme                      }
@@ -2398,6 +2403,40 @@ Procedure Intr21h;Assembler;ASM
 
 @40hEnd:
  POP SI                     { Restaurer AX original (ignoré) }
+ POP DI
+ POP SI
+ POP CX
+ JMP @Xit
+
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+ { Interruption 21h - Fonction 41h: Delete File                                }
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+@41h:
+ PUSH CX                    { Sauvegarder les registres }
+ PUSH SI
+ PUSH DI
+
+ { Paramètres: DS:DX = pointeur vers nom fichier ASCIIZ }
+ PUSH DX                    { Pointeur fichier (offset) }
+ PUSH DS                    { Pointeur fichier (segment) }
+
+ CALL DOS41h_DeleteFile     { Appeler fonction Pascal }
+ ADD SP,4                   { Nettoyer pile (2 mots = 4 octets) }
+
+ { AX contient le résultat : 0 = succès, autre = erreur }
+ CMP AX,0                   { Vérifier si succès }
+ JE @41hSuccess             { Si succès }
+
+ { Erreur }
+ MOV AX,2                   { File not found par défaut }
+ STC                        { Set Carry Flag }
+ JMP @41hEnd
+
+@41hSuccess:
+ { Succès }
+ CLC                        { Clear Carry Flag }
+
+@41hEnd:
  POP DI
  POP SI
  POP CX
@@ -5633,6 +5672,157 @@ End;
 Function DOS40h_WriteFile(Handle:Word;Buffer:Pointer;BytesToWrite:Word;Var BytesWritten:Word):Word;
 Begin
  DOS40h_WriteFile:=WriteFileData(Handle, Buffer, BytesToWrite, BytesWritten);
+End;
+
+{ Supprimer une entrée de répertoire }
+Function DeleteDirectoryEntry(Drive:Byte;BootSec:BootSectorRec;DirCluster:Word;FileName:String):Boolean;
+Var
+ Buffer: Array[0..511] of Byte;
+ Entry: DirectoryEntry;
+ EntryPtr: ^DirectoryEntry;
+ FirstDataSector: LongInt;
+ DirSector: LongInt;
+ SectorsToRead: Word;
+ I, J, K: Word;
+ Found: Boolean;
+ SearchName: String;
+Begin
+ DeleteDirectoryEntry:=False;
+
+ { Préparer le nom de recherche (8.3 avec espaces) }
+ SearchName:=FileName;
+ While Length(SearchName) < 11 Do SearchName:=SearchName + ' ';
+
+ { Calculer le secteur de début du répertoire }
+ If DirCluster = 0 Then Begin
+  { Répertoire racine }
+  FirstDataSector:=BootSec.ReservedSectors + (BootSec.NumberOfFATs * BootSec.SectorsPerFAT);
+  DirSector:=FirstDataSector;
+  SectorsToRead:=(BootSec.RootDirEntries * 32) div BootSec.BytesPerSector;
+ End
+ Else Begin
+  { Sous-répertoire }
+  FirstDataSector:=BootSec.ReservedSectors + (BootSec.NumberOfFATs * BootSec.SectorsPerFAT) +
+                   ((BootSec.RootDirEntries * 32) div BootSec.BytesPerSector);
+  DirSector:=FirstDataSector + (LongInt(DirCluster - 2) * BootSec.SectorsPerCluster);
+  SectorsToRead:=BootSec.SectorsPerCluster;
+ End;
+
+ { Parcourir les secteurs du répertoire }
+ For I:=0 To SectorsToRead-1 Do Begin
+  If Not ReadSector(Drive, DirSector + I, @Buffer) Then Exit;
+
+  EntryPtr:=@Buffer;
+  For J:=0 To (BootSec.BytesPerSector div 32)-1 Do Begin
+   Move(EntryPtr^, Entry, 32);
+
+   { Vérifier si c'est l'entrée recherchée }
+   Found:=True;
+   For K:=0 To 10 Do Begin
+    If Entry.FileName[K] <> SearchName[K+1] Then Begin
+     Found:=False;
+     Break;
+    End;
+   End;
+
+   If Found and (Entry.FileName[0] <> #0) and (Entry.FileName[0] <> #$E5) Then Begin
+    { Entrée trouvée - la marquer comme supprimée }
+    Entry.FileName[0]:=#$E5;
+
+    { Libérer la chaîne de clusters }
+    If Entry.FirstClusterLow > 0 Then Begin
+     If Not FreeFATChain(Drive, BootSec, Entry.FirstClusterLow) Then Exit;
+    End;
+
+    { Réécrire l'entrée modifiée }
+    Move(Entry, EntryPtr^, 32);
+    If Not WriteSector(Drive, DirSector + I, @Buffer) Then Exit;
+
+    DeleteDirectoryEntry:=True;
+    Exit;
+   End;
+
+   Inc(LongInt(EntryPtr), 32);
+  End;
+ End;
+End;
+
+{ Fonction principale 41h }
+Function DOS41h_DeleteFile(PathPtr:Pointer):Word;
+Var
+ Path: String;
+ Drive: Byte;
+ DirPath,FileName: String;
+ BootSec: BootSectorRec;
+ DirCluster: Word;
+ Entry: DirectoryEntry;
+ EntryOffset: Word;
+ P: PChar;
+ I: Byte;
+ Handle: Word;
+ FileEntry: FileTableEntry;
+Begin
+ DOS41h_DeleteFile:=2; { File not found par défaut }
+
+ { Convertir pointeur ASCIIZ en string Pascal }
+ P:=PChar(PathPtr);
+ Path:='';
+ I:=0;
+ While (P^ <> #0) and (I < 255) Do Begin
+  Path:=Path + P^;
+  Inc(P);
+  Inc(I);
+ End;
+
+ { Analyser le chemin }
+ If Not ParseFilePath(Path,Drive,DirPath,FileName) Then Begin
+  DOS41h_DeleteFile:=3; { Path not found }
+  Exit;
+ End;
+
+ { Lire boot sector }
+ If Not ReadBootSector(Drive,BootSec) Then Begin
+  DOS41h_DeleteFile:=2; { File not found }
+  Exit;
+ End;
+
+ { Trouver le répertoire parent }
+ If DirPath = '' Then
+  DirCluster:=0 { Répertoire racine }
+ Else Begin
+  If Not FindDirectoryByPath(Drive,BootSec,DirPath,DirCluster) Then Begin
+   DOS41h_DeleteFile:=3; { Path not found }
+   Exit;
+  End;
+ End;
+
+ { Vérifier que le fichier existe }
+ If Not FindDirectoryEntry(Drive,BootSec,DirCluster,FileName + '        ',Entry,EntryOffset) Then Begin
+  DOS41h_DeleteFile:=2; { File not found }
+  Exit;
+ End;
+
+ { Vérifier que c'est bien un fichier (pas un répertoire) }
+ If (Entry.Attributes and $10) <> 0 Then Begin
+  DOS41h_DeleteFile:=5; { Access denied - c'est un répertoire }
+  Exit;
+ End;
+
+ { Vérifier si le fichier est ouvert }
+ For Handle:=0 To 19 Do Begin
+  If GetFileTableEntry(Handle, FileEntry) Then Begin
+   If FileEntry.InUse and (FileEntry.FirstCluster = Entry.FirstClusterLow) Then Begin
+    DOS41h_DeleteFile:=5; { Access denied - fichier ouvert }
+    Exit;
+   End;
+  End;
+ End;
+
+ { Supprimer l'entrée de répertoire }
+ If DeleteDirectoryEntry(Drive, BootSec, DirCluster, FileName + '        ') Then
+  DOS41h_DeleteFile:=0 { Succès }
+ Else
+  DOS41h_DeleteFile:=5; { Access denied }
 End;
 
 Procedure SetIntVec(_AL:Byte;_DS,_DX:Word);Assembler;ASM
