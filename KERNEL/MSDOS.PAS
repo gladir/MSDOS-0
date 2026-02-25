@@ -76,22 +76,26 @@ Type DataMOS=Record
  DTAOffset:Word;     { Offset de la DTA }
 End;
 
+Procedure Intr20h;Interrupt;Forward;
 Procedure Intr21h;Interrupt;Forward;
 Procedure Intr25h;Interrupt;Forward;
 Procedure Intr26h;Interrupt;Forward;
 Procedure Intr28h;Interrupt;Forward;
 Procedure Intr2Ah;Interrupt;Forward;
 Procedure Intr2Fh;Interrupt;Forward;
+Procedure Intr33h;Interrupt;Forward;
 
 Procedure SetIntVec(AL:Byte;DS,DX:Word);Near;Forward;
 
 Procedure BEGIN_KERNEL;Begin
+ SetIntVec($20,CSeg,Ofs(Intr21h));
  SetIntVec($21,CSeg,Ofs(Intr21h));
  SetIntVec($25,CSeg,Ofs(Intr25h));
  SetIntVec($26,CSeg,Ofs(Intr26h));
  SetIntVec($28,CSeg,Ofs(Intr28h));
  SetIntVec($2A,CSeg,Ofs(Intr2Ah));
  SetIntVec($2F,CSeg,Ofs(Intr2Fh));
+ SetIntVec($33,CSeg,Ofs(Intr33h));
   { TODO : Charger un programme COMMAND.EXE, faire un JMP sur le point d'entr�e du programme charg� en m�moire }
  ASM
   DB 'DEBUT DU NOYAU MSDOS-0';
@@ -104,6 +108,10 @@ Procedure Data;Assembler;ASM
  DB 0          { CurrDisk: Disque courant }
  DW 0          { DTASegment: Segment DTA (initialisé à 0) }
  DW 80h        { DTAOffset: Offset DTA (par défaut 80h) }
+END;
+
+Procedure Intr20h;Assembler;ASM
+ { TODO : Mettre le code n�cessaire }
 END;
 
 Procedure Intr21h;Assembler;ASM
@@ -1179,6 +1187,10 @@ END;
 
 Procedure Intr2Fh;Assembler;ASM
  XOR BX,BX
+ XOR AX,AX
+END;
+
+Procedure Intr33h;Assembler;ASM
  XOR AX,AX
 END;
 
