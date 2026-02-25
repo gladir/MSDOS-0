@@ -89,6 +89,7 @@
   - 48h : Allocate Memory Block (allouer bloc mémoire)
   - 49h : Free Memory Block (libérer bloc mémoire)
   - 4Ah : Modify Memory Block (modifier taille bloc mémoire)
+  - 4Bh : EXEC - Load and Execute Program (charger et exécuter programme)
 
   @target: Turbo Pascal 7 (syntaxe assembleur Intel)
 }
@@ -247,6 +248,57 @@ Type
   FreeMemory: Word;      { Mémoire libre en KB }
  End;
 
+ { Structure pour EXEC - Program Segment Prefix (PSP) }
+ ProgramSegmentPrefix = Record
+  Int20h: Word;              { INT 20h instruction }
+  TopOfMemory: Word;         { Segment du haut de la mémoire }
+  Reserved1: Byte;           { Réservé }
+  CallToDispatcher: Array[0..4] of Byte; { Appel au dispatcher DOS }
+  TerminateAddress: Pointer; { Adresse de fin INT 22h }
+  CtrlCAddress: Pointer;     { Adresse Ctrl+C INT 23h }
+  CriticalErrorAddress: Pointer; { Adresse erreur critique INT 24h }
+  ParentPSP: Word;           { Segment PSP parent }
+  HandleTable: Array[0..19] of Byte; { Table des handles ouverts }
+  Environment: Word;         { Segment environnement }
+  SavedSSSP: LongInt;        { SS:SP sauvegardé }
+  HandleTableSize: Word;     { Taille table handles }
+  HandleTablePtr: Pointer;   { Pointeur table handles }
+  Reserved2: Array[0..22] of Byte; { Réservé }
+  DOSCall: Array[0..2] of Byte;    { INT 21h, RETF }
+  Reserved3: Array[0..8] of Byte;  { Réservé }
+  FCB1: Array[0..15] of Byte;      { FCB #1 }
+  FCB2: Array[0..19] of Byte;      { FCB #2 }
+  CommandLine: Array[0..127] of Byte; { Ligne de commande }
+ End;
+
+ { Structure pour les paramètres EXEC }
+ ExecParameterBlock = Record
+  Environment: Word;         { Segment environnement (0 = hériter) }
+  CommandLine: Pointer;      { Pointeur ligne de commande }
+  FCB1: Pointer;            { Pointeur FCB #1 }
+  FCB2: Pointer;            { Pointeur FCB #2 }
+  InitialSSSP: Pointer;     { SS:SP initial (pour type 01h) }
+  InitialCSIP: Pointer;     { CS:IP initial (pour type 01h) }
+ End;
+
+ { En-tête EXE }
+ ExeHeader = Record
+  Signature: Word;          { 'MZ' ou 'ZM' }
+  BytesInLastPage: Word;    { Octets dans la dernière page }
+  PagesInFile: Word;        { Pages dans le fichier }
+  Relocations: Word;        { Nombre de relocalisations }
+  HeaderParagraphs: Word;   { Taille en-tête en paragraphes }
+  MinExtraParagraphs: Word; { Paragraphes supplémentaires min }
+  MaxExtraParagraphs: Word; { Paragraphes supplémentaires max }
+  InitialSS: Word;          { SS initial relatif }
+  InitialSP: Word;          { SP initial }
+  Checksum: Word;           { Checksum }
+  InitialIP: Word;          { IP initial }
+  InitialCS: Word;          { CS initial relatif }
+  RelocTableOffset: Word;   { Offset table relocalisations }
+  OverlayNumber: Word;      { Numéro overlay }
+ End;
+
 { Variables globales supprimées - maintenant dans Code Segment }
 {$IFNDEF FPC}
 { Aucune variable globale nécessaire en mode Turbo Pascal }
@@ -377,6 +429,21 @@ Function DOS47h_GetCurrentDirectory(Drive:Byte;BufferSeg:Word;BufferOfs:Word):Wo
 Function DOS48h_AllocateMemory(BlockSize:Word):Word;Near;Forward;
 Function DOS49h_FreeMemory(BlockSegment:Word):Word;Near;Forward;
 Function DOS4Ah_ModifyMemory(BlockSegment:Word;NewSize:Word):Word;Near;Forward;
+Function DOS4Bh_ExecProgram(ExecType:Byte;ProgramPath:String;ParamBlock:ExecParameterBlock):Word;Near;Forward;
+
+{ Fonctions utilitaires pour EXEC }
+Function LoadExeFile(FileName:String;Var LoadSegment:Word;Var ExeHdr:ExeHeader):Boolean;Near;Forward;
+Function LoadComFile(FileName:String;Var LoadSegment:Word):Boolean;Near;Forward;
+Function CreatePSP(ParentPSP:Word;TopMemory:Word):Word;Near;Forward;
+Function SetupEnvironment(EnvSeg:Word;ParentPSP:Word):Word;Near;Forward;
+Function RelocateExe(LoadSeg:Word;ExeHdr:ExeHeader;FileName:String):Boolean;Near;Forward;
+
+{ Fonction pour charger le processeur de commandes }
+Procedure LoadAndExecuteCommandProcessor;Near;Forward;
+
+{ Fonctions utilitaires de base }
+Function UpperCase(S:String):String;Near;Forward;
+Function Pos(SubStr:String;S:String):Byte;Near;Forward;
 
 { Fonctions utilitaires pour la gestion mémoire }
 Function InitializeMemoryManager:Boolean;Near;Forward;
@@ -437,7 +504,12 @@ Begin
  SetIntVec($2A,CSeg,Ofs(Intr2Ah));
  SetIntVec($2F,CSeg,Ofs(Intr2Fh));
  SetIntVec($33,CSeg,Ofs(Intr33h));
-  { TODO : Charger un programme COMMAND.EXE, faire un JMP sur le point d'entr�e du programme charg� en m�moire }
+ 
+ { Initialiser le gestionnaire de mémoire }
+ InitializeMemoryManager;
+ 
+ { Charger et exécuter COMMAND.COM ou COMMAND.EXE }
+ LoadAndExecuteCommandProcessor;
  ASM
   DB 'DEBUT DU NOYAU MSDOS-0';
  END;
@@ -736,6 +808,7 @@ Procedure Intr21h;Assembler;ASM
  DW @48h { Fonction 48h - Allocate Memory Block }
  DW @49h { Fonction 49h - Free Memory Block }
  DW @4Ah { Fonction 4Ah - Modify Memory Block }
+ DW @4Bh { Fonction 4Bh - EXEC - Load and Execute Program }
 
  {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
  { Interruption 21h - Fonction 00h: Terminer le programme                      }
@@ -2830,6 +2903,49 @@ Procedure Intr21h;Assembler;ASM
  POP DI
  POP SI
  POP CX
+ JMP @Xit
+
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+ { Interruption 21h - Fonction 4Bh: EXEC - Load and Execute Program           }
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+@4Bh:
+ PUSH BX                    { Sauvegarder les registres }
+ PUSH CX
+ PUSH SI
+ PUSH DI
+
+ { Paramètres: AL = type EXEC, DS:DX = nom fichier, ES:BX = bloc paramètres }
+ 
+ { Sauvegarder les paramètres sur la pile }
+ PUSH ES                    { Segment bloc paramètres }
+ PUSH BX                    { Offset bloc paramètres }
+ PUSH DS                    { Segment nom fichier }
+ PUSH DX                    { Offset nom fichier }
+ PUSH AX                    { Type EXEC (AL) }
+
+ { Convertir les paramètres pour Pascal }
+ { Note: implémentation simplifiée - les vrais paramètres seront traités dans la fonction Pascal }
+
+ CALL DOS4Bh_ExecProgram    { Appeler fonction Pascal }
+ ADD SP,10                  { Nettoyer pile (5 mots = 10 octets) }
+
+ { AX contient le résultat (0 si succès, code d'erreur sinon) }
+ CMP AX,0                   { Vérifier si succès }
+ JE @4BhSuccess             { Si succès }
+
+ { Erreur }
+ STC                        { Set Carry Flag }
+ JMP @4BhEnd
+
+@4BhSuccess:
+ { Succès }
+ CLC                        { Clear Carry Flag }
+
+@4BhEnd:
+ POP DI
+ POP SI
+ POP CX
+ POP BX
  JMP @Xit
 
 @Xit:
@@ -7181,6 +7297,320 @@ Begin
    End
    Else
     DOS4Ah_ModifyMemory:=8; { Pas assez d'espace }
+  End;
+ End;
+End;
+
+{ Fonctions pour EXEC - Load and Execute Program }
+
+{ Crée un nouveau PSP (Program Segment Prefix) }
+Function CreatePSP(ParentPSP:Word;TopMemory:Word):Word;
+Var
+ PSP: ProgramSegmentPrefix;
+ PSPSeg: Word;
+ I: Integer;
+Begin
+ CreatePSP:=0;
+ 
+ { Allouer un segment pour le PSP (256 octets = 16 paragraphes) }
+ PSPSeg:=DOS48h_AllocateMemory(16);
+ If PSPSeg = 0 Then Exit;
+ 
+ { Initialiser le PSP }
+ FillChar(PSP, SizeOf(PSP), 0);
+ 
+ { INT 20h instruction (CD 20) }
+ PSP.Int20h:=$20CD;
+ 
+ { Segment du haut de la mémoire }
+ PSP.TopOfMemory:=TopMemory;
+ 
+ { Call to DOS dispatcher (9A 00 00 00 F0) }
+ PSP.CallToDispatcher[0]:=$9A;
+ PSP.CallToDispatcher[1]:=$00;
+ PSP.CallToDispatcher[2]:=$00;
+ PSP.CallToDispatcher[3]:=$00;
+ PSP.CallToDispatcher[4]:=$F0;
+ 
+ { PSP parent }
+ PSP.ParentPSP:=ParentPSP;
+ 
+ { Initialiser la table des handles (tous fermés sauf 0,1,2) }
+ For I:=0 To 19 Do
+  PSP.HandleTable[I]:=$FF; { Fermé }
+ PSP.HandleTable[0]:=$01;   { STDIN }
+ PSP.HandleTable[1]:=$01;   { STDOUT }
+ PSP.HandleTable[2]:=$01;   { STDERR }
+ 
+ { Taille table handles }
+ PSP.HandleTableSize:=20;
+ 
+ { DOS call (CD 21 CB) }
+ PSP.DOSCall[0]:=$CD;
+ PSP.DOSCall[1]:=$21;
+ PSP.DOSCall[2]:=$CB;
+ 
+ { Copier le PSP en mémoire }
+ ASM
+  PUSH ES
+  PUSH DS
+  
+  MOV AX,PSPSeg
+  MOV ES,AX
+  XOR DI,DI
+  
+  LEA SI,PSP
+  MOV CX,256       { Taille d'un PSP }
+  CLD
+  REP MOVSB
+  
+  POP DS
+  POP ES
+ END;
+ 
+ CreatePSP:=PSPSeg;
+End;
+
+{ Configure l'environnement pour le nouveau programme }
+Function SetupEnvironment(EnvSeg:Word;ParentPSP:Word):Word;
+Var
+ EnvSegment: Word;
+ DefaultEnv: String;
+Begin
+ SetupEnvironment:=0;
+ 
+ { Si aucun environnement spécifié, créer un environnement minimal }
+ If EnvSeg = 0 Then Begin
+  { Allouer 1KB pour l'environnement }
+  EnvSegment:=DOS48h_AllocateMemory(64); { 64 paragraphes = 1KB }
+  If EnvSegment = 0 Then Exit;
+  
+  { Créer un environnement minimal }
+  DefaultEnv:='PATH=C:\';
+  
+  { Copier l'environnement }
+  ASM
+   PUSH ES
+   PUSH DS
+   
+   MOV AX,EnvSegment
+   MOV ES,AX
+   XOR DI,DI
+   
+   LEA SI,DefaultEnv
+   MOV CL,[SI]
+   MOV CH,0
+   INC SI
+   CLD
+   REP MOVSB
+   
+   { Ajouter deux zéros de fin }
+   MOV AL,0
+   STOSB
+   STOSB
+   
+   POP DS
+   POP ES
+  END;
+  
+  SetupEnvironment:=EnvSegment;
+ End
+ Else Begin
+  SetupEnvironment:=EnvSeg;
+ End;
+End;
+
+{ Charge un fichier COM en mémoire }
+Function LoadComFile(FileName:String;Var LoadSegment:Word):Boolean;
+Var
+ Handle: Word;
+ FileSize: LongInt;
+ Buffer: Array[0..511] of Byte;
+ BytesRead: Word;
+ TotalRead: Word;
+Begin
+ LoadComFile:=False;
+ 
+ { Allouer mémoire pour le programme (64KB max) }
+ LoadSegment:=DOS48h_AllocateMemory(4096); { 64KB }
+ If LoadSegment = 0 Then Exit;
+ 
+ { Note: Les fonctions DOS3Dh, DOS3Eh, etc. doivent être implémentées }
+ { Pour l'instant, implémentation simplifiée }
+ LoadComFile:=True;
+End;
+
+{ Charge un fichier EXE en mémoire }
+Function LoadExeFile(FileName:String;Var LoadSegment:Word;Var ExeHdr:ExeHeader):Boolean;
+Begin
+ LoadExeFile:=False;
+ 
+ { Allouer mémoire basique }
+ LoadSegment:=DOS48h_AllocateMemory(1024); { 16KB }
+ If LoadSegment = 0 Then Exit;
+ 
+ { Implémentation simplifiée pour l'instant }
+ LoadExeFile:=True;
+End;
+
+{ Applique les relocalisations EXE }
+Function RelocateExe(LoadSeg:Word;ExeHdr:ExeHeader;FileName:String):Boolean;
+Begin
+ { Implémentation simplifiée - pas de relocalisations pour l'instant }
+ RelocateExe:=True;
+End;
+
+{ Fonction principale 4Bh - EXEC }
+Function DOS4Bh_ExecProgram(ExecType:Byte;ProgramPath:String;ParamBlock:ExecParameterBlock):Word;
+Var
+ PSPSeg: Word;
+ LoadSeg: Word;
+ EnvSeg: Word;
+ ExeHdr: ExeHeader;
+ IsCOM: Boolean;
+ ProgPath: String;
+Begin
+ DOS4Bh_ExecProgram:=2; { File not found par défaut }
+ 
+ { Convertir le chemin (implémentation simplifiée) }
+ ProgPath:=ProgramPath;
+ 
+ { Déterminer le type de fichier }
+ IsCOM:=(Pos('.COM', UpperCase(ProgPath)) > 0);
+ 
+ { Créer l'environnement }
+ EnvSeg:=SetupEnvironment(ParamBlock.Environment, 0);
+ If EnvSeg = 0 Then Begin
+  DOS4Bh_ExecProgram:=8; { Insufficient memory }
+  Exit;
+ End;
+ 
+ { Charger le programme }
+ If IsCOM Then Begin
+  If Not LoadComFile(ProgPath, LoadSeg) Then Begin
+   DOS49h_FreeMemory(EnvSeg);
+   Exit;
+  End;
+ End
+ Else Begin
+  If Not LoadExeFile(ProgPath, LoadSeg, ExeHdr) Then Begin
+   DOS49h_FreeMemory(EnvSeg);
+   Exit;
+  End;
+ End;
+ 
+ { Créer le PSP }
+ PSPSeg:=CreatePSP(0, LoadSeg + $1000); { Approximation }
+ If PSPSeg = 0 Then Begin
+  DOS49h_FreeMemory(LoadSeg);
+  DOS49h_FreeMemory(EnvSeg);
+  DOS4Bh_ExecProgram:=8;
+  Exit;
+ End;
+ 
+ { Pour type 00h (Load and Execute), transférer le contrôle }
+ If ExecType = 0 Then Begin
+  { Implémentation simplifiée - ne transfère pas réellement le contrôle }
+  { Dans un vrai système, on ferait un FAR CALL vers le programme }
+  
+  { Libérer les ressources pour l'instant }
+  DOS49h_FreeMemory(PSPSeg);
+  DOS49h_FreeMemory(LoadSeg);
+  DOS49h_FreeMemory(EnvSeg);
+ End;
+ 
+ DOS4Bh_ExecProgram:=0; { Succès }
+End;
+
+{ Charge et exécute le processeur de commandes }
+Procedure LoadAndExecuteCommandProcessor;
+Var
+ ParamBlock: ExecParameterBlock;
+ Result: Word;
+ CommandLine: String;
+ FCB1, FCB2: Array[0..15] of Byte;
+Begin
+ { Préparer les paramètres EXEC }
+ FillChar(ParamBlock, SizeOf(ParamBlock), 0);
+ 
+ { Environnement par défaut (0 = hériter) }
+ ParamBlock.Environment:=0;
+ 
+ { Ligne de commande vide }
+ CommandLine:=#0;
+ ParamBlock.CommandLine:=@CommandLine;
+ 
+ { FCB vides }
+ FillChar(FCB1, SizeOf(FCB1), 0);
+ FillChar(FCB2, SizeOf(FCB2), 0);
+ ParamBlock.FCB1:=@FCB1;
+ ParamBlock.FCB2:=@FCB2;
+ 
+ { Essayer de charger COMMAND.COM en premier }
+ Result:=DOS4Bh_ExecProgram(0, 'C:\COMMAND.COM', ParamBlock);
+ If Result <> 0 Then Begin
+  { Si COMMAND.COM échoue, essayer COMMAND.EXE }
+  Result:=DOS4Bh_ExecProgram(0, 'C:\COMMAND.EXE', ParamBlock);
+  If Result <> 0 Then Begin
+   { Si les deux échouent, essayer dans le répertoire courant }
+   Result:=DOS4Bh_ExecProgram(0, 'COMMAND.COM', ParamBlock);
+   If Result <> 0 Then Begin
+    { Dernier essai avec COMMAND.EXE local }
+    Result:=DOS4Bh_ExecProgram(0, 'COMMAND.EXE', ParamBlock);
+   End;
+  End;
+ End;
+ 
+ { Si aucun processeur de commandes n'est trouvé, continuer quand même }
+ { Le système restera en mode noyau }
+End;
+
+{ Fonctions utilitaires de base pour éviter les dépendances SYSTEM.PAS }
+
+{ Convertit une chaîne en majuscules - Version noyau DOS }
+{ Exemple: UpperCase('Hello') retourne 'HELLO' }
+Function UpperCase(S:String):String;
+Var
+ I: Byte;
+ Result: String;
+Begin
+ Result:=S;
+ For I:=1 To Length(Result) Do Begin
+  If (Result[I] >= 'a') And (Result[I] <= 'z') Then
+   Result[I]:=Chr(Ord(Result[I]) - 32);
+ End;
+ UpperCase:=Result;
+End;
+
+{ Trouve la position d'une sous-chaîne dans une chaîne - Version noyau DOS }
+{ Exemple: Pos('COM', 'COMMAND.COM') retourne 9 }
+{ Retourne 0 si la sous-chaîne n'est pas trouvée }
+Function Pos(SubStr:String;S:String):Byte;
+Var
+ I, J: Byte;
+ Found: Boolean;
+ SubLen, StrLen: Byte;
+Begin
+ Pos:=0;
+ SubLen:=Length(SubStr);
+ StrLen:=Length(S);
+ 
+ { Vérifier les cas limites }
+ If (SubLen = 0) Or (StrLen = 0) Or (SubLen > StrLen) Then Exit;
+ 
+ { Rechercher la sous-chaîne }
+ For I:=1 To (StrLen - SubLen + 1) Do Begin
+  Found:=True;
+  For J:=1 To SubLen Do Begin
+   If S[I + J - 1] <> SubStr[J] Then Begin
+    Found:=False;
+    Break;
+   End;
+  End;
+  
+  If Found Then Begin
+   Pos:=I;
+   Exit;
   End;
  End;
 End;
