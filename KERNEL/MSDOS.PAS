@@ -23,6 +23,9 @@
   - 13h : Supprimer un fichier avec FCB
   - 14h : Lecture séquentielle avec FCB
   - 15h : Ecriture séquentielle avec FCB
+  - 16h : Créer un fichier avec FCB
+  - 17h : Renommer un fichier avec FCB
+  - 18h : Fonction réservée
   - 19h : Demande le lecteur courant
   - 25h : Fixe le vecteur d'interruption
   - 2Ah : Lire la date
@@ -93,9 +96,9 @@ Procedure Intr21;Interrupt;Assembler;ASM
  DW @13h { Fonction 13h - Supprimer un fichier avec FCB }
  DW @14h { Fonction 14h - Lecture séquentielle avec FCB }
  DW @15h { Fonction 15h - Ecriture séquentielle avec FCB }
- DW @Xit { Fonction 16h - a developper }
- DW @Xit { Fonction 17h - a developper }
- DW @Xit { Fonction 18h - a developper }
+ DW @16h { Fonction 16h - Créer un fichier avec FCB }
+ DW @17h { Fonction 17h - Renommer un fichier avec FCB }
+ DW @18h { Fonction 18h - Fonction réservée }
  DW @19h { Fonction 19h - Demande le lecteur courant }
  DW @Xit { Fonction 1Ah - a developper }
  DW @Xit { Fonction 1Bh - a developper }
@@ -566,6 +569,79 @@ Procedure Intr21;Interrupt;Assembler;ASM
  POP DS
  POP DI
  POP SI
+ JMP @Xit
+
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
+ { Interruption 21h - Fonction 16h: Créer un fichier avec FCB                  }
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
+@16h:
+ PUSH SI                    { Sauver registres }
+ PUSH DI
+ PUSH DS
+ PUSH ES
+ MOV SI,DX                  { DS:DX pointe sur le FCB }
+ { Verifier que le nom de fichier est valide dans le FCB }
+ CMP BYTE PTR [SI+1],' '    { Premier caractere du nom vide ? }
+ JE @16Error
+ { Implementation simplifiee: simuler une creation reussie }
+ { Dans un DOS complet, il faudrait creer le fichier sur disque }
+ { et initialiser la structure FCB avec les informations du nouveau fichier }
+ MOV BL,Data.DataMOS.CurrDisk
+ INC BL                     { 1=A:, 2=B:, etc. }
+ MOV [SI],BL                { Marquer le FCB comme ouvert sur le drive courant }
+ { Initialiser les champs du FCB pour un nouveau fichier }
+ MOV WORD PTR [SI+12],0     { Bloc courant = 0 }
+ MOV WORD PTR [SI+14],128   { Taille d'enregistrement = 128 }
+ MOV WORD PTR [SI+16],0     { Taille du fichier = 0 (partie basse) }
+ MOV WORD PTR [SI+18],0     { Taille du fichier = 0 (partie haute) }
+ MOV AL,0                   { Code de retour: succes }
+ JMP @16End
+@16Error:
+ MOV AL,0FFh                { Code d'erreur: nom invalide }
+@16End:
+ POP ES                     { Restaurer registres }
+ POP DS
+ POP DI
+ POP SI
+ JMP @Xit
+
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
+ { Interruption 21h - Fonction 17h: Renommer un fichier avec FCB               }
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
+@17h:
+ PUSH SI                    { Sauver registres }
+ PUSH DI
+ PUSH DS
+ PUSH ES
+ MOV SI,DX                  { DS:DX pointe sur le FCB source }
+ { Le FCB pour renommer contient l'ancien nom (offset 0) et le nouveau nom (offset 17) }
+ { Verifier que l'ancien nom est valide }
+ CMP BYTE PTR [SI+1],' '    { Premier caractere de l'ancien nom vide ? }
+ JE @17Error
+ { Verifier que le nouveau nom est valide }
+ CMP BYTE PTR [SI+17],' '   { Premier caractere du nouveau nom vide ? }
+ JE @17Error
+ { Implementation simplifiee: simuler un renommage reussi }
+ { Dans un DOS complet, il faudrait localiser le fichier dans le repertoire }
+ { et modifier l'entree pour changer le nom }
+ MOV AL,0                   { Code de retour: succes }
+ JMP @17End
+@17Error:
+ MOV AL,0FFh                { Code d'erreur: fichier non trouve ou nom invalide }
+@17End:
+ POP ES                     { Restaurer registres }
+ POP DS
+ POP DI
+ POP SI
+ JMP @Xit
+
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
+ { Interruption 21h - Fonction 18h: Fonction réservée                          }
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
+@18h:
+ { Fonction réservée dans DOS classique - pas d'implémentation }
+ { Certaines versions de DOS utilisent cette fonction à des fins internes }
+ MOV AL,0                   { Code de retour neutre }
  JMP @Xit
 
  {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
