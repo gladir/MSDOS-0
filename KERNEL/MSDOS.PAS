@@ -84,6 +84,7 @@
   - 43h : Get/Set File Attributes (lecture/modification attributs fichier)
   - 44h : IOCTL (contrôle d'entrée/sortie)
   - 45h : Duplicate Handle (duplication de handle)
+  - 46h : Force Duplicate Handle (duplication forcée de handle)
 
   @target: Turbo Pascal 7 (syntaxe assembleur Intel)
 }
@@ -350,6 +351,7 @@ Function IOCTL_ReadControlData(Handle:Word;Buffer:Pointer;BytesToRead:Word):Word
 Function IOCTL_WriteControlData(Handle:Word;Buffer:Pointer;BytesToWrite:Word):Word;Near;Forward;
 Function DOS44h_IOCTL(Handle:Word;SubFunction:Byte;Buffer:Pointer;ByteCount:Word):Word;Near;Forward;
 Function DOS45h_DuplicateHandle(SourceHandle:Word):Word;Near;Forward;
+Function DOS46h_ForceDuplicateHandle(SourceHandle:Word;TargetHandle:Word):Word;Near;Forward;
 
 { Fonctions d'accès aux données dans Code Segment }
 Function GetCurrentDrive: Byte;Near;Forward;
@@ -697,6 +699,7 @@ Procedure Intr21h;Assembler;ASM
  DW @43h { Fonction 43h - Get/Set File Attributes }
  DW @44h { Fonction 44h - IOCTL (Input/Output Control) }
  DW @45h { Fonction 45h - Duplicate Handle }
+ DW @46h { Fonction 46h - Force Duplicate Handle }
 
  {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
  { Interruption 21h - Fonction 00h: Terminer le programme                      }
@@ -2621,6 +2624,39 @@ Procedure Intr21h;Assembler;ASM
  STC                        { Set Carry Flag }
 
 @45hEnd:
+ POP DI
+ POP SI
+ POP CX
+ JMP @Xit
+
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+ { Interruption 21h - Fonction 46h: Force Duplicate Handle                    }
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+@46h:
+ PUSH CX                    { Sauvegarder les registres }
+ PUSH SI
+ PUSH DI
+
+ { Paramètres: BX = handle source, CX = handle destination }
+ PUSH CX                    { Handle destination }
+ PUSH BX                    { Handle source }
+
+ CALL DOS46h_ForceDuplicateHandle { Appeler fonction Pascal }
+ ADD SP,4                   { Nettoyer pile (2 mots = 4 octets) }
+
+ { AX contient le résultat (0 si succès, code d'erreur sinon) }
+ CMP AX,0                   { Vérifier si succès }
+ JE @46hSuccess             { Si succès }
+
+ { Erreur }
+ STC                        { Set Carry Flag }
+ JMP @46hEnd
+
+@46hSuccess:
+ { Succès }
+ CLC                        { Clear Carry Flag }
+
+@46hEnd:
  POP DI
  POP SI
  POP CX
@@ -6562,6 +6598,65 @@ Begin
  
  { Aucun handle libre trouvé }
  DOS45h_DuplicateHandle:=$FFFF;
+End;
+
+{ Fonction 46h - Force Duplicate Handle }
+Function DOS46h_ForceDuplicateHandle(SourceHandle:Word;TargetHandle:Word):Word;
+Var
+ SourceEntry: FileTableEntry;
+ TargetEntry: FileTableEntry;
+Begin
+ DOS46h_ForceDuplicateHandle:=6; { Invalid handle par défaut }
+ 
+ { Vérifier la validité des handles }
+ If (SourceHandle >= 20) Or (TargetHandle >= 20) Then Begin
+  DOS46h_ForceDuplicateHandle:=6; { Invalid handle }
+  Exit;
+ End;
+ 
+ { Vérifier que le handle source existe }
+ If Not GetFileTableEntry(SourceHandle, SourceEntry) Then Exit;
+ 
+ { Vérifier si le handle source est utilisé }
+ If Not SourceEntry.InUse Then Exit;
+ 
+ { Si le handle de destination est déjà utilisé, le fermer d'abord }
+ If GetFileTableEntry(TargetHandle, TargetEntry) Then Begin
+  If TargetEntry.InUse Then Begin
+   { Fermer le handle de destination s'il est ouvert }
+   { Pour les handles système (0-4), on ne les ferme pas réellement }
+   If TargetHandle >= 5 Then Begin
+    TargetEntry.InUse:=False;
+    TargetEntry.FirstCluster:=0;
+    TargetEntry.FileSize:=0;
+    TargetEntry.CurrentPos:=0;
+    TargetEntry.CurrentCluster:=0;
+    TargetEntry.ClusterOffset:=0;
+    SetFileTableEntry(TargetHandle, TargetEntry);
+   End;
+  End;
+ End Else Begin
+  { Initialiser l'entrée de destination si elle n'existe pas }
+  FillChar(TargetEntry, SizeOf(TargetEntry), 0);
+ End;
+ 
+ { Copier toutes les informations du handle source vers la destination }
+ TargetEntry.InUse:=True;
+ TargetEntry.Drive:=SourceEntry.Drive;
+ TargetEntry.FirstCluster:=SourceEntry.FirstCluster;
+ TargetEntry.CurrentCluster:=SourceEntry.CurrentCluster;
+ TargetEntry.CurrentPos:=SourceEntry.CurrentPos;
+ TargetEntry.FileSize:=SourceEntry.FileSize;
+ TargetEntry.Attributes:=SourceEntry.Attributes;
+ TargetEntry.ClusterOffset:=SourceEntry.ClusterOffset;
+ 
+ { Sauvegarder l'entrée de destination }
+ If SetFileTableEntry(TargetHandle, TargetEntry) Then Begin
+  { Marquer comme réussi }
+  DOS46h_ForceDuplicateHandle:=0; { Succès }
+ End Else Begin
+  DOS46h_ForceDuplicateHandle:=6; { Invalid handle }
+ End;
 End;
 
 Procedure SetIntVec(_AL:Byte;_DS,_DX:Word);Assembler;ASM
