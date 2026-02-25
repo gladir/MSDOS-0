@@ -51,6 +51,8 @@
   - 2Ch : Lire l'heure système
   - 2Dh : Fixer l'heure système
   - 2Eh : Fixer/réinitialiser le drapeau de vérification
+  - 2Fh : DOS Multiplex Interrupt (interface TSR/utilitaires)
+  - 30h : Get DOS Version (obtenir version DOS)
   - 33h : Multi-fonction
   - 34h : Demande l'adresse du drapeau InDos
   - 35h : Demande le vecteur d'interruption
@@ -172,8 +174,8 @@ Procedure Intr21h;Assembler;ASM
  DW @2Ch { Fonction 2Ch - Lire l'heure système }
  DW @2Dh { Fonction 2Dh - Fixer l'heure système }
  DW @2Eh { Fonction 2Eh - Fixer/réinitialiser le drapeau de vérification }
- DW @Xit { Fonction 2Fh - a developper }
- DW @Xit { Fonction 30h - a developper }
+ DW @2Fh { Fonction 2Fh - DOS Multiplex Interrupt }
+ DW @30h { Fonction 30h - Get DOS Version }
  DW @Xit { Fonction 31h - a developper }
  DW @Xit { Fonction 32h - a developper }
  DW @33h { Fonction 33h - Multi-fonction }
@@ -1193,6 +1195,45 @@ Procedure Intr21h;Assembler;ASM
  { Dans un DOS complet, cette fonction activerait/désactiverait }
  { la vérification des écritures sur disque }
  { Pour cette implémentation, on ne fait rien mais on accepte la commande }
+ JMP @Xit
+
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
+ { Interruption 21h - Fonction 2Fh: DOS Multiplex Interrupt                    }
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
+@2Fh:
+ { DOS Multiplex Interrupt - interface de communication pour TSR et utilitaires }
+ { Entrée : AH = fonction, AL = sous-fonction, autres registres selon fonction }
+ { Cette fonction est utilisée par DOSKEY, PRINT, APPEND, SHARE, etc. }
+ { Pour cette implémentation de base, on retourne "fonction non supportée" }
+ CMP AH,43h                 { Fonction 43h - Extended Memory Specification (XMS) ? }
+ JE @2FhXMS
+ CMP AH,10h                 { Fonction 10h - SHARE.EXE ? }
+ JE @2FhShare
+ { Fonction non reconnue - retourner AL=0 (non installé/supporté) }
+ XOR AL,AL
+ JMP @Xit
+@2FhXMS:
+ { XMS non implémenté dans ce DOS de base }
+ XOR AL,AL
+ JMP @Xit
+@2FhShare:
+ { SHARE.EXE non installé }
+ XOR AL,AL
+ JMP @Xit
+
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
+ { Interruption 21h - Fonction 30h: Get DOS Version                            }
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
+@30h:
+ { Retourner la version DOS }
+ { Sortie : AL = version majeure, AH = version mineure }
+ { BH = fabricant OEM (00h = IBM PC-DOS, FFh = MS-DOS) }
+ { BL:CX = numéro de série de l'utilisateur (généralement 0) }
+ MOV AL,VerDos              { Version majeure (7) }
+ MOV AH,SubVerDos           { Version mineure (10) }
+ MOV BH,0FFh                { MS-DOS compatible }
+ XOR BL,BL                  { Pas de numéro de série utilisateur }
+ XOR CX,CX                  { Pas de numéro de série utilisateur }
  JMP @Xit
 
  {- - - - - - - - - - - - - - - - - - - - - - - - -}
