@@ -206,6 +206,15 @@ Var
  End;
 {$ENDIF}
 
+{ Variables globales pour accès aux données dans Code Segment }
+Var
+ CurrentDrive: Byte;
+ CurrentDir: Array[0..25] of Record
+  Drive: Byte;
+  Cluster: Word;
+  Path: String[127];
+ End;
+
 { Déclarations Forward }
 Procedure Intr20h;Interrupt;Forward;
 Procedure Intr21h;Interrupt;Forward;
@@ -249,10 +258,35 @@ Function FreeFATChain(Drive:Byte;BootSec:BootSectorRec;StartCluster:Word):Boolea
 Function DeleteDirEntry(Drive:Byte;BootSec:BootSectorRec;ParentCluster:Word;EntryOffset:Word):Boolean;Near;Forward;
 Function GetClusterSector(Drive:Byte;BootSec:BootSectorRec;Cluster:Word):LongInt;Near;Forward;
 
-{ Fonction principale 3Ah }
+{ Fonctions principales pour 3Ah et 3Bh }
 Function DOS3Ah_RemoveDirectory(PathPtr:Pointer):Word;Near;Forward;
 
-Procedure BEGIN_KERNEL;Begin
+{ Procédures spécifiques pour fonction 3Bh - Change Directory }
+Function FindDirectoryByPath(Drive:Byte;BootSec:BootSectorRec;Path:String;Var DirCluster:Word):Boolean;Near;Forward;
+Function SetCurrentDirectory(Drive:Byte;DirCluster:Word):Boolean;Near;Forward;
+Function DOS3Bh_ChangeDirectory(PathPtr:Pointer):Word;Near;Forward;
+
+{ Fonctions d'accès aux données dans Code Segment }
+Function GetCurrentDrive: Byte;Near;Forward;
+Procedure SetCurrentDrive(Drive: Byte);Near;Forward;
+Function GetCurrentDirDrive(Index: Byte): Byte;Near;Forward;
+Function GetCurrentDirCluster(Index: Byte): Word;Near;Forward;
+Function GetCurrentDirPath(Index: Byte): String;Near;Forward;
+Procedure SetCurrentDirDrive(Index, Drive: Byte);Near;Forward;
+Procedure SetCurrentDirCluster(Index: Byte; Cluster: Word);Near;Forward;
+Procedure SetCurrentDirPath(Index: Byte; Path: String);Near;Forward;
+
+Procedure BEGIN_KERNEL;
+Var I:Byte;
+Begin
+ { Initialiser répertoires courants via les fonctions d'accès Code Segment }
+ SetCurrentDrive(2); { C: par défaut }
+ For I:=0 To 25 Do Begin
+  SetCurrentDirDrive(I, I);
+  SetCurrentDirCluster(I, 0); { Répertoire racine }
+  SetCurrentDirPath(I, '\');
+ End;
+ 
  SetIntVec($20,CSeg,Ofs(Intr21h));
  SetIntVec($21,CSeg,Ofs(Intr21h));
  SetIntVec($25,CSeg,Ofs(Intr25h));
@@ -274,6 +308,178 @@ Procedure Data;Assembler;ASM
  DW 0          { DTASegment: Segment DTA (initialisé à 0) }
  DW 80h        { DTAOffset: Offset DTA (par défaut 80h) }
  DW 33         { CurrentCountry: Pays actuel (33=France par défaut) }
+ 
+ { Variables pour gestion répertoires courants }
+ DB 2          { CurrentDrive: Lecteur courant (0=A:, 1=B:, 2=C:) }
+ 
+ { CurrentDir: Array[0..25] of Record - Structure pour chaque drive }
+ { Drive A: (0) }
+ DB 0          { Drive }
+ DW 0          { Cluster }
+ DB 1,'\',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0,0,0  { Path: String[127] avec '\' par défaut }
+ { Drive B: (1) }
+ DB 1          { Drive }
+ DW 0          { Cluster }
+ DB 1,'\',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0,0,0  { Path: String[127] avec '\' par défaut }
+ { Drive C: (2) }
+ DB 2          { Drive }
+ DW 0          { Cluster }
+ DB 1,'\',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0,0,0  { Path: String[127] avec '\' par défaut }
+ { Drive D: (3) }
+ DB 3          { Drive }
+ DW 0          { Cluster }
+ DB 1,'\',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0,0,0  { Path: String[127] avec '\' par défaut }
+ { Drive E: (4) }
+ DB 4          { Drive }
+ DW 0          { Cluster }
+ DB 1,'\',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0,0,0  { Path: String[127] avec '\' par défaut }
+ { Drives F: à Z: (5-25) - 21 drives restants avec même structure }
+ { Drive F: (5) }
+ DB 5,0,0,1,'\',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0,0,0
+ { Drive G: (6) }
+ DB 6,0,0,1,'\',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0,0,0
+ { Drive H: (7) }
+ DB 7,0,0,1,'\',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0,0,0
+ { Drive I: (8) }
+ DB 8,0,0,1,'\',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0,0,0
+ { Drive J: (9) }
+ DB 9,0,0,1,'\',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0,0,0
+ { Drive K: (10) }
+ DB 10,0,0,1,'\',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0,0
+ { Drive L: (11) }
+ DB 11,0,0,1,'\',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0,0
+ { Drive M: (12) }
+ DB 12,0,0,1,'\',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0,0
+ { Drive N: (13) }
+ DB 13,0,0,1,'\',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0,0
+ { Drive O: (14) }
+ DB 14,0,0,1,'\',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0,0
+ { Drive P: (15) }
+ DB 15,0,0,1,'\',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0,0
+ { Drive Q: (16) }
+ DB 16,0,0,1,'\',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0,0
+ { Drive R: (17) }
+ DB 17,0,0,1,'\',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0,0
+ { Drive S: (18) }
+ DB 18,0,0,1,'\',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0,0
+ { Drive T: (19) }
+ DB 19,0,0,1,'\',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0,0
+ { Drive U: (20) }
+ DB 20,0,0,1,'\',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0,0
+ { Drive V: (21) }
+ DB 21,0,0,1,'\',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0,0
+ { Drive W: (22) }
+ DB 22,0,0,1,'\',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0,0
+ { Drive X: (23) }
+ DB 23,0,0,1,'\',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0,0
+ { Drive Y: (24) }
+ DB 24,0,0,1,'\',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0,0
+ { Drive Z: (25) }
+ DB 25,0,0,1,'\',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0,0
 END;
 
 Procedure Intr20h;Assembler;ASM
@@ -347,6 +553,7 @@ Procedure Intr21h;Assembler;ASM
  DW @38h { Fonction 38h - Get/Set Country Information }
  DW @39h { Fonction 39h - Create Subdirectory }
  DW @3Ah { Fonction 3Ah - Remove Directory }
+ DW @3Bh { Fonction 3Bh - Change Directory }
 
  {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
  { Interruption 21h - Fonction 00h: Terminer le programme                      }
@@ -1873,6 +2080,43 @@ Procedure Intr21h;Assembler;ASM
  POP CX
  JMP @Xit
 
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+ { Interruption 21h - Fonction 3Bh: Change Directory (changer répertoire)     }
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+@3Bh:
+ { Entrée: DS:DX pointe sur le chemin ASCIIZ }
+ { Sortie: AX = code d'erreur (0 = succès) }
+ { Carry Flag: 0 = succès, 1 = erreur }
+ 
+ PUSH CX                    { Sauver registres }
+ PUSH SI
+ PUSH DI
+ 
+ MOV SI,DX                  { SI pointe sur le chemin }
+ 
+ { Appeler la fonction Pascal pour changer de répertoire }
+ PUSH DS                    { Paramètre: segment chaîne }
+ PUSH SI                    { Paramètre: offset chaîne }
+ CALL DOS3Bh_ChangeDirectory
+ ADD SP,4                   { Nettoyer pile (2 paramètres) }
+ 
+ { AX contient le résultat (0 = succès, autre = code erreur) }
+ OR AX,AX                   { Tester le résultat }
+ JZ @3BhSuccess             { Si 0, succès }
+ 
+ { Erreur }
+ STC                        { Set Carry Flag }
+ JMP @3BhEnd
+ 
+@3BhSuccess:
+ CLC                        { Clear Carry Flag }
+ 
+@3BhEnd:
+ POP DI
+ POP SI 
+ POP CX
+ JMP @Xit
+
 @Xit:
  DEC Data.DataMOS.InDos
 END;
@@ -2323,6 +2567,138 @@ Procedure Intr(IntNo: Byte; var Regs: Registers);Assembler;ASM
 {$ENDIF}
 {$ENDIF}
 END;
+
+{==============================================================================}
+{ FONCTIONS D'ACCÈS AUX DONNÉES DANS LE CODE SEGMENT                          }
+{==============================================================================}
+
+{ Fonctions pour accéder aux variables CurrentDrive et CurrentDir dans Data }
+Function GetCurrentDrive: Byte;Assembler;
+ASM
+ MOV AL,BYTE PTR [Data + 6]  { CurrentDrive est à l'offset 6 }
+END;
+
+Procedure SetCurrentDrive(Drive: Byte);Assembler;
+ASM
+ MOV AL,Drive
+ MOV BYTE PTR [Data + 6],AL  { Stocker CurrentDrive à l'offset 6 }
+END;
+
+Function GetCurrentDirDrive(Index: Byte): Byte;Assembler;
+ASM
+ MOV AL,Index
+ MOV AH,131                  { Taille d'un enregistrement CurrentDir (1+2+128) }
+ MUL AH                      { AL = Index * 131 }
+ ADD AX,7                    { Ajouter offset de base (7) }
+ MOV BX,AX
+ MOV AL,BYTE PTR [Data + BX] { Lire Drive }
+END;
+
+Function GetCurrentDirCluster(Index: Byte): Word;Assembler;
+ASM
+ MOV AL,Index
+ MOV AH,131                  { Taille d'un enregistrement CurrentDir }
+ MUL AH
+ ADD AX,8                    { Drive(1) + offset de base(7) = 8 }
+ MOV BX,AX
+ MOV AX,WORD PTR [Data + BX] { Lire Cluster (Word) }
+END;
+
+Function GetCurrentDirPath(Index: Byte): String;
+Var
+ Path: String;
+ I, Len: Byte;
+ BaseOffset: Word;
+Begin
+ BaseOffset := 7 + (Index * 131) + 3;  { Base + Index*RecordSize + Drive(1) + Cluster(2) }
+ 
+ { Lire la longueur de la chaîne }
+ ASM
+  MOV BX,BaseOffset
+  MOV AL,BYTE PTR [Data + BX]
+  MOV Len,AL
+ END;
+ 
+ { Lire les caractères }
+ Path[0] := Chr(Len);
+ For I := 1 To Len Do Begin
+  ASM
+   MOV AL,I
+   MOV AH,0
+   ADD AX,BaseOffset
+   MOV BX,AX
+   MOV AL,BYTE PTR [Data + BX]
+   
+   { Stocker le caractère dans Path[I] }
+   LEA BX,Path
+   MOV CL,I
+   MOV CH,0
+   ADD BX,CX
+   MOV BYTE PTR [BX],AL
+  END;
+ End;
+ 
+ GetCurrentDirPath := Path;
+End;
+
+Procedure SetCurrentDirDrive(Index, Drive: Byte);Assembler;
+ASM
+ MOV AL,Index
+ MOV AH,131                  { Taille d'un enregistrement CurrentDir }
+ MUL AH
+ ADD AX,7                    { Ajouter offset de base }
+ MOV BX,AX
+ MOV AL,Drive
+ MOV BYTE PTR [Data + BX],AL { Stocker Drive }
+END;
+
+Procedure SetCurrentDirCluster(Index: Byte; Cluster: Word);Assembler;
+ASM
+ MOV AL,Index
+ MOV AH,131                  { Taille d'un enregistrement CurrentDir }
+ MUL AH
+ ADD AX,8                    { Drive(1) + offset de base(7) = 8 }
+ MOV BX,AX
+ MOV AX,Cluster
+ MOV WORD PTR [Data + BX],AX { Stocker Cluster }
+END;
+
+Procedure SetCurrentDirPath(Index: Byte; Path: String);
+Var
+ I, Len: Byte;
+ BaseOffset: Word;
+Begin
+ Len := Length(Path);
+ BaseOffset := 7 + (Index * 131) + 3;  { Base + Index*RecordSize + Drive(1) + Cluster(2) }
+ 
+ { Stocker la longueur }
+ ASM
+  MOV BX,BaseOffset
+  MOV AL,Len
+  MOV BYTE PTR [Data + BX],AL
+ END;
+ 
+ { Stocker les caractères }
+ For I := 1 To Len Do Begin
+  ASM
+   { Calculer l'adresse de destination dans Data }
+   MOV AL,I
+   MOV AH,0
+   ADD AX,BaseOffset
+   MOV DI,AX           { DI = adresse destination dans Data }
+   
+   { Lire le caractère depuis Path[I] }
+   LEA BX,Path
+   MOV CL,I
+   MOV CH,0
+   ADD BX,CX
+   MOV AL,BYTE PTR [BX] { AL = Path[I] }
+   
+   { Stocker dans Data }
+   MOV BYTE PTR [Data + DI],AL
+  END;
+ End;
+End;
 
 {==============================================================================}
 { FONCTIONS DE MANIPULATION DE CHAÎNES INTERNES                               }
@@ -3440,6 +3816,194 @@ Begin
  End;
  
  DOS3Ah_RemoveDirectory:=0; { Succès }
+End;
+
+{==============================================================================}
+{ FONCTIONS POUR CHANGER DE RÉPERTOIRE (Fonction 3Bh)                        }
+{==============================================================================}
+
+Function FindDirectoryByPath(Drive:Byte;BootSec:BootSectorRec;Path:String;Var DirCluster:Word):Boolean;
+{ Trouve un répertoire par son chemin complet }
+Var
+ PathParts:Array[0..15] of String; { Maximum 16 niveaux }
+ PartCount:Byte;
+ CurrentCluster:Word;
+ I,J:Byte;
+ TempPath:String;
+ Entry:DirectoryEntry;
+ EntryOffset:Word;
+Begin
+ FindDirectoryByPath:=False;
+ DirCluster:=0;
+ 
+ { Traiter le cas du répertoire racine }
+ If (Path = '\') or (Path = '') Then Begin
+  DirCluster:=0; { Répertoire racine }
+  FindDirectoryByPath:=True;
+  Exit;
+ End;
+ 
+ { Décomposer le chemin en parties }
+ TempPath:=Path;
+ PartCount:=0;
+ 
+ { Enlever le \ initial s'il existe }
+ If (Length(TempPath) > 0) and (TempPath[1] = '\') Then
+  Delete(TempPath,1,1);
+  
+ { Séparer par \ }
+ While (Length(TempPath) > 0) and (PartCount < 16) Do Begin
+  J:=Pos('\',TempPath);
+  If J = 0 Then Begin
+   PathParts[PartCount]:=TempPath;
+   TempPath:='';
+  End
+  Else Begin
+   PathParts[PartCount]:=Copy(TempPath,1,J-1);
+   Delete(TempPath,1,J);
+  End;
+  Inc(PartCount);
+ End;
+ 
+ { Commencer par le répertoire racine }
+ CurrentCluster:=0;
+ 
+ { Parcourir chaque partie du chemin }
+ For I:=0 To PartCount-1 Do Begin
+  If Not FindDirectoryEntry(Drive,BootSec,CurrentCluster,PathParts[I],Entry,EntryOffset) Then
+   Exit; { Partie non trouvée }
+   
+  { Vérifier que c'est un répertoire }
+  If (Entry.Attributes and $10) = 0 Then
+   Exit; { Pas un répertoire }
+   
+  { Passer au cluster suivant }
+  CurrentCluster:=Entry.FirstClusterLow or (Word(Entry.FirstClusterHigh) shl 16);
+ End;
+
+ DirCluster:=CurrentCluster;
+ FindDirectoryByPath:=True;
+End;
+
+Function SetCurrentDirectory(Drive:Byte;DirCluster:Word):Boolean;
+{ Met à jour le répertoire courant pour un lecteur }
+Begin
+ SetCurrentDirectory:=False;
+
+ { Vérifier validité du lecteur }
+ If Drive > 25 Then Exit; { A-Z seulement }
+
+ { Mettre à jour les variables globales }
+ CurrentDir[Drive].Drive:=Drive;
+ CurrentDir[Drive].Cluster:=DirCluster;
+ 
+ { Pour l'instant, path sera mis à jour plus tard }
+ If DirCluster = 0 Then
+  CurrentDir[Drive].Path:='\'
+ Else
+  CurrentDir[Drive].Path:='\SUBDIR'; { Simplifié pour le test }
+  
+ SetCurrentDirectory:=True;
+End;
+
+Function DOS3Bh_ChangeDirectory(PathPtr:Pointer):Word;
+{ Fonction principale pour changer de répertoire }
+Var
+ Path:String;
+ Drive:Byte;
+ DirName:String;
+ FullPath:String;
+ BootSec:BootSectorRec;
+ DirCluster:Word;
+ P:^Char;
+ I,J:Byte;
+Begin
+ DOS3Bh_ChangeDirectory:=3; { Par défaut: Path not found }
+ 
+ { Convertir pointeur en chaîne Pascal }
+ P:=PathPtr;
+ Path:='';
+ I:=0;
+ While (P^ <> #0) and (I < 255) Do Begin
+  Path:=Path + P^;
+  Inc(P);
+  Inc(I);
+ End;
+ 
+ { Déterminer le lecteur }
+ If (Length(Path) >= 2) and (Path[2] = ':') Then Begin
+  Drive:=Ord(UpCase(Path[1])) - Ord('A');
+  FullPath:=Copy(Path,3,255); { Enlever "C:" }
+ End
+ Else Begin
+  Drive:=CurrentDrive; { Lecteur courant }
+  FullPath:=Path;
+ End;
+ 
+ { Vérifier validité du lecteur }
+ If Drive > 25 Then Begin
+  DOS3Bh_ChangeDirectory:=15; { Invalid drive }
+  Exit;
+ End;
+ 
+ { Lire le secteur de boot }
+ If Not ReadBootSector(Drive,BootSec) Then Begin
+  DOS3Bh_ChangeDirectory:=15; { Invalid drive }
+  Exit;
+ End;
+ 
+ { Traiter les cas spéciaux }
+ If FullPath = '' Then Begin
+  { Pas de chemin = juste changer de lecteur }
+  CurrentDrive:=Drive;
+  DOS3Bh_ChangeDirectory:=0;
+  Exit;
+ End;
+ 
+ { Gérer chemin relatif vs absolu }
+ If (Length(FullPath) = 0) or (FullPath[1] <> '\') Then Begin
+  { Chemin relatif - partir du répertoire courant }
+  If CurrentDir[Drive].Path <> '\' Then
+   FullPath:=CurrentDir[Drive].Path + '\' + FullPath
+  Else
+   FullPath:='\' + FullPath;
+ End;
+ 
+ { Gérer ".." (répertoire parent) }
+ While Pos('\..\',FullPath) > 0 Do Begin
+  I:=Pos('\..\',FullPath);
+  If I > 1 Then Begin
+   { Trouver le répertoire parent }
+   J:=I-1;
+   While (J > 1) and (FullPath[J] <> '\') Do Dec(J);
+   Delete(FullPath,J+1,I+3-J-1);
+  End
+  Else
+   Delete(FullPath,1,4); { Enlever "\.." au début }
+ End;
+ 
+ { Gérer "." (répertoire courant) }
+ While Pos('\.\',FullPath) > 0 Do Begin
+  I:=Pos('\.\',FullPath);
+  Delete(FullPath,I,2); { Enlever "\." }
+ End;
+ 
+ { Chercher le répertoire }
+ If Not FindDirectoryByPath(Drive,BootSec,FullPath,DirCluster) Then Begin
+  DOS3Bh_ChangeDirectory:=3; { Path not found }
+  Exit;
+ End;
+ 
+ { Mettre à jour le répertoire courant }
+ If Not SetCurrentDirectory(Drive,DirCluster) Then Begin
+  DOS3Bh_ChangeDirectory:=5; { Access denied }
+  Exit;
+ End;
+ 
+ { Changer le lecteur courant si nécessaire }
+ CurrentDrive:=Drive;
+ 
+ DOS3Bh_ChangeDirectory:=0; { Succès }
 End;
 
 Procedure SetIntVec(AL:Byte;DS,DX:Word);
