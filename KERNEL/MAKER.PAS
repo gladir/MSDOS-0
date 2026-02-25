@@ -2,7 +2,7 @@
   @created: 2026
   @website(https://www.gladir.com/msdos0)
   @abstract(Target: Turbo Pascal 7)
-  @desciption: Fabrique le MSDOS.SYS avec un unit‚ automne Pascal.
+  @desciption: Fabrique le MSDOS.SYS avec un unitï¿½ automne Pascal.
 }
 
 Program MAKER;
@@ -17,9 +17,9 @@ Var
 BEGIN
  SourceKernel:=@BEGIN_KERNEL;
  {$I-}Assign(KernelFile,'MSDOS.SYS');
- Rewrite(KernelFile) {$I+}
+ Rewrite(KernelFile);{$I+}
  If IOResult<>0 Then Begin
-  Write('Impossible d''‚crire MSDOS.SYS');
+  Write('Impossible d''ï¿½crire MSDOS.SYS');
   Halt(1);
  End;
  BlockWrite(KernelFile,SourceKernel^,Ofs(END_KERNEL)+1,ByteWrited);

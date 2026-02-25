@@ -15,76 +15,76 @@ Const
  { Version du pilote souris - Compatible Microsoft Mouse Driver }
  MOUSE_DRIVER_VERSION = $0806;  { Version 8.06 - Format: version majeure.mineure }
 
- { Codes d'erreur pour les op√©rations souris }
- ERR_SUCCESS = 0;               { Op√©ration r√©ussie }
- ERR_INVALID_FUNCTION = 1;      { Fonction non support√©e }
- ERR_NO_MOUSE = 2;              { Aucune souris d√©tect√©e }
- ERR_DRIVER_NOT_INSTALLED = 3;  { Pilote non install√© }
- ERR_INVALID_PARAMETER = 4;     { Param√®tre invalide }
+ { Codes d'erreur pour les opÇrations souris }
+ ERR_SUCCESS = 0;               { OpÇration rÇussie }
+ ERR_INVALID_FUNCTION = 1;      { Fonction non supportÇe }
+ ERR_NO_MOUSE = 2;              { Aucune souris dÇtectÇe }
+ ERR_DRIVER_NOT_INSTALLED = 3;  { Pilote non installÇ }
+ ERR_INVALID_PARAMETER = 4;     { Paramätre invalide }
 
  { Interruption logicielle souris - Standard MS-DOS }
  MOUSE_INT = $33;               { INT 33h - Interface standard souris }
 
- { Ports s√©rie pour souris s√©rie Microsoft/compatibles }
- COM1_BASE = $3F8;              { Port s√©rie COM1 - Adresse de base }
- COM2_BASE = $2F8;              { Port s√©rie COM2 - Adresse de base }
- COM3_BASE = $3E8;              { Port s√©rie COM3 - Adresse de base }
- COM4_BASE = $2E8;              { Port s√©rie COM4 - Adresse de base }
+ { Ports sÇrie pour souris s√©rie Microsoft/compatibles }
+ COM1_BASE = $3F8;              { Port sÇrie COM1 - Adresse de base }
+ COM2_BASE = $2F8;              { Port sÇrie COM2 - Adresse de base }
+ COM3_BASE = $3E8;              { Port sÇrie COM3 - Adresse de base }
+ COM4_BASE = $2E8;              { Port sÇrie COM4 - Adresse de base }
 
- { Ports PS/2 pour souris PS/2 (contr√¥leur clavier 8042) }
- PS2_DATA_PORT = $60;           { Port de donn√©es PS/2 }
+ { Ports PS/2 pour souris PS/2 (contrìleur clavier 8042) }
+ PS2_DATA_PORT = $60;           { Port de donnÇes PS/2 }
  PS2_STATUS_PORT = $64;         { Port de statut PS/2 (lecture) }
- PS2_COMMAND_PORT = $64;        { Port de commande PS/2 (√©criture) }
+ PS2_COMMAND_PORT = $64;        { Port de commande PS/2 (Çcriture) }
 
- { Num√©ros IRQ pour interruptions mat√©rielles souris }
+ { NumÇros IRQ pour interruptions matÇrielles souris }
  PS2_IRQ = 12;                  { IRQ 12 - Souris PS/2 (PIC esclave) }
- COM1_IRQ = 4;                  { IRQ 4 - Port s√©rie COM1 }
- COM2_IRQ = 3;                  { IRQ 3 - Port s√©rie COM2 }
+ COM1_IRQ = 4;                  { IRQ 4 - Port sÇrie COM1 }
+ COM2_IRQ = 3;                  { IRQ 3 - Port sÇrie COM2 }
 
- { Types de souris support√©s par le pilote }
- MOUSE_TYPE_NONE = 0;           { Aucune souris d√©tect√©e }
- MOUSE_TYPE_SERIAL = 1;         { Souris s√©rie (COM1-COM4) }
+ { Types de souris supportÇs par le pilote }
+ MOUSE_TYPE_NONE = 0;           { Aucune souris dÇtectÇe }
+ MOUSE_TYPE_SERIAL = 1;         { Souris sÇrie (COM1-COM4) }
  MOUSE_TYPE_PS2 = 2;            { Souris PS/2 (port auxiliaire) }
  MOUSE_TYPE_BUS = 3;            { Souris bus (IBM PC/InPort) }
 
- { Masques de bits pour l'√©tat des boutons souris }
+ { Masques de bits pour l'Çtat des boutons souris }
  BUTTON_LEFT = 1;               { Bit 0 - Bouton gauche }
  BUTTON_RIGHT = 2;              { Bit 1 - Bouton droit }
  BUTTON_MIDDLE = 4;             { Bit 2 - Bouton central }
 
- { Limites par d√©faut de la zone de travail souris }
- DEFAULT_MIN_X = 0;             { Coordonn√©e X minimale }
- DEFAULT_MAX_X = 639;           { Coordonn√©e X maximale (mode 640x200) }
- DEFAULT_MIN_Y = 0;             { Coordonn√©e Y minimale }
- DEFAULT_MAX_Y = 199;           { Coordonn√©e Y maximale (mode 640x200) }
+ { Limites par dÇfaut de la zone de travail souris }
+ DEFAULT_MIN_X = 0;              { CoordonnÇe X minimale }
+ DEFAULT_MAX_X = 639;            { CoordonnÇe X maximale (mode 640x200) }
+ DEFAULT_MIN_Y = 0;              { CoordonnÇe Y minimale }
+ DEFAULT_MAX_Y = 199;            { CoordonnÇe Y maximale (mode 640x200) }
 
 Type
- { Structure d'√©tat de la souris }
+ { Structure d'Çtat de la souris }
  TMouseState = Record
-  X, Y: Integer;          { Position actuelle }
-  Buttons: Byte;          { √âtat des boutons }
-  DeltaX, DeltaY: Integer; { D√©placement depuis derni√®re lecture }
-  Visible: Boolean;       { Curseur visible }
-  MinX, MaxX: Integer;    { Limites horizontales }
-  MinY, MaxY: Integer;    { Limites verticales }
-  MickeyX, MickeyY: Integer; { Sensibilit√© }
+  X, Y: Integer;                 { Position actuelle }
+  Buttons: Byte;                 { êtat des boutons }
+  DeltaX, DeltaY: Integer;       { DÇplacement depuis derniäre lecture }
+  Visible: Boolean;              { Curseur visible }
+  MinX, MaxX: Integer;           { Limites horizontales }
+  MinY, MaxY: Integer;           { Limites verticales }
+  MickeyX, MickeyY: Integer;     { SensibilitÇ }
   DoubleSpeedThreshold: Integer; { Seuil de vitesse double }
  End;
 
- { Structure de contr√¥le du pilote TSR }
+  { Structure de contrìle du pilote TSR }
  TMouseDriver = Record
-  Installed: Boolean;     { Pilote install√© }
-  MouseType: Byte;        { Type de souris d√©tect√© }
-  SerialPort: Word;       { Port s√©rie (si souris s√©rie) }
-  SerialIRQ: Byte;        { IRQ s√©rie }
-  State: TMouseState;     { √âtat de la souris }
-  UserHandler: Pointer;   { Gestionnaire utilisateur }
-  CallMask: Word;         { Masque d'appel utilisateur }
-  OldInt33Handler: Pointer; { Ancien gestionnaire INT 33h }
-  OldSerialHandler: Pointer; { Ancien gestionnaire IRQ s√©rie }
-  OldPS2Handler: Pointer;    { Ancien gestionnaire IRQ PS/2 }
-  InitializedHardware: Boolean; { Mat√©riel initialis√© }
-  SilentMode: Boolean;    { Mode silencieux }
+  Installed: Boolean;            { Pilote installÇ }
+  MouseType: Byte;               { Type de souris dÇtectÇ }
+  SerialPort: Word;              { Port sÇrie (si souris sÇrie) }
+  SerialIRQ: Byte;               { IRQ sÇrie }
+  State: TMouseState;            { êtat de la souris }
+  UserHandler: Pointer;          { Gestionnaire utilisateur }
+  CallMask: Word;                { Masque d'appel utilisateur }
+  OldInt33Handler: Pointer;      { Ancien gestionnaire INT 33h }
+  OldSerialHandler: Pointer;     { Ancien gestionnaire IRQ sÇrie }
+  OldPS2Handler: Pointer;        { Ancien gestionnaire IRQ PS/2 }
+  InitializedHardware: Boolean;  { MatÇriel initialisÇ }
+  SilentMode: Boolean;           { Mode silencieux }
  End;
 
 Var
