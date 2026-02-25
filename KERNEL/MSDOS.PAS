@@ -1959,9 +1959,18 @@ Procedure Intr25h;Assembler;ASM
  POP DI
  POP BP
 
- { Note: INT 25h pousse FLAGS sur la pile - on doit le nettoyer }
- { Mais comme on est dans un gestionnaire d'interruption, }
- { le nettoyage se fait automatiquement au IRET }
+ { COMPORTEMENT SPÉCIAL INT 25h: }
+ { INT 25h laisse les FLAGS sur la pile pour l'appelant }
+ { L'appelant doit faire POPF ou ADD SP,2 pour nettoyer }
+ 
+ { Récupérer l'adresse de retour et les flags depuis la pile }
+ POP DX                     { DX = adresse de retour (offset) }
+ POP CX                     { CX = adresse de retour (segment) }
+ PUSHF                      { Pousser les flags actuels }
+ PUSH CX                    { Repousser segment de retour }
+ PUSH DX                    { Repousser offset de retour }
+ 
+ { Retour normal - les flags restent sur la pile pour l'appelant }
 END;
 
 Procedure Intr26h;Assembler;ASM
@@ -2092,6 +2101,19 @@ Procedure Intr26h;Assembler;ASM
  POP SI
  POP DI
  POP BP
+
+ { COMPORTEMENT SPÉCIAL INT 26h: }
+ { INT 26h laisse les FLAGS sur la pile pour l'appelant }
+ { L'appelant doit faire POPF ou ADD SP,2 pour nettoyer }
+ 
+ { Récupérer l'adresse de retour et les flags depuis la pile }
+ POP DX                     { DX = adresse de retour (offset) }
+ POP CX                     { CX = adresse de retour (segment) }
+ PUSHF                      { Pousser les flags actuels }
+ PUSH CX                    { Repousser segment de retour }
+ PUSH DX                    { Repousser offset de retour }
+ 
+ { Retour normal - les flags restent sur la pile pour l'appelant }
 END;
 
 Procedure Intr28h;Assembler;ASM
