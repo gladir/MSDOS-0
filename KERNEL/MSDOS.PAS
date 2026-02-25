@@ -206,14 +206,10 @@ Var
  End;
 {$ENDIF}
 
-{ Variables globales pour accès aux données dans Code Segment }
-Var
- CurrentDrive: Byte;
- CurrentDir: Array[0..25] of Record
-  Drive: Byte;
-  Cluster: Word;
-  Path: String[127];
- End;
+{ Variables globales supprimées - maintenant dans Code Segment }
+{$IFNDEF FPC}
+{ Aucune variable globale nécessaire en mode Turbo Pascal }
+{$ENDIF}
 
 { Déclarations Forward }
 Procedure Intr20h;Interrupt;Forward;
@@ -827,7 +823,8 @@ Procedure Intr21h;Assembler;ASM
  MOV AL,26 { Nombre d'unite installe }
  CMP DL,AL
  JAE @Xit
- MOV Data.DataMOS.CurrDisk,DL
+ MOV BYTE PTR [Data + 6],DL { Stocker CurrentDrive à l'offset 6 }
+ MOV Data.DataMOS.CurrDisk,DL { Maintenir compatibilité }
  JMP @Xit
 
  {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
@@ -1074,7 +1071,7 @@ Procedure Intr21h;Assembler;ASM
  { Interruption 21h - Fonction 19h: Demande le lecteur courant }
  {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
 @19h:
- MOV AL,Data.DataMOS.CurrDisk
+ MOV AL,BYTE PTR [Data + 6]  { CurrentDrive à l'offset 6 }
  JMP @Xit
 
  {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
@@ -3335,7 +3332,6 @@ End;
 Function ParsePath(Path:String;Var Drive:Byte;Var DirName:String):Boolean;
 Var
  I:Byte;
- CurrentDrive:Byte;
 Begin
  ParsePath:=False;
  Drive:=0;
@@ -3352,14 +3348,8 @@ Begin
   Else Exit;
   Delete(Path,1,2);
  End Else Begin
-  { Utiliser le lecteur courant }
-  ASM
-   MOV AH,19h
-   INT 21h
-   INC AL
-   MOV CurrentDrive,AL
-  END;
-  Drive:=CurrentDrive;
+  { Utiliser le lecteur courant depuis Data }
+  Drive:=GetCurrentDrive;
  End;
 
  { Enlever les backslashes de début }
@@ -3893,15 +3883,15 @@ Begin
  { Vérifier validité du lecteur }
  If Drive > 25 Then Exit; { A-Z seulement }
 
- { Mettre à jour les variables globales }
- CurrentDir[Drive].Drive:=Drive;
- CurrentDir[Drive].Cluster:=DirCluster;
+ { Mettre à jour via les fonctions d'accès Code Segment }
+ SetCurrentDirDrive(Drive, Drive);
+ SetCurrentDirCluster(Drive, DirCluster);
  
  { Pour l'instant, path sera mis à jour plus tard }
  If DirCluster = 0 Then
-  CurrentDir[Drive].Path:='\'
+  SetCurrentDirPath(Drive, '\')
  Else
-  CurrentDir[Drive].Path:='\SUBDIR'; { Simplifié pour le test }
+  SetCurrentDirPath(Drive, '\SUBDIR'); { Simplifié pour le test }
   
  SetCurrentDirectory:=True;
 End;
@@ -3936,7 +3926,7 @@ Begin
   FullPath:=Copy(Path,3,255); { Enlever "C:" }
  End
  Else Begin
-  Drive:=CurrentDrive; { Lecteur courant }
+  Drive:=GetCurrentDrive; { Lecteur courant }
   FullPath:=Path;
  End;
  
@@ -3955,7 +3945,7 @@ Begin
  { Traiter les cas spéciaux }
  If FullPath = '' Then Begin
   { Pas de chemin = juste changer de lecteur }
-  CurrentDrive:=Drive;
+  SetCurrentDrive(Drive);
   DOS3Bh_ChangeDirectory:=0;
   Exit;
  End;
@@ -3963,8 +3953,8 @@ Begin
  { Gérer chemin relatif vs absolu }
  If (Length(FullPath) = 0) or (FullPath[1] <> '\') Then Begin
   { Chemin relatif - partir du répertoire courant }
-  If CurrentDir[Drive].Path <> '\' Then
-   FullPath:=CurrentDir[Drive].Path + '\' + FullPath
+  If GetCurrentDirPath(Drive) <> '\' Then
+   FullPath:=GetCurrentDirPath(Drive) + '\' + FullPath
   Else
    FullPath:='\' + FullPath;
  End;
@@ -4001,7 +3991,7 @@ Begin
  End;
  
  { Changer le lecteur courant si nécessaire }
- CurrentDrive:=Drive;
+ SetCurrentDrive(Drive);
  
  DOS3Bh_ChangeDirectory:=0; { Succès }
 End;
