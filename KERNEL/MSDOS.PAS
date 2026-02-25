@@ -3,6 +3,12 @@
   @website(https://www.gladir.com/msdos0)
   @description: Le MS Operating System est un systeme d'exploitation remplacant le DOS traditionnel.
 
+  Directives de compilation pour compatibilite processeur :
+  - CPU86  : Cible 8088/8086 (pas de PUSH immediate)
+  - CPU286 : Cible 80286+ (PUSH immediate supporte)
+
+  Pour compiler en mode 8088 compatible : $DEFINE CPU86
+
   Fonctions DOS implementees :
   - 00h : Terminer le programme
   - 01h : Entree de caractere avec echo
@@ -74,6 +80,83 @@ Unit MSDOS;
 
 INTERFACE
 
+Type
+  { Paramètres de lecteur de disque }
+  DriveParameterTable=Record
+    SectorsPerTrack:Word;     { Secteurs par piste }
+    NumberOfHeads:Word;       { Nombre de têtes }
+    NumberOfCylinders:Word;   { Nombre de cylindres }
+    BytesPerSector:Word;      { Octets par secteur }
+    SectorsPerCluster:Byte;   { Secteurs par cluster }
+  End;
+
+  { Structure pour Boot Sector (FAT12/FAT16) }
+  BootSectorRec=Record
+    JmpBoot:Array[0..2] of Byte;      { Code de saut }
+    OEMName:Array[0..7] of Char;      { Nom OEM }
+    BytesPerSector:Word;              { Octets par secteur }
+    SectorsPerCluster:Byte;           { Secteurs par cluster }
+    ReservedSectors:Word;             { Secteurs réservés }
+    NumberOfFATs:Byte;                { Nombre de FATs }
+    RootDirEntries:Word;              { Entrées répertoire racine }
+    TotalSectors:Word;                { Secteurs totaux }
+    MediaDescriptor:Byte;             { Descripteur média }
+    SectorsPerFAT:Word;               { Secteurs par FAT }
+    SectorsPerTrack:Word;             { Secteurs par piste }
+    NumberOfHeads:Word;               { Nombre de têtes }
+    HiddenSectors:LongInt;            { Secteurs cachés }
+    TotalSectorsLarge:LongInt;        { Secteurs totaux (32-bit) }
+    DriveNumber:Byte;                 { Numéro de lecteur }
+    Reserved:Byte;                    { Réservé }
+    BootSignature:Byte;               { Signature de démarrage }
+    VolumeID:LongInt;                 { ID de volume }
+    VolumeLabel:Array[0..10] of Char; { Label de volume }
+    FileSystemType:Array[0..7] of Char; { Type de système de fichiers }
+    BootCode:Array[0..447] of Byte;   { Code de démarrage }
+    BootSectorSignature:Word;         { Signature 55AAh }
+  End;
+
+  { Entrée de répertoire FAT }
+  DirectoryEntry=Record
+    FileName:Array[0..7] of Char;     { Nom de fichier (8 caractères) }
+    Extension:Array[0..2] of Char;    { Extension (3 caractères) }
+    Attributes:Byte;                  { Attributs de fichier }
+    Reserved:Byte;                    { Réservé }
+    CreationTimeFine:Byte;            { Création temps fin }
+    CreationTime:Word;                { Heure de création }
+    CreationDate:Word;                { Date de création }
+    LastAccessDate:Word;              { Date dernier accès }
+    FirstClusterHigh:Word;            { Cluster de départ (partie haute) }
+    LastWriteTime:Word;               { Heure dernière écriture }
+    LastWriteDate:Word;               { Date dernière écriture }
+    FirstClusterLow:Word;             { Cluster de départ (partie basse) }
+    FileSize:LongInt;                 { Taille du fichier }
+  End;
+
+  { Paramètres de bloc BIOS }
+  BIOSParameterBlock=Record
+    BytesPerSector:Word;              { Octets par secteur }
+    SectorsPerCluster:Byte;           { Secteurs par cluster }
+    ReservedSectors:Word;             { Secteurs réservés }
+    NumberOfFATs:Byte;                { Nombre de FATs }
+    RootDirEntries:Word;              { Entrées répertoire racine }
+    TotalSectors:Word;                { Secteurs totaux }
+    MediaDescriptor:Byte;             { Descripteur média }
+    SectorsPerFAT:Word;               { Secteurs par FAT }
+    SectorsPerTrack:Word;             { Secteurs par piste }
+    NumberOfHeads:Word;               { Nombre de têtes }
+    HiddenSectors:LongInt;            { Secteurs cachés }
+    TotalSectorsLarge:LongInt;        { Secteurs totaux (32-bit) }
+  End;
+
+  { Requête d'I/O disque }
+  DiskIORequest=Record
+    DriveNumber:Byte;                 { Numéro de lecteur }
+    SectorNumber:LongInt;             { Numéro de secteur }
+    SectorCount:Word;                 { Nombre de secteurs }
+    BufferPtr:Pointer;                { Pointeur vers buffer }
+  End;
+
 Procedure BEGIN_KERNEL;
 Procedure END_KERNEL;
 
@@ -83,65 +166,47 @@ Const
  VerDos=7;          { Version de DOS }
  SubVerDos=10;      { Sous-version de DOS }
 
-Type DataMOS=Record
- Key:Byte;
- InDos:Byte;
- CurrDisk:Byte;
- DTASegment:Word;    { Segment de la DTA }
- DTAOffset:Word;     { Offset de la DTA }
- CurrentCountry:Word; { Code pays actuel }
-End;
+Type
+ Registers=Record
+  Case Integer of
+   0: (AX, BX, CX, DX, BP, SI, DI, DS, ES, Flags: Word);
+   1: (AL, AH, BL, BH, CL, CH, DL, DH: Byte);
+ End;
 
-{ Structure pour les informations pays }
-DataCountryRec=Record
- CountryCode:Word;           { Code pays }
- DateFormat:Byte;            { 0=USA, 1=Europe, 2=Japan }
- Currency:Array[0..4] of Char; { Symbole monétaire }
- ThousandsSep:Array[0..1] of Char; { Séparateur milliers }
- DecimalSep:Array[0..1] of Char;   { Séparateur décimal }
- DateSep:Array[0..1] of Char;      { Séparateur date }
- TimeSep:Array[0..1] of Char;      { Séparateur heure }
- CurrencyFormat:Byte;        { Format monétaire }
- DecimalDigits:Byte;         { Chiffres après virgule }
- TimeFormat:Byte;            { 0=12h, 1=24h }
- DataListSep:Array[0..1] of Char; { Séparateur liste }
-End;
+  { Structure pour les données internes DOS }
+ DataMOS=Record
+  Key:Byte;
+  InDos:Byte;
+  CurrDisk:Byte;
+  DTASegment:Word;    { Segment de la DTA }
+  DTAOffset:Word;     { Offset de la DTA }
+  CurrentCountry:Word; { Code pays actuel }
+ End;
 
-{ Structure pour Boot Sector (FAT12/FAT16) }
-BootSectorRec=Record
- JmpBoot:Array[0..2] of Byte;      { Code de saut }
- OEMName:Array[0..7] of Char;      { Nom OEM }
- BytesPerSector:Word;              { Octets par secteur }
- SectorsPerCluster:Byte;           { Secteurs par cluster }
- ReservedSectors:Word;             { Secteurs réservés }
- NumberOfFATs:Byte;                { Nombre de FATs }
- RootDirEntries:Word;              { Entrées répertoire racine }
- TotalSectors:Word;                { Secteurs totaux }
- MediaDescriptor:Byte;             { Descripteur média }
- SectorsPerFAT:Word;               { Secteurs par FAT }
- SectorsPerTrack:Word;             { Secteurs par piste }
- NumberOfHeads:Word;               { Nombre de têtes }
- HiddenSectors:LongInt;            { Secteurs cachés }
- TotalSectorsLarge:LongInt;        { Secteurs totaux (32-bit) }
- DriveNumber:Byte;                 { Numéro de lecteur }
- Reserved:Byte;                    { Réservé }
- BootSignature:Byte;               { Signature de démarrage }
- VolumeID:LongInt;                 { ID de volume }
- VolumeLabel:Array[0..10] of Char; { Label de volume }
- FileSystemType:Array[0..7] of Char; { Type système fichier }
-End;
+ { Structure pour les informations pays }
+ DataCountryRec=Record
+  CountryCode:Word;           { Code pays }
+  DateFormat:Byte;            { 0=USA, 1=Europe, 2=Japan }
+  Currency:Array[0..4] of Char; { Symbole monétaire }
+  ThousandsSep:Array[0..1] of Char; { Séparateur milliers }
+  DecimalSep:Array[0..1] of Char;   { Séparateur décimal }
+  DateSep:Array[0..1] of Char;      { Séparateur date }
+  TimeSep:Array[0..1] of Char;      { Séparateur heure }
+  CurrencyFormat:Byte;        { Format monétaire }
+  DecimalDigits:Byte;         { Chiffres après virgule }
+  TimeFormat:Byte;            { 0=12h, 1=24h }
+  DataListSep:Array[0..1] of Char; { Séparateur liste }
+ End;
 
-{ Structure pour entrée de répertoire (32 octets) }
-DirectoryEntry=Record
- FileName:Array[0..10] of Char;    { Nom de fichier 8.3 }
- Attributes:Byte;                  { Attributs }
- Reserved:Array[0..9] of Byte;     { Réservé }
- Time:Word;                        { Heure }
- Date:Word;                        { Date }
- StartCluster:Word;                { Cluster de départ }
- FileSize:LongInt;                 { Taille du fichier }
-End;
+{$IFDEF FPC}
+Var
+ Data:Record
+  DataMOS:DataMOS;
+  DefaultCountry:DataCountryRec;
+ End;
+{$ENDIF}
 
+{ Déclarations Forward }
 Procedure Intr20h;Interrupt;Forward;
 Procedure Intr21h;Interrupt;Forward;
 Procedure Intr25h;Interrupt;Forward;
@@ -155,6 +220,7 @@ Procedure SetIntVec(AL:Byte;DS,DX:Word);Near;Forward;
 Procedure DataCountry(CountryCode:Word;Var CountryInfo:DataCountryRec);Near;Forward;
 Procedure FillChar(Var Dest;Size:Word;Value:Byte);Near;Forward;
 Procedure Move(Var Source,Dest;Size:Word);Near;Forward;
+Procedure Intr(IntNo:Byte;Var Regs:Registers);Near;Forward;
 
 { Fonctions de manipulation de chaînes internes }
 Function Length(S:String):Byte;Near;Forward;
@@ -1720,16 +1786,16 @@ Procedure Intr21h;Assembler;ASM
 @39h:
  { Pour cette implémentation simplifiée, on retourne temporairement succès }
  { L'implémentation complète sera ajoutée dans une version ultérieure }
- 
+
  { Vérifier que DS:DX pointe sur un chemin valide }
  PUSH AX
  PUSH SI
  MOV SI,DX                  { SI = pointeur sur chemin }
- 
+
  { Vérifier longueur minimale }
  CMP Byte Ptr [SI],0        { Chaîne vide ? }
  JE @39hError
- 
+
  { Parcourir la chaîne pour vérifier validité }
  MOV CX,0                   { Compteur }
 @39hCheckLoop:
@@ -1762,15 +1828,270 @@ Procedure Intr21h;Assembler;ASM
 END;
 
 Procedure Intr25h;Assembler;ASM
- XCHG AX,DX
- MOV AX,0201h
- PUSH DS
- POP ES
-  { Conversion des pistes et cylindres en secteur absolue a faire ...}
- INT 13h
+ { INT 25h - Lecture secteur disque absolue }
+ { Entrée:                                  }
+ {   AL = numéro lecteur (0=A:, 1=B:, etc.) }
+ {   CX = nombre de secteurs à lire          }
+ {   DX = secteur de départ (pour petits disques) }
+ {   DS:BX = pointeur buffer                 }
+ { Sortie:                                  }
+ {   CF = 0 si succès, 1 si erreur          }
+ {   AX = code d'erreur si erreur           }
+
+ PUSH BP                    { Sauver registres }
+ PUSH DI
+ PUSH SI
+ PUSH ES
+
+ { Vérifier validité du lecteur }
+ CMP AL,26                  { Maximum 26 lecteurs (A-Z) }
+ JA @25hInvalidDrive
+
+ { Déterminer si c'est un disque dur ou disquette }
+ CMP AL,2                   { 0=A:, 1=B:, 2=C:, etc. }
+ JAE @25hHardDisk
+
+ {--- Disquette (A: ou B:) ---}
+@25hFloppy:
+ { Pour les disquettes, utiliser l'approche CHS classique }
+ MOV AH,02h                 { BIOS read sectors }
+ MOV AL,CL                  { Nombre de secteurs }
+
+ { Convertir numéro secteur logique en CHS }
+ PUSH AX                    { Sauver AX }
+ MOV AX,DX                  { AX = secteur logique }
+ MOV BL,18                  { 18 secteurs par piste (standard 1.44MB) }
+ DIV BL                     { AL = piste, AH = secteur dans piste }
+ MOV CL,AH                  { CL = secteur (0-based) }
+ INC CL                     { Secteur BIOS est 1-based }
+
+ XOR AH,AH                  { AH = 0, AL = piste }
+ MOV BL,2                   { 2 têtes }
+ DIV BL                     { AL = cylindre, AH = tête }
+ MOV CH,AL                  { CH = cylindre }
+ MOV DH,AH                  { DH = tête }
+
+ POP AX                     { Restaurer AX }
+ PUSH AX                    { Sauver AX }
+ MOV AX,[BP+8]              { Récupérer registres originaux depuis pile }
+ MOV DL,AL                  { DL = numéro lecteur original }
+ POP AX                     { Restaurer AX }
+
+ INT 13h                    { Appel BIOS }
+ JMP @25hEnd
+
+ {--- Disque dur ---}
+@25hHardDisk:
+ { Pour les disques durs, utiliser LBA si possible }
+ MOV AH,42h                 { BIOS Extended Read }
+ PUSH AX                    { Sauver AX }
+ MOV AX,[BP+8]              { Récupérer registres originaux }
+ MOV DL,AL                  { DL = numéro lecteur }
+ POP AX                     { Restaurer AX }
+ ADD DL,80h                 { Convertir en numéro BIOS (80h=C:, 81h=D:, etc.) }
+
+ { Préparer structure LBA sur la pile }
+{$IFDEF CPU86}
+ { 8088/8086 : Utiliser registres pour les constantes }
+ XOR AX,AX                  { AX = 0 }
+ PUSH AX                    { LBA étendu partie haute (high word) }
+ PUSH AX                    { LBA étendu partie haute (low word) }
+ PUSH DX                    { LBA secteur de départ (partie basse) }
+ PUSH DS                    { Segment buffer }
+ PUSH BX                    { Offset buffer }
+ PUSH CX                    { Nombre de secteurs }
+ MOV AX,10h                 { Taille structure }
+ PUSH AX
+{$ELSE}
+ { 80286+ : PUSH immediate supporté }
+ PUSH DWord Ptr 0           { LBA étendu (partie haute) }
+ PUSH DX                    { LBA secteur de départ (partie basse) }
+ PUSH DS                    { Segment buffer }
+ PUSH BX                    { Offset buffer }
+ PUSH CX                    { Nombre de secteurs }
+ PUSH 10h                   { Taille structure }
+{$ENDIF}
+
+ MOV SI,SP                  { DS:SI pointe sur structure }
+ INT 13h                    { Appel BIOS étendu }
+ ADD SP,16                  { Nettoyer pile }
+
+ JNC @25hSuccess            { Si succès, terminer }
+
+ { Si LBA échoue, essayer CHS classique }
+ MOV AH,02h                 { BIOS read sectors classique }
+ MOV AL,CL                  { Nombre de secteurs }
+
+ { Conversion LBA vers CHS approximative }
+ MOV AX,DX                  { AX = LBA }
+ MOV BL,63                  { 63 secteurs par piste (standard) }
+ DIV BL                     { AL = piste/tête, AH = secteur }
+ MOV CL,AH                  { CL = secteur }
+ INC CL                     { Secteur BIOS 1-based }
+
+ XOR AH,AH                  { AX = piste/tête }
+ MOV BL,255                 { 255 têtes maximum }
+ DIV BL                     { AL = cylindre, AH = tête }
+ MOV CH,AL                  { CH = cylindre }
+ MOV DH,AH                  { DH = tête }
+
+ PUSH AX                    { Sauver AX }
+ MOV AX,[BP+8]              { Récupérer registres originaux }
+ MOV DL,AL                  { DL = numéro lecteur }
+ POP AX                     { Restaurer AX }
+ ADD DL,80h                 { Convertir BIOS }
+
+ INT 13h                    { Appel BIOS }
+ JMP @25hEnd
+
+@25hInvalidDrive:
+ MOV AX,0001h               { Code erreur : lecteur invalide }
+ STC                        { Set Carry Flag }
+ JMP @25hEnd
+
+@25hSuccess:
+ XOR AX,AX                  { Succès }
+ CLC                        { Clear Carry Flag }
+
+@25hEnd:
+ POP ES                     { Restaurer registres }
+ POP SI
+ POP DI
+ POP BP
+
+ { Note: INT 25h pousse FLAGS sur la pile - on doit le nettoyer }
+ { Mais comme on est dans un gestionnaire d'interruption, }
+ { le nettoyage se fait automatiquement au IRET }
 END;
 
 Procedure Intr26h;Assembler;ASM
+ { INT 26h - Écriture secteur disque absolue }
+ { Entrée:                                   }
+ {   AL = numéro lecteur (0=A:, 1=B:, etc.)  }
+ {   CX = nombre de secteurs à écrire        }
+ {   DX = secteur de départ                  }
+ {   DS:BX = pointeur buffer                 }
+ { Sortie:                                   }
+ {   CF = 0 si succès, 1 si erreur           }
+ {   AX = code d'erreur si erreur            }
+
+ PUSH BP                    { Sauver registres }
+ PUSH DI
+ PUSH SI
+ PUSH ES
+
+ { Vérifier validité du lecteur }
+ CMP AL,26                  { Maximum 26 lecteurs }
+ JA @26hInvalidDrive
+
+ { Déterminer type de lecteur }
+ CMP AL,2
+ JAE @26hHardDisk
+
+ {--- Disquette ---}
+@26hFloppy:
+ MOV AH,03h                 { BIOS write sectors }
+ MOV AL,CL                  { Nombre de secteurs }
+
+ { Convertir secteur logique en CHS }
+ PUSH AX
+ MOV AX,DX                  { AX = secteur logique }
+ MOV BL,18                  { Secteurs par piste }
+ DIV BL                     { AL = piste, AH = secteur }
+ MOV CL,AH
+ INC CL                     { Secteur 1-based }
+
+ XOR AH,AH
+ MOV BL,2                   { Têtes }
+ DIV BL                     { AL = cylindre, AH = tête }
+ MOV CH,AL
+ MOV DH,AH
+
+ POP AX
+ PUSH AX                    { Sauver AX }
+ MOV AX,[BP+8]              { Récupérer registres originaux }
+ MOV DL,AL                  { Numéro lecteur }
+ POP AX                     { Restaurer AX }
+
+ INT 13h
+ JMP @26hEnd
+
+ {--- Disque dur ---}
+@26hHardDisk:
+ MOV AH,43h                 { BIOS Extended Write }
+ PUSH AX                    { Sauver AX }
+ MOV AX,[BP+8]              { Récupérer registres originaux }
+ MOV DL,AL                  { DL = numéro lecteur }
+ POP AX                     { Restaurer AX }
+ ADD DL,80h                 { Numéro BIOS }
+
+ { Structure LBA }
+{$IFDEF CPU86}
+ { 8088/8086 : Utiliser registres pour les constantes }
+ XOR AX,AX                  { AX = 0 }
+ PUSH AX                    { LBA étendu partie haute (high word) }
+ PUSH AX                    { LBA étendu partie haute (low word) }
+ PUSH DX                    { LBA secteur }
+ PUSH DS                    { Segment buffer }
+ PUSH BX                    { Offset buffer }
+ PUSH CX                    { Nombre secteurs }
+ MOV AX,10h                 { Taille structure }
+ PUSH AX
+{$ELSE}
+ { 80286+ : PUSH immediate supporté }
+ PUSH DWord Ptr 0           { LBA étendu }
+ PUSH DX                    { LBA secteur }
+ PUSH DS                    { Segment buffer }
+ PUSH BX                    { Offset buffer }
+ PUSH CX                    { Nombre secteurs }
+ PUSH 10h                   { Taille structure }
+{$ENDIF}
+
+ MOV SI,SP
+ INT 13h
+ ADD SP,16
+
+ JNC @26hSuccess
+
+ { Fallback CHS }
+ MOV AH,03h                 { BIOS write sectors }
+ MOV AL,CL
+
+ MOV AX,DX
+ MOV BL,63
+ DIV BL
+ MOV CL,AH
+ INC CL
+
+ XOR AH,AH
+ MOV BL,255
+ DIV BL
+ MOV CH,AL
+ MOV DH,AH
+
+ PUSH AX                    { Sauver AX }
+ MOV AX,[BP+8]              { Récupérer registres originaux }
+ MOV DL,AL                  { DL = numéro lecteur }
+ POP AX                     { Restaurer AX }
+ ADD DL,80h
+
+ INT 13h
+ JMP @26hEnd
+
+@26hInvalidDrive:
+ MOV AX,0001h
+ STC
+ JMP @26hEnd
+
+@26hSuccess:
+ XOR AX,AX
+ CLC
+
+@26hEnd:
+ POP ES
+ POP SI
+ POP DI
+ POP BP
 END;
 
 Procedure Intr28h;Assembler;ASM
@@ -1826,6 +2147,111 @@ Procedure Move(Var Source,Dest;Size:Word);Assembler;ASM
  POP ES
 END;
 
+{ Procédure interne pour appeler une interruption logicielle }
+Procedure Intr(IntNo: Byte; var Regs: Registers);Assembler;ASM
+{$IFNDEF Win32}
+	PUSH	DS
+{$IFDEF ProtectedMode}
+{$IFDEF Windows}
+ PUSH CS
+ CALL	AllocCSToDSAlias
+{$ELSE}
+ MOV AX,CS
+ ADD AX,SelectorInc
+{$ENDIF}
+	MOV	DS,AX
+	CLI
+	PUSH	WORD PTR DS:@@Int
+	PUSH	DS
+	MOV	AL,IntNo
+	MOV	BYTE PTR DS:@@Int+1,AL
+{$ELSE}
+	PUSH	WORD PTR CS:@@Int
+	MOV	AL,IntNo
+	MOV	BYTE PTR CS:@@Int+1,AL
+{$ENDIF}
+	PUSH	BP			{ Preserve our BP }
+	LDS	SI,Regs
+	CLD
+	LODSW
+	PUSH	AX			{ Regs.AX }
+	LODSW
+	XCHG	AX,BX
+	LODSW
+	XCHG	AX,CX
+	LODSW
+	XCHG	AX,DX
+	LODSW
+	XCHG	AX,BP
+	LODSW
+	PUSH	AX			{ Regs.SI }
+	LODSW
+	XCHG	AX,DI
+	LODSW
+	PUSH	AX			{ Regs.DS }
+	LODSW
+{$IFDEF DPMI}
+        VERR    AX
+	JNZ	@@1
+	MOV	ES,AX
+@@1:	POP	AX			{ Regs.DS }
+	VERR	AX
+	JNZ	@@2
+	MOV	DS,AX
+@@2:
+{$ELSE}
+	MOV	ES,AX
+	POP	DS			{ Regs.DS }
+{$ENDIF}
+	POP	SI			{ Regs.SI }
+	POP	AX			{ Regs.AX }
+@@Int:	INT	0
+	STI
+	PUSHF				{ New Regs.Flags, .ES, .DI, .BP }
+	PUSH	ES
+	PUSH	DI
+	PUSH	BP
+	MOV	BP,SP
+	MOV	BP,[BP+8]		{ Recover our BP }
+	LES	DI,Regs
+	CLD
+	STOSW
+	XCHG	AX,BX
+	STOSW
+	XCHG	AX,CX
+	STOSW
+	XCHG	AX,DX
+	STOSW
+	POP	AX			{ New Regs.BP }
+	STOSW
+	XCHG	AX,SI
+	STOSW
+	POP	AX			{ New Regs.DI }
+	STOSW
+	MOV	AX,DS
+	STOSW
+	POP	AX			{ New Regs.ES }
+	STOSW
+	POP	AX			{ New Regs.Flags }
+	STOSW
+	POP	AX			{ Throw away our pushed BP }
+{$IFDEF ProtectedMode}
+	POP	DS
+	POP	WORD PTR DS:@@Int
+{$ELSE}
+	POP	WORD PTR CS:@@Int
+{$ENDIF}
+{$IFDEF Windows}
+	MOV	AX,DS
+	POP	DS
+	PUSH	AX
+	CALL	FreeSelector
+{$ELSE}
+	POP	DS
+{$ENDIF}
+{$ENDIF}
+END;
+
 {==============================================================================}
 { FONCTIONS DE MANIPULATION DE CHAÎNES INTERNES                               }
 {==============================================================================}
@@ -1844,23 +2270,23 @@ Var
 Begin
  Result:='';
  Len:=Ord(S[0]);
- 
+
  { Validation des paramètres }
  If (Index=0)or(Index>Len)or(Count=0) Then Begin
   Copy:=Result;
   Exit;
  End;
- 
+
  { Ajuster Count si nécessaire }
  If Index+Count-1>Len Then Count:=Len-Index+1;
  If Count>255 Then Count:=255;
- 
+
  { Copier les caractères }
  Result[0]:=Chr(Count);
  For I:=1 to Count Do Begin
   Result[I]:=S[Index+I-1];
  End;
- 
+
  Copy:=Result;
 End;
 
@@ -1870,21 +2296,21 @@ Var
  I,Len,NewLen:Byte;
 Begin
  Len:=Ord(S[0]);
- 
+
  { Validation des paramètres }
  If (Index=0)or(Index>Len)or(Count=0) Then Exit;
- 
+
  { Ajuster Count si nécessaire }
  If Index+Count-1>Len Then Count:=Len-Index+1;
- 
+
  { Calculer nouvelle longueur }
  NewLen:=Len-Count;
- 
+
  { Décaler les caractères restants }
  For I:=Index to NewLen Do Begin
   S[I]:=S[I+Count];
  End;
- 
+
  { Mettre à jour la longueur }
  S[0]:=Chr(NewLen);
 End;
@@ -2115,6 +2541,149 @@ Procedure DataCountry(CountryCode:Word;Var CountryInfo:DataCountryRec);Begin
  End;
 End;
 
+{ =============================================== }
+{ Fonctions de support pour opérations disque  }
+{ =============================================== }
+
+Function GetDriveParameterTable(Drive:Byte;Var DPT:DriveParameterTable):Boolean;
+{ Récupère les paramètres du lecteur spécifié }
+Var
+  Regs:Registers;
+Begin
+  GetDriveParameterTable:=False;
+
+  { Initialiser structure par défaut }
+  FillChar(DPT,SizeOf(DPT),0);
+
+  { Pour les disquettes (0=A:, 1=B:) }
+  If Drive < 2 Then Begin
+    { Paramètres standard disquette 1.44MB }
+    DPT.SectorsPerTrack:=18;
+    DPT.NumberOfHeads:=2;
+    DPT.NumberOfCylinders:=80;
+    DPT.BytesPerSector:=512;
+    DPT.SectorsPerCluster:=1;
+    GetDriveParameterTable:=True;
+  End
+  Else Begin
+    { Pour disques durs, essayer INT 13h AH=08h }
+    Regs.AH:=$08;
+    Regs.DL:=Drive+$80; { 80h=C:, 81h=D:, etc. }
+    Intr($13,Regs);
+
+    If (Regs.Flags And 1)=0 Then Begin { CF=0, succès }
+      DPT.NumberOfHeads:=(Regs.DH And $FF)+1;
+      DPT.SectorsPerTrack:=Regs.CL And $3F;
+      DPT.NumberOfCylinders:=((Regs.CL And $C0) Shl 2) Or Regs.CH;
+      DPT.BytesPerSector:=512; { Standard }
+      DPT.SectorsPerCluster:=4; { Valeur par défaut }
+      GetDriveParameterTable:=True;
+    End;
+  End;
+End;
+
+Function ValidateDriveNumber(DriveNumber:Byte):Boolean;
+{ Vérifie si le numéro de lecteur est valide }
+Begin
+  ValidateDriveNumber:=(DriveNumber>=0) And (DriveNumber<=25); { A-Z }
+End;
+
+Procedure ConvertLBAtoCHS(LBA:LongInt;Var Cylinder,Head,Sector:Word;DPT:DriveParameterTable);
+{ Convertit une adresse LBA en adresse CHS }
+Var
+  SectorsPerCylinder:Word;
+Begin
+  SectorsPerCylinder:=DPT.SectorsPerTrack * DPT.NumberOfHeads;
+
+  Cylinder:=LBA Div SectorsPerCylinder;
+  Head:=(LBA Mod SectorsPerCylinder) Div DPT.SectorsPerTrack;
+  Sector:=(LBA Mod DPT.SectorsPerTrack)+1; { BIOS sectors start at 1 }
+End;
+
+Function BIOSReadSector(DriveNumber:Byte;Cylinder,Head,Sector:Word;
+                        NumSectors:Byte;Buffer:Pointer):Boolean;
+{ Lecture de secteurs via BIOS INT 13h }
+Var
+  Regs:Registers;
+Begin
+  BIOSReadSector:=False;
+
+  Regs.AH:=$02; { Read sectors }
+  Regs.AL:=NumSectors;
+  Regs.CH:=Lo(Cylinder);
+  Regs.CL:=Hi(Cylinder) Shl 6 Or Sector;
+  Regs.DH:=Head;
+
+  If DriveNumber<2 Then
+    Regs.DL:=DriveNumber { Disquette: 0=A:, 1=B: }
+  Else
+    Regs.DL:=DriveNumber+$80; { Disque dur: 80h=C:, 81h=D: }
+
+  Regs.ES:=Seg(Buffer^);
+  Regs.BX:=Ofs(Buffer^);
+
+  Intr($13,Regs);
+
+  BIOSReadSector:=(Regs.Flags And 1)=0; { CF=0 si succès }
+End;
+
+Function BIOSWriteSector(DriveNumber:Byte;Cylinder,Head,Sector:Word;
+                         NumSectors:Byte;Buffer:Pointer):Boolean;
+{ Écriture de secteurs via BIOS INT 13h }
+Var
+  Regs:Registers;
+Begin
+  BIOSWriteSector:=False;
+
+  Regs.AH:=$03; { Write sectors }
+  Regs.AL:=NumSectors;
+  Regs.CH:=Lo(Cylinder);
+  Regs.CL:=Hi(Cylinder) Shl 6 Or Sector;
+  Regs.DH:=Head;
+
+  If DriveNumber<2 Then
+    Regs.DL:=DriveNumber
+  Else
+    Regs.DL:=DriveNumber+$80;
+
+  Regs.ES:=Seg(Buffer^);
+  Regs.BX:=Ofs(Buffer^);
+
+  Intr($13,Regs);
+
+  BIOSWriteSector:=(Regs.Flags And 1)=0;
+End;
+
+Function ReadSectorLBA(Drive:Byte;LBA:LongInt;Buffer:Pointer):Boolean;
+{ Lecture d'un secteur par adresse LBA }
+Var
+  DPT:DriveParameterTable;
+  Cylinder,Head,Sector:Word;
+Begin
+  ReadSectorLBA:=False;
+
+  If Not ValidateDriveNumber(Drive) Then Exit;
+  If Not GetDriveParameterTable(Drive,DPT) Then Exit;
+
+  ConvertLBAtoCHS(LBA,Cylinder,Head,Sector,DPT);
+  ReadSectorLBA:=BIOSReadSector(Drive,Cylinder,Head,Sector,1,Buffer);
+End;
+
+Function WriteSectorLBA(Drive:Byte;LBA:LongInt;Buffer:Pointer):Boolean;
+{ Écriture d'un secteur par adresse LBA }
+Var
+  DPT:DriveParameterTable;
+  Cylinder,Head,Sector:Word;
+Begin
+  WriteSectorLBA:=False;
+
+  If Not ValidateDriveNumber(Drive) Then Exit;
+  If Not GetDriveParameterTable(Drive,DPT) Then Exit;
+
+  ConvertLBAtoCHS(LBA,Cylinder,Head,Sector,DPT);
+  WriteSectorLBA:=BIOSWriteSector(Drive,Cylinder,Head,Sector,1,Buffer);
+End;
+
 {==============================================================================}
 { PROCÉDURES DE SUPPORT POUR LA GESTION FAT ET RÉPERTOIRES - FONCTION 39h     }
 {==============================================================================}
@@ -2136,20 +2705,20 @@ Begin
   PUSH CX
   PUSH DX
   PUSH AX
-  
+
   MOV DL,Drive               { DL = numéro de lecteur }
   MOV AX,Word Ptr Sector     { Secteur bas }
   MOV DX,Word Ptr Sector+2   { Secteur haut }
-  
+
   { Convertir secteur logique en CHS si nécessaire }
   { Pour simplifier, on utilise l'interruption 25h }
-  
+
   LES BX,Buffer              { ES:BX = buffer }
   MOV CX,1                   { Lire 1 secteur }
   MOV AL,DL                  { AL = lecteur }
   INT 25h                    { Interruption lecture secteur }
   JC @ReadError
-  
+
   MOV AL,1                   { Succès }
   JMP @ReadEnd
 @ReadError:
@@ -2158,7 +2727,7 @@ Begin
   MOV Result,AL              { Sauver résultat dans variable Pascal }
   POP BX                     { Nettoyer pile (INT 25h pousse flags) }
   POP AX
-  POP DX  
+  POP DX
   POP CX
   POP BX
   POP ES
@@ -2177,17 +2746,17 @@ Begin
   PUSH CX
   PUSH DX
   PUSH AX
-  
+
   MOV DL,Drive               { DL = numéro de lecteur }
   MOV AX,Word Ptr Sector     { Secteur bas }
   MOV DX,Word Ptr Sector+2   { Secteur haut }
-  
+
   LES BX,Buffer              { ES:BX = buffer }
   MOV CX,1                   { Écrire 1 secteur }
   MOV AL,DL                  { AL = lecteur }
   INT 26h                    { Interruption écriture secteur }
   JC @WriteError
-  
+
   MOV AL,1                   { Succès }
   JMP @WriteEnd
 @WriteError:
@@ -2214,7 +2783,7 @@ Var
  FATEntry:Word;
 Begin
  FindFreeCluster:=0;  { 0 = pas de cluster libre trouvé }
- 
+
  { Calculer le nombre total de clusters }
  If BootSec.TotalSectors=0 Then
   TotalClusters:=(BootSec.TotalSectorsLarge-BootSec.ReservedSectors-
@@ -2226,7 +2795,7 @@ Begin
                   BootSec.NumberOfFATs*BootSec.SectorsPerFAT-
                   (BootSec.RootDirEntries*32+511)div 512)
                  div BootSec.SectorsPerCluster;
- 
+
  { Déterminer si FAT12 ou FAT16 }
  If TotalClusters<4085 Then Begin
   { FAT12 }
@@ -2270,7 +2839,7 @@ Var
  FATCopy:Byte;
 Begin
  AllocateCluster:=False;
- 
+
  { Calculer le nombre total de clusters }
  If BootSec.TotalSectors=0 Then
   TotalClusters:=(BootSec.TotalSectorsLarge-BootSec.ReservedSectors-
@@ -2282,7 +2851,7 @@ Begin
                   BootSec.NumberOfFATs*BootSec.SectorsPerFAT-
                   (BootSec.RootDirEntries*32+511)div 512)
                  div BootSec.SectorsPerCluster;
- 
+
  { Mettre à jour toutes les copies de la FAT }
  For FATCopy:=0 to BootSec.NumberOfFATs-1 Do Begin
   If TotalClusters<4085 Then Begin
@@ -2310,7 +2879,7 @@ Begin
    End Else Exit;
   End;
  End;
- 
+
  AllocateCluster:=True;
 End;
 
@@ -2323,9 +2892,9 @@ Begin
  ParsePath:=False;
  Drive:=0;
  DirName:='';
- 
+
  If Length(Path)=0 Then Exit;
- 
+
  { Vérifier le lecteur }
  If (Length(Path)>=2)and(Path[2]=':') Then Begin
   If (Path[1]>='A')and(Path[1]<='Z') Then
@@ -2344,10 +2913,10 @@ Begin
   END;
   Drive:=CurrentDrive;
  End;
- 
+
  { Enlever les backslashes de début }
  While (Length(Path)>0)and(Path[1]='\')Do Delete(Path,1,1);
- 
+
  { Extraire le nom du dernier répertoire }
  I:=Length(Path);
  While (I>0)and(Path[I]<>'\')Do Dec(I);
@@ -2358,7 +2927,7 @@ Begin
   DirName:=Path;
   Path:='';
  End;
- 
+
  { Valider le nom de répertoire (format 8.3 sans extension) }
  If (Length(DirName)>8)or(Length(DirName)=0) Then Exit;
  For I:=1 to Length(DirName) Do Begin
@@ -2367,7 +2936,7 @@ Begin
      Not ((DirName[I]>='0')and(DirName[I]<='9'))and
      Not (DirName[I]='_') Then Exit;
  End;
- 
+
  ParsePath:=True;
 End;
 
@@ -2390,7 +2959,7 @@ Var
  DOSDate,DOSTime:Word;
 Begin
  CreateDirEntry:=False;
- 
+
  { Obtenir la date/heure DOS }
  ASM
   MOV AH,2Ah
@@ -2412,7 +2981,7 @@ Begin
   SHL AX,1
  {$ENDIF}
   MOV CL,DH
-  XOR CH,CH  
+  XOR CH,CH
   { Décaler CX de 5 bits - Compatible 8088 }
  {$IFOPT G+}
   SHL CX,5
@@ -2426,7 +2995,7 @@ Begin
   OR AX,CX
   OR AL,DL
   MOV DOSDate,AX
-  
+
   MOV AH,2Ch
   INT 21h
   MOV AL,CH
@@ -2465,17 +3034,17 @@ Begin
   OR AL,BL
   MOV DOSTime,AX
  END;
- 
+
  { Trouver un cluster libre pour le nouveau répertoire }
  FreeCluster:=FindFreeCluster(Drive,BootSec);
  If FreeCluster=0 Then Exit;
- 
+
  { Allouer le cluster }
  If Not AllocateCluster(Drive,BootSec,FreeCluster) Then Exit;
- 
+
  { Calculer secteur du répertoire racine }
  DirSector:=BootSec.ReservedSectors+BootSec.NumberOfFATs*BootSec.SectorsPerFAT;
- 
+
  { Chercher une entrée libre dans le répertoire parent }
  For I:=0 to (BootSec.RootDirEntries*32)div 512-1 Do Begin
   If ReadSector(Drive,DirSector+I,@DirBuffer) Then Begin
@@ -2484,7 +3053,7 @@ Begin
     If (Entry.FileName[0]=#0)or(Entry.FileName[0]=#$E5) Then Begin
      { Entrée libre trouvée }
      FillChar(Entry,32,0);
-     
+
      { Remplir le nom (format 8.3, majuscules, espaces) }
      FillChar(Entry.FileName,11,Byte(' '));
      For J:=1 to Length(DirName) Do Begin
@@ -2495,24 +3064,25 @@ Begin
         Entry.FileName[J-1]:=DirName[J];
       End;
      End;
-     
+
      Entry.Attributes:=$10;        { Attribut répertoire }
-     Entry.Time:=DOSTime;
-     Entry.Date:=DOSDate;
-     Entry.StartCluster:=FreeCluster;
+     Entry.LastWriteTime:=DOSTime;
+     Entry.LastWriteDate:=DOSDate;
+     Entry.FirstClusterLow:=FreeCluster;
+     Entry.FirstClusterHigh:=0;     { FAT16 n'utilise que la partie basse }
      Entry.FileSize:=0;
-     
+
      { Écrire l'entrée }
      Move(Entry,DirBuffer[J*32],32);
      If WriteSector(Drive,DirSector+I,@DirBuffer) Then Begin
       { Initialiser le nouveau répertoire avec . et .. }
       FillChar(DirBuffer,512,0);
-      
+
       { Entrée "." }
       Move(Entry,DirBuffer[0],32);
       FillChar(DirBuffer[0],11,Byte(' '));
       DirBuffer[0]:=Byte('.');
-      
+
       { Entrée ".." }
       Move(Entry,DirBuffer[32],32);
       FillChar(DirBuffer[32],11,Byte(' '));
@@ -2524,7 +3094,7 @@ Begin
       DirSector:=BootSec.ReservedSectors+BootSec.NumberOfFATs*BootSec.SectorsPerFAT+
                  (BootSec.RootDirEntries*32+511)div 512+
                  (FreeCluster-2)*BootSec.SectorsPerCluster;
-      
+
       If WriteSector(Drive,DirSector,@DirBuffer) Then Begin
        CreateDirEntry:=True;
        Exit;
