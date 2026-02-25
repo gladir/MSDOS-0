@@ -1,4 +1,27 @@
-{ @description: Le ®MS Operating System¯ est un systŠme d'exploitation rempla‡ant le DOS traditionnel.
+{ @description: Le MS Operating System est un systeme d'exploitation remplacant le DOS traditionnel.
+
+  Fonctions DOS implementees :
+  - 01h : Entree de caractere avec echo
+  - 02h : Sortie de caractere
+  - 03h : Entree de caractere depuis AUX (port serie)
+  - 04h : Sortie de caractere vers AUX (port serie)
+  - 05h : Sortie de caractere vers PRN (imprimante)
+  - 06h : Entree/sortie directe de console
+  - 07h : Entree de caractere directe sans sortie
+  - 08h : Entree de caractere sans sortie (avec Ctrl+C)
+  - 0Bh : Lire l'etat d'entree
+  - 0Ch : Vider le tampon et appeler la fonction d'entree
+  - 0Eh : Selectionne le lecteur courant
+  - 19h : Demande le lecteur courant
+  - 25h : Fixe le vecteur d'interruption
+  - 2Ah : Lire la date
+  - 2Bh : Fixe la date
+  - 33h : Multi-fonction
+  - 34h : Demande l'adresse du drapeau InDos
+  - 35h : Demande le vecteur d'interruption
+
+  @author: Developpe selon les specifications MS-DOS
+  @target: Turbo Pascal 7 (syntaxe assembleur Intel)
 }
 
 Unit MSDOS;
@@ -37,62 +60,164 @@ Procedure Intr21;Interrupt;Assembler;ASM
  JMP @Label.Word[BX]
 @Label:
  DW @00h { Fonction 00h }
- DW @Xit { Fonction 01h - … d‚velopper }
- DW @Xit { Fonction 02h - … d‚velopper }
- DW @Xit { Fonction 03h - … d‚velopper }
- DW @Xit { Fonction 04h - … d‚velopper }
- DW @Xit { Fonction 05h - … d‚velopper }
- DW @Xit { Fonction 06h - … d‚velopper }
- DW @07h { Fonction 07h - Entr‚e de caractŠre directe sans sortie }
- DW @08h { Fonction 08h - Entr‚e de caractŠre sans sortie}
- DW @Xit { Fonction 09h - … d‚velopper }
- DW @Xit { Fonction 0Ah - … d‚velopper }
- DW @0Bh { Fonction 0Bh - Lire l'‚tat d'entr‚e}
- DW @0Ch { Fonction 0Ch - Vider le tampon et appeler la fonction d'entr‚e }
- DW @Xit { Fonction 0Dh - … d‚velopper }
- DW @0Eh { Fonction 0Eh - S‚lectionne le disque courant }
- DW @Xit { Fonction 0Fh - … d‚velopper }
- DW @Xit { Fonction 10h - … d‚velopper }
- DW @Xit { Fonction 11h - … d‚velopper }
- DW @Xit { Fonction 12h - … d‚velopper }
- DW @Xit { Fonction 13h - … d‚velopper }
- DW @Xit { Fonction 14h - … d‚velopper }
- DW @Xit { Fonction 15h - … d‚velopper }
- DW @Xit { Fonction 16h - … d‚velopper }
- DW @Xit { Fonction 17h - … d‚velopper }
- DW @Xit { Fonction 18h - … d‚velopper }
+ DW @01h { Fonction 01h - Entrï¿½e de caractï¿½re avec ï¿½cho }
+ DW @02h { Fonction 02h - Sortie de caractï¿½re }
+ DW @03h { Fonction 03h - Entrï¿½e de caractï¿½re depuis AUX }
+ DW @04h { Fonction 04h - Sortie de caractï¿½re vers AUX }
+ DW @05h { Fonction 05h - Sortie de caractï¿½re vers PRN }
+ DW @06h { Fonction 06h - Entrï¿½e/sortie directe de console }
+ DW @07h { Fonction 07h - Entrï¿½e de caractï¿½re directe sans sortie }
+ DW @08h { Fonction 08h - Entrï¿½e de caractï¿½re sans sortie}
+ DW @Xit { Fonction 09h - ï¿½ dï¿½velopper }
+ DW @Xit { Fonction 0Ah - ï¿½ dï¿½velopper }
+ DW @0Bh { Fonction 0Bh - Lire l'ï¿½tat d'entrï¿½e}
+ DW @0Ch { Fonction 0Ch - Vider le tampon et appeler la fonction d'entrï¿½e }
+ DW @Xit { Fonction 0Dh - ï¿½ dï¿½velopper }
+ DW @0Eh { Fonction 0Eh - Sï¿½lectionne le disque courant }
+ DW @Xit { Fonction 0Fh - ï¿½ dï¿½velopper }
+ DW @Xit { Fonction 10h - ï¿½ dï¿½velopper }
+ DW @Xit { Fonction 11h - ï¿½ dï¿½velopper }
+ DW @Xit { Fonction 12h - ï¿½ dï¿½velopper }
+ DW @Xit { Fonction 13h - ï¿½ dï¿½velopper }
+ DW @Xit { Fonction 14h - ï¿½ dï¿½velopper }
+ DW @Xit { Fonction 15h - ï¿½ dï¿½velopper }
+ DW @Xit { Fonction 16h - ï¿½ dï¿½velopper }
+ DW @Xit { Fonction 17h - ï¿½ dï¿½velopper }
+ DW @Xit { Fonction 18h - ï¿½ dï¿½velopper }
  DW @19h { Fonction 19h - Demande le lecteur courant }
- DW @Xit { Fonction 1Ah - … d‚velopper }
- DW @Xit { Fonction 1Bh - … d‚velopper }
- DW @Xit { Fonction 1Ch - … d‚velopper }
- DW @Xit { Fonction 1Dh - … d‚velopper }
- DW @Xit { Fonction 1Eh - … d‚velopper }
- DW @Xit { Fonction 1Fh - … d‚velopper }
- DW @Xit { Fonction 20h - … d‚velopper }
- DW @Xit { Fonction 21h - … d‚velopper }
- DW @Xit { Fonction 22h - … d‚velopper }
- DW @Xit { Fonction 23h - … d‚velopper }
- DW @Xit { Fonction 24h - … d‚velopper }
+ DW @Xit { Fonction 1Ah - ï¿½ dï¿½velopper }
+ DW @Xit { Fonction 1Bh - ï¿½ dï¿½velopper }
+ DW @Xit { Fonction 1Ch - ï¿½ dï¿½velopper }
+ DW @Xit { Fonction 1Dh - ï¿½ dï¿½velopper }
+ DW @Xit { Fonction 1Eh - ï¿½ dï¿½velopper }
+ DW @Xit { Fonction 1Fh - ï¿½ dï¿½velopper }
+ DW @Xit { Fonction 20h - ï¿½ dï¿½velopper }
+ DW @Xit { Fonction 21h - ï¿½ dï¿½velopper }
+ DW @Xit { Fonction 22h - ï¿½ dï¿½velopper }
+ DW @Xit { Fonction 23h - ï¿½ dï¿½velopper }
+ DW @Xit { Fonction 24h - ï¿½ dï¿½velopper }
  DW @25h { Fonction 25h - Fixe le vecteur d'Interruption}
- DW @Xit { Fonction 26h - … d‚velopper }
- DW @Xit { Fonction 27h - … d‚velopper }
- DW @Xit { Fonction 28h - … d‚velopper }
- DW @Xit { Fonction 29h - … d‚velopper }
+ DW @Xit { Fonction 26h - ï¿½ dï¿½velopper }
+ DW @Xit { Fonction 27h - ï¿½ dï¿½velopper }
+ DW @Xit { Fonction 28h - ï¿½ dï¿½velopper }
+ DW @Xit { Fonction 29h - ï¿½ dï¿½velopper }
  DW @2Ah { Fonction 2Ah - Lire la date }
  DW @2Bh { Fonction 2Bh - Fixe la date }
- DW @Xit { Fonction 2Ch - … d‚velopper }
- DW @Xit { Fonction 2Dh - … d‚velopper }
- DW @Xit { Fonction 2Eh - … d‚velopper }
- DW @Xit { Fonction 2Fh - … d‚velopper }
- DW @Xit { Fonction 30h - … d‚velopper }
- DW @Xit { Fonction 31h - … d‚velopper }
- DW @Xit { Fonction 32h - … d‚velopper }
+ DW @Xit { Fonction 2Ch - ï¿½ dï¿½velopper }
+ DW @Xit { Fonction 2Dh - ï¿½ dï¿½velopper }
+ DW @Xit { Fonction 2Eh - ï¿½ dï¿½velopper }
+ DW @Xit { Fonction 2Fh - ï¿½ dï¿½velopper }
+ DW @Xit { Fonction 30h - ï¿½ dï¿½velopper }
+ DW @Xit { Fonction 31h - ï¿½ dï¿½velopper }
+ DW @Xit { Fonction 32h - ï¿½ dï¿½velopper }
  DW @33h { Fonction 33h - Multi-fonction }
  DW @34h { Fonction 34h - Demande l'adresse du drapeau "InDos" }
  DW @35h { Fonction 35h - Demande le vecteur d'Interruption}
 @00h:
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+ { Interruption 21h - Fonction 01h: Entrï¿½e de caractï¿½re avec ï¿½cho              }
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+@01h:
+ MOV AL,Data.DataMOS.Key
+ OR  AL,AL
+ JE  @01GetInt16h
+ MOV AH,0
+ JMP @01EchoChar
+@01GetInt16h:
+ XOR AX,AX
+ INT 16h
+@01EchoChar:
+ MOV Data.DataMOS.Key,AH    { Sauver la touche suivante }
+ CMP AL,3                   { Ctrl+C/Ctrl+Break ? }
+ JNE @01NoBreak
+ INT 23h
+@01NoBreak:
+ PUSH AX                    { Sauver le caractï¿½re }
+ MOV DL,AL
+ MOV AH,02h                 { Fonction 02h - Sortie caractï¿½re }
+ INT 21h
+ POP AX                     { Restaurer le caractï¿½re }
+ JMP @Xit
+
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+ { Interruption 21h - Fonction 02h: Sortie de caractï¿½re                        }
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+@02h:
+ MOV AL,DL
+ MOV AH,0Eh                 { BIOS - Sortie caractï¿½re }
+ XOR BX,BX                  { Page 0, couleur par dï¿½faut }
+ INT 10h
+ JMP @Xit
+
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+ { Interruption 21h - Fonction 03h: Entrï¿½e de caractï¿½re depuis AUX             }
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+@03h:
+ MOV AH,02h                 { BIOS - Lire caractï¿½re sï¿½rie }
+ XOR DX,DX                  { Port COM1 }
+ INT 14h
+ TEST AH,80h                { Vï¿½rifier timeout }
+ JZ @03NoError
+ MOV AL,1Ah                 { Code EOF si erreur }
+@03NoError:
+ JMP @Xit
+
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+ { Interruption 21h - Fonction 04h: Sortie de caractï¿½re vers AUX               }
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+@04h:
+ MOV AL,DL
+ MOV AH,01h                 { BIOS - ï¿½crire caractï¿½re sï¿½rie }
+ XOR DX,DX                  { Port COM1 }
+ INT 14h
+ JMP @Xit
+
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+ { Interruption 21h - Fonction 05h: Sortie de caractï¿½re vers PRN (imprimante)  }
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+@05h:
+ MOV AL,DL
+ XOR AH,AH                  { BIOS - Imprimer caractï¿½re }
+ XOR DX,DX                  { Port LPT1 }
+ INT 17h
+ JMP @Xit
+
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+ { Interruption 21h - Fonction 06h: Entrï¿½e/sortie directe de console           }
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+@06h:
+ CMP DL,0FFh                { Fonction d'entrï¿½e ? }
+ JNE @06Output
+ { Fonction d'entrï¿½e }
+ MOV AL,Data.DataMOS.Key
+ OR  AL,AL
+ JE  @06CheckKeyboard
+ MOV AH,0
+ MOV Data.DataMOS.Key,0     { Effacer la touche }
+ CMP AL,0                   { Zero Flag = 0 si caractï¿½re disponible }
+ JMP @Xit
+@06CheckKeyboard:
+ MOV AH,01h                 { BIOS - Vï¿½rifier si touche disponible }
+ INT 16h
+ JZ  @06NoKey              { Pas de touche }
+ XOR AX,AX                  { Lire la touche }
+ INT 16h
+ MOV Data.DataMOS.Key,AH    { Sauver scan code }
+ TEST AL,AL                 { Zero Flag = 0 si caractï¿½re valide }
+ JMP @Xit
+@06NoKey:
+ XOR AL,AL                  { Pas de caractï¿½re - Zero Flag = 1 }
+ JMP @Xit
+@06Output:
+ { Fonction de sortie }
+ MOV AL,DL
+ MOV AH,0Eh                 { BIOS - Sortie caractï¿½re }
+ XOR BX,BX                  { Page 0, couleur par dï¿½faut }
+ INT 10h
+ JMP @Xit
+
  {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
- { Interruption 21h - Fonction 07h: Entr‚e de caractŠre directe sans sortie }
+ { Interruption 21h - Fonction 07h: Entrï¿½e de caractï¿½re directe sans sortie }
  {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
 @07h:
  MOV AL,Data.DataMOS.Key
@@ -107,7 +232,7 @@ Procedure Intr21;Interrupt;Assembler;ASM
  MOV Data.DataMOS.Key,AH
  JMP @Xit
  {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
- { Interruption 21h - Fonction 08h: Entr‚e de caractŠre sans sortie }
+ { Interruption 21h - Fonction 08h: Entrï¿½e de caractï¿½re sans sortie }
  {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
 @08h:
  MOV AL,Data.DataMOS.Key
@@ -126,7 +251,7 @@ Procedure Intr21;Interrupt;Assembler;ASM
 @08NoBreak:
  JMP @Xit
  {- - - - - - - - - - - - - - - - - - - - - - - - - - - -}
- { Interruption 21h - Fonction 0Bh: Lire l'‚tat d'entr‚e }
+ { Interruption 21h - Fonction 0Bh: Lire l'ï¿½tat d'entrï¿½e }
  {- - - - - - - - - - - - - - - - - - - - - - - - - - - -}
 @0Bh:
  XOR AX,AX
@@ -138,7 +263,7 @@ Procedure Intr21;Interrupt;Assembler;ASM
  MOV AL,0FFh
  JMP @Xit
  {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
- { Interruption 21h - Fonction 0Ch: Vider le tampon et appeler la fonction d'entr‚e }
+ { Interruption 21h - Fonction 0Ch: Vider le tampon et appeler la fonction d'entrï¿½e }
  {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
 @0Ch:
  PUSH AX
@@ -150,10 +275,10 @@ Procedure Intr21;Interrupt;Assembler;ASM
  POP BX
  JMP @CallFunc
  {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
- { Interruption 21h - Fonction 0Eh: S‚lectionne le lecteur courant }
+ { Interruption 21h - Fonction 0Eh: Sï¿½lectionne le lecteur courant }
  {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
 @0Eh:
- MOV AL,26 { Nombre d'unit‚ install‚ }
+ MOV AL,26 { Nombre d'unitï¿½ installï¿½ }
  CMP DL,AL
  JAE @Xit
  MOV Data.DataMOS.CurrDisk,DL
@@ -234,7 +359,7 @@ Procedure Intr25h;Interrupt;Assembler;ASM
  MOV AX,0201h
  PUSH DS
  POP ES
-  { Conversion des pistes et cylindres en secteur absolue … faire ...}
+  { Conversion des pistes et cylindres en secteur absolue ï¿½ faire ...}
  INT 13h
 END;
 
@@ -242,7 +367,7 @@ Procedure Intr26h;Interrupt;Assembler;ASM
 END;
 
 Procedure Intr28h;Interrupt;Assembler;ASM
- { Vide - Ex‚cuter … temps perdu! }
+ { Vide - Exï¿½cuter ï¿½ temps perdu! }
 END;
 
 Procedure Intr2Ah;Interrupt;Assembler;ASM
