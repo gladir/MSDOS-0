@@ -229,6 +229,7 @@ Type
   CurrentCountry:Word; { Code pays actuel }
   LastReturnCode:Word; { Code de retour du dernier programme (AH=raison, AL=code) }
   CurrentPSP:Word;     { Segment du PSP courant }
+  VerifyFlag:Byte;     { Flag de vérification en écriture (0=off, 1=on) }
   FindState: FindFileState; { État de la recherche de fichiers }
  End;
 
@@ -406,6 +407,7 @@ Procedure SetFindState(Var State:FindFileState);Near;Forward;
 Function GetRootDirectorySector:Word;Near;Forward;
 Function GetRootDirectorySize:Word;Near;Forward;
 Function ReadSectorSimple(Sector:Word;Var Buffer):Boolean;Near;Forward;
+Function WriteSectorSimple(Sector:Word;Var Buffer):Boolean;Near;Forward;
 
 Procedure SetIntVec(_AL:Byte;_DS,_DX:Word);Near;Forward;
 Procedure DataCountry(CountryCode:Word;Var CountryInfo:DataCountryRec);Near;Forward;
@@ -534,6 +536,14 @@ Function DOS51h_GetPSPAddress:Word;Near;Forward;
 Function DOS52h_GetListOfLists:Pointer;Near;Forward;
 Function DOS53h_TranslateBPBtoDPB(BPBPtr:Pointer;DPBPtr:Pointer):Word;Near;Forward;
 
+{ Fonctions 2Eh et 54h - Vérification en écriture }
+Function DOS2Eh_SetVerifyFlag(VerifyState:Byte):Word;Near;Forward;
+Function DOS54h_GetVerifyFlag:Byte;Near;Forward;
+
+{ Fonctions utilitaires pour la vérification }
+Function VerifyWrite(Drive:Byte;Sector:LongInt;Buffer:Pointer;Size:Word):Boolean;Near;Forward;
+Function WriteSectorWithVerify(Drive:Byte;Sector:LongInt;Buffer:Pointer):Boolean;Near;Forward;
+
 { Fonctions utilitaires pour EXEC }
 Function LoadExeFile(FileName:String;Var LoadSegment:Word;Var ExeHdr:ExeHeader):Boolean;Near;Forward;
 Function LoadComFile(FileName:String;Var LoadSegment:Word):Boolean;Near;Forward;
@@ -589,6 +599,10 @@ Procedure SetLastReturnCode(ReturnCode: Word);Near;Forward;
 Function GetCurrentPSP: Word;Near;Forward;
 Procedure SetCurrentPSP(PSP: Word);Near;Forward;
 
+{ Fonctions d'accès au flag de vérification }
+Function GetVerifyFlag: Byte;Near;Forward;
+Procedure SetVerifyFlag(Flag: Byte);Near;Forward;
+
 Procedure BEGIN_KERNEL;
 Var I:Byte;
 Begin
@@ -633,6 +647,8 @@ Procedure Data;Assembler;ASM
  DW 33         { CurrentCountry: Pays actuel (33=France par défaut) }
  DW 0          { LastReturnCode: Code de retour du dernier programme }
  DW 1000h      { CurrentPSP: Segment du PSP courant (par défaut 1000h) }
+@VerifyFlag:
+ DB 0          { VerifyFlag: Flag de vérification en écriture (0=off, 1=on) }
 
  { Variables pour gestion répertoires courants }
  DB 2          { CurrentDrive: Lecteur courant (0=A:, 1=B:, 2=C:) }
@@ -947,6 +963,7 @@ Procedure Intr21h;Assembler;ASM
  DW @51h { Fonction 51h - Get PSP Address }
  DW @52h { Fonction 52h - Get List of Lists }
  DW @53h { Fonction 53h - Translate BPB to DPB }
+ DW @54h { Fonction 54h - Get Verify Flag }
 
  {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
  { Interruption 21h - Fonction 00h: Terminer le programme                      }
@@ -1957,11 +1974,19 @@ Procedure Intr21h;Assembler;ASM
  { Fixer ou réinitialiser le drapeau de vérification }
  { Entrée : AL = 0 pour désactiver la vérification, AL = 1 pour l'activer }
  { Sortie : aucune }
- CMP AL,1                   { Activer la vérification ? }
- JA @Xit                    { Valeur invalide - ignorer }
- { Dans un DOS complet, cette fonction activerait/désactiverait }
- { la vérification des écritures sur disque }
- { Pour cette implémentation, on ne fait rien mais on accepte la commande }
+ PUSH CX                    { Sauvegarder les registres }
+ PUSH BX
+ 
+ { AL contient l'état de vérification (0=off, 1=on) }
+ PUSH AX                    { État de vérification }
+ 
+ CALL DOS2Eh_SetVerifyFlag  { Appeler fonction Pascal }
+ { AX contient le code d'erreur (mais ignoré par DOS) }
+ 
+ ADD SP,2                   { Nettoyer la pile }
+ 
+ POP BX
+ POP CX
  JMP @Xit
 
  {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
@@ -3290,6 +3315,20 @@ Procedure Intr21h;Assembler;ASM
  POP CX
  JMP @Xit
 
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+ { Interruption 21h - Fonction 54h: Get Verify Flag                           }
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+@54h:
+ PUSH CX                    { Sauvegarder les registres }
+ 
+ CALL DOS54h_GetVerifyFlag  { Appeler fonction Pascal }
+ { AL contient l'état du flag de vérification }
+ 
+ CLC                        { Clear Carry Flag - toujours succès }
+ 
+ POP CX
+ JMP @Xit
+
 @Xit:
  DEC Data.DataMOS.InDos
 END;
@@ -4083,6 +4122,21 @@ Procedure SetCurrentPSP(PSP: Word);Assembler;
 ASM
  MOV AX,PSP
  MOV WORD PTR [Data.DataMOS.CurrentPSP],AX
+END;
+
+{ Fonctions d'accès au flag de vérification }
+Function GetVerifyFlag: Byte;Assembler;
+ASM
+ MOV AL,BYTE PTR [Data.DataMOS.VerifyFlag]
+END;
+
+Procedure SetVerifyFlag(Flag: Byte);Assembler;
+ASM
+ PUSH BP
+ MOV BP,SP
+ MOV AL,[BP+4]        { Récupérer le paramètre Flag depuis la pile }
+ MOV BYTE PTR [Data.DataMOS.VerifyFlag],AL
+ POP BP
 END;
 
 { Lire une entrée complète de la FileTable }
@@ -8122,6 +8176,20 @@ Begin
  ReadSectorSimple:=True;
 End;
 
+{ Écriture simplifiée d'un secteur avec vérification optionnelle }
+Function WriteSectorSimple(Sector:Word;Var Buffer):Boolean;
+Begin
+ { Simulation d'écriture }
+ WriteSectorSimple:=True;
+ 
+ { Si la vérification est activée, utiliser la fonction avec vérification }
+ If GetVerifyFlag <> 0 Then Begin
+  WriteSectorSimple:=WriteSectorWithVerify(0, Sector, @Buffer);
+ End;
+ 
+ { Sinon, écriture normale (simulée pour l'instant) }
+End;
+
 { Fonctions d'accès aux données du kernel dans le Code Segment }
 
 { Obtient l'état de recherche de fichiers depuis le Code Segment }
@@ -8588,6 +8656,113 @@ Begin
  END;
  
  DOS53h_TranslateBPBtoDPB:=0; { Succès }
+End;
+
+{ Fonctions 2Eh et 54h - Vérification en écriture avec vraies vérifications }
+
+{ Fonction utilitaire - Vérifier l'écriture d'un secteur }
+Function VerifyWrite(Drive:Byte;Sector:LongInt;Buffer:Pointer;Size:Word):Boolean;
+Var
+ VerifyBuffer: Array[0..511] of Byte;
+ I: Word;
+ Success: Boolean;
+Begin
+ VerifyWrite:=False;
+ 
+ { Si la vérification est désactivée, retourner succès immédiatement }
+ If GetVerifyFlag = 0 Then Begin
+  VerifyWrite:=True;
+  Exit;
+ End;
+ 
+ { Relire le secteur qui vient d'être écrit }
+ Success:=ReadSectorSimple(Sector, VerifyBuffer);
+ If Not Success Then Exit;
+ 
+ { Comparer octet par octet avec le buffer original }
+ ASM
+  PUSH DS
+  PUSH ES
+  
+  LDS SI,Buffer               { DS:SI = buffer original }
+  LEA DI,VerifyBuffer         { ES:DI = buffer relu }
+  MOV CX,Size                 { Nombre d'octets à comparer }
+  CLD                         { Direction forward }
+  REPE CMPSB                  { Comparer les chaînes }
+  JNZ @VerifyFailed          { Si différent, échec }
+  
+  { Vérification réussie }
+  MOV Success,1
+  JMP @VerifyEnd
+  
+@VerifyFailed:
+  MOV Success,0
+  
+@VerifyEnd:
+  POP ES
+  POP DS
+ END;
+ 
+ VerifyWrite:=Success;
+End;
+
+{ Fonction utilitaire - Écrire un secteur avec vérification }
+Function WriteSectorWithVerify(Drive:Byte;Sector:LongInt;Buffer:Pointer):Boolean;
+Var
+ WriteSuccess: Boolean;
+ VerifySuccess: Boolean;
+ Retries: Byte;
+Begin
+ WriteSectorWithVerify:=False;
+ 
+ { Essayer l'écriture avec jusqu'à 3 tentatives }
+ For Retries:=1 To 3 Do Begin
+  { Écrire le secteur }
+  WriteSuccess:=True; { Simulation écriture pour l'instant }
+  
+  If WriteSuccess Then Begin
+   { Si la vérification est activée, vérifier l'écriture }
+   VerifySuccess:=VerifyWrite(Drive, Sector, Buffer, 512);
+   
+   If VerifySuccess Then Begin
+    WriteSectorWithVerify:=True;
+    Exit; { Succès complet }
+   End Else Begin
+    { Vérification échouée - réessayer }
+    Continue;
+   End;
+  End;
+ End;
+ 
+ { Toutes les tentatives ont échoué }
+ WriteSectorWithVerify:=False;
+End;
+
+{ Fonction 2Eh - Set/Reset Verify Flag }
+Function DOS2Eh_SetVerifyFlag(VerifyState:Byte):Word;
+Begin
+ DOS2Eh_SetVerifyFlag:=0; { Succès par défaut }
+ 
+ { Valider le paramètre (0=off, 1=on) }
+ If VerifyState > 1 Then Begin
+  DOS2Eh_SetVerifyFlag:=1; { Paramètre invalide }
+  Exit;
+ End;
+ 
+ { Mettre à jour le flag de vérification }
+ SetVerifyFlag(VerifyState);
+ 
+ { Dans un vrai système, on pourrait aussi configurer le contrôleur disque }
+ { pour activer/désactiver la vérification matérielle }
+ 
+ DOS2Eh_SetVerifyFlag:=0; { Succès }
+End;
+
+{ Fonction 54h - Get Verify Flag }
+Function DOS54h_GetVerifyFlag:Byte;
+Begin
+ { Retourner l'état actuel du flag de vérification }
+ DOS54h_GetVerifyFlag:=GetVerifyFlag;
 End;
 
 Procedure SetIntVec(_AL:Byte;_DS,_DX:Word);Assembler;ASM
