@@ -64,6 +64,7 @@
   - 35h : Demande le vecteur d'interruption
   - 36h : Get free disk space (espace libre sur disque)
   - 37h : Switch character functions (fonctions caractère de commutation)
+  - 38h : Get/Set Country Information (informations de localisation)
 
   @target: Turbo Pascal 7 (syntaxe assembleur Intel)
 }
@@ -191,6 +192,7 @@ Procedure Intr21h;Assembler;ASM
  DW @35h { Fonction 35h - Demande le vecteur d'Interruption}
  DW @36h { Fonction 36h - Get free disk space }
  DW @37h { Fonction 37h - Switch character functions }
+ DW @38h { Fonction 38h - Get/Set Country Information }
 
  {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
  { Interruption 21h - Fonction 00h: Terminer le programme                      }
@@ -1556,6 +1558,150 @@ Procedure Intr21h;Assembler;ASM
 
 @37hUnknown:
  { Sous-fonction non supportée }
+ JMP @Xit
+
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+ { Interruption 21h - Fonction 38h: Get/Set Country Information        }
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+@38h:
+ { Obtenir ou fixer les informations de localisation (pays) }
+ { AL = sous-fonction : }
+ { 00h = Get current country info }
+ { FFh = Set country info }
+ { DX = code pays (AL=FFh) ou buffer (AL=00h) }
+ 
+ CMP AL,00h                 { Sous-fonction 00h : Get country info ? }
+ JE @38h00h
+ CMP AL,0FFh                { Sous-fonction FFh : Set country info ? }
+ JE @38hFFh
+ JMP @38hUnknown
+
+@38h00h:
+ { Sous-fonction 00h : Get current country information }
+ { Sortie : BX = code pays, DS:DX pointe sur structure d'informations pays }
+ PUSH AX                    { Sauver registres }
+ PUSH CX
+ PUSH DI
+ PUSH ES
+ 
+ { Pour cette implémentation simplifiée, on simule les informations pour la France }
+ MOV BX,33                  { Code pays France (33) }
+ 
+ { Vérifier si DX pointe vers un buffer valide pour les informations étendues }
+ CMP DX,0                   { Buffer fourni ? }
+ JE @38h00hNoBuf
+ 
+ { Remplir le buffer avec les informations pays (structure de 38 octets) }
+ PUSH DS
+ MOV DI,DX                  { ES:DI pointe sur le buffer destination }
+ 
+ { Structure Country Info (format DOS) : }
+ { +00 : Date format (0=USA mm/dd/yy, 1=Europe dd/mm/yy, 2=Japan yy/mm/dd) }
+ MOV BYTE PTR ES:[DI],1     { Format européen dd/mm/yy }
+ INC DI
+ 
+ { +01 : Currency symbol (5 bytes ASCIIZ) }
+ MOV AL,'F'
+ STOSB                      { F }
+ MOV AL,'R'
+ STOSB                      { R }
+ MOV AL,0
+ STOSB                      { Terminateur }
+ STOSB                      { Padding }
+ STOSB                      { Padding }
+ 
+ { +06 : Thousands separator (2 bytes ASCIIZ) }
+ MOV AL,' '                 { Espace pour milliers en français }
+ STOSB
+ MOV AL,0
+ STOSB
+ 
+ { +08 : Decimal separator (2 bytes ASCIIZ) }
+ MOV AL,','                 { Virgule décimale française }
+ STOSB
+ MOV AL,0
+ STOSB
+ 
+ { +0A : Date separator (2 bytes ASCIIZ) }
+ MOV AL,'/'
+ STOSB
+ MOV AL,0
+ STOSB
+ 
+ { +0C : Time separator (2 bytes ASCIIZ) }
+ MOV AL,':'
+ STOSB
+ MOV AL,0
+ STOSB
+ 
+ { +0E : Currency format (1 byte) }
+ MOV BYTE PTR ES:[DI],0     { 0 = currency symbol precedes value }
+ INC DI
+ 
+ { +0F : Digits after decimal in currency (1 byte) }
+ MOV BYTE PTR ES:[DI],2     { 2 digits après virgule pour francs }
+ INC DI
+ 
+ { +10 : Time format (1 byte: 0=12hr, 1=24hr) }
+ MOV BYTE PTR ES:[DI],1     { Format 24h européen }
+ INC DI
+ 
+ { +11 : Case conversion routine address (4 bytes) - on met 0 }
+ XOR AX,AX
+ STOSW
+ STOSW
+ 
+ { +15 : Data list separator (2 bytes ASCIIZ) }
+ MOV AL,';'                 { Point-virgule }
+ STOSB
+ MOV AL,0
+ STOSB
+ 
+ { +17 : Reserved (10 bytes) }
+ MOV CX,10
+@38hFillZero:
+ XOR AL,AL
+ STOSB
+ LOOP @38hFillZero
+ 
+ POP DS                     { Restaurer DS }
+
+@38h00hNoBuf:
+ POP ES                     { Restaurer registres }
+ POP DI
+ POP CX
+ POP AX
+ { BX contient déjà le code pays (33) }
+ JMP @Xit
+
+@38hFFh:
+ { Sous-fonction FFh : Set country information }
+ { Entrée : DX = code pays à définir }
+ PUSH AX                    { Sauver registres }
+ PUSH BX
+ 
+ { Dans un DOS complet, on sauvegarderait le nouveau code pays }
+ { Pour cette implémentation, on accepte mais on ne change rien réellement }
+ { Vérifier que c'est un code pays raisonnable }
+ CMP DX,999                 { Code pays raisonnable ? }
+ JA @38hFFhError
+ 
+ { Code pays accepté }
+ MOV BX,DX                  { Retourner le code pays dans BX }
+ POP BX                     { Restaurer BX original }
+ POP AX
+ JMP @Xit
+
+@38hFFhError:
+ { Code pays invalide }
+ POP BX
+ POP AX
+ MOV AX,2                   { Code d'erreur : Invalid country code }
+ JMP @Xit
+
+@38hUnknown:
+ { Sous-fonction non supportée }
+ MOV AX,1                   { Code d'erreur : Invalid function }
  JMP @Xit
 
 @Xit:
