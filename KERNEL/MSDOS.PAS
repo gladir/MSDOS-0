@@ -230,7 +230,7 @@ Procedure Delete(Var S:String;Index,Count:Byte);Near;Forward;
 Procedure Handle38hGetCountryInfo(CountryCode:Word;BufferPtr:Word);Near;Forward;
 Function Handle38hSetCountryInfo(NewCountryCode:Word):Word;Near;Forward;
 
-{ Procédures pour gestion FAT et répertoires - Fonction 39h }
+{ Procédures pour gestion FAT et répertoires - Fonctions 39h/3Ah }
 Function ReadBootSector(Drive:Byte;Var BootSec:BootSectorRec):Boolean;Near;Forward;
 Function ReadSector(Drive:Byte;Sector:LongInt;Buffer:Pointer):Boolean;Near;Forward;
 Function WriteSector(Drive:Byte;Sector:LongInt;Buffer:Pointer):Boolean;Near;Forward;
@@ -239,6 +239,18 @@ Function AllocateCluster(Drive:Byte;BootSec:BootSectorRec;Cluster:Word):Boolean;
 Function CreateDirEntry(Drive:Byte;BootSec:BootSectorRec;ParentCluster:Word;DirName:String):Boolean;Near;Forward;
 Function ParsePath(Path:String;Var Drive:Byte;Var DirName:String):Boolean;Near;Forward;
 Function FindParentDirectory(Drive:Byte;BootSec:BootSectorRec;Path:String;Var ParentCluster:Word):Boolean;Near;Forward;
+
+{ Procédures spécifiques pour fonction 3Ah - Remove Directory }
+Function FindDirectoryEntry(Drive:Byte;BootSec:BootSectorRec;ParentCluster:Word;
+                           DirName:String;Var Entry:DirectoryEntry;
+                           Var EntryOffset:Word):Boolean;Near;Forward;
+Function IsDirectoryEmpty(Drive:Byte;BootSec:BootSectorRec;DirCluster:Word):Boolean;Near;Forward;
+Function FreeFATChain(Drive:Byte;BootSec:BootSectorRec;StartCluster:Word):Boolean;Near;Forward;
+Function DeleteDirEntry(Drive:Byte;BootSec:BootSectorRec;ParentCluster:Word;EntryOffset:Word):Boolean;Near;Forward;
+Function GetClusterSector(Drive:Byte;BootSec:BootSectorRec;Cluster:Word):LongInt;Near;Forward;
+
+{ Fonction principale 3Ah }
+Function DOS3Ah_RemoveDirectory(PathPtr:Pointer):Word;Near;Forward;
 
 Procedure BEGIN_KERNEL;Begin
  SetIntVec($20,CSeg,Ofs(Intr21h));
@@ -334,6 +346,7 @@ Procedure Intr21h;Assembler;ASM
  DW @37h { Fonction 37h - Switch character functions }
  DW @38h { Fonction 38h - Get/Set Country Information }
  DW @39h { Fonction 39h - Create Subdirectory }
+ DW @3Ah { Fonction 3Ah - Remove Directory }
 
  {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
  { Interruption 21h - Fonction 00h: Terminer le programme                      }
@@ -1823,6 +1836,43 @@ Procedure Intr21h;Assembler;ASM
  POP CX                     { Récupérer AX original dans CX }
  JMP @Xit
 
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+ { Interruption 21h - Fonction 3Ah: Remove Directory (supprimer répertoire)   }
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+@3Ah:
+ { Entrée: DS:DX pointe sur le chemin ASCIIZ }
+ { Sortie: AX = code d'erreur (0 = succès) }
+ { Carry Flag: 0 = succès, 1 = erreur }
+ 
+ PUSH CX                    { Sauver registres }
+ PUSH SI
+ PUSH DI
+ 
+ MOV SI,DX                  { SI pointe sur le chemin }
+ 
+ { Appeler la fonction Pascal pour supprimer le répertoire }
+ PUSH DS                    { Paramètre: segment chaîne }
+ PUSH SI                    { Paramètre: offset chaîne }
+ CALL DOS3Ah_RemoveDirectory
+ ADD SP,4                   { Nettoyer pile (2 paramètres) }
+ 
+ { AX contient le résultat (0 = succès, autre = code erreur) }
+ OR AX,AX                   { Tester le résultat }
+ JZ @3AhSuccess             { Si 0, succès }
+ 
+ { Erreur }
+ STC                        { Set Carry Flag }
+ JMP @3AhEnd
+ 
+@3AhSuccess:
+ CLC                        { Clear Carry Flag }
+ 
+@3AhEnd:
+ POP DI
+ POP SI 
+ POP CX
+ JMP @Xit
+
 @Xit:
  DEC Data.DataMOS.InDos
 END;
@@ -3126,6 +3176,270 @@ Begin
    End;
   End;
  End;
+End;
+
+{==============================================================================}
+{ FONCTIONS POUR SUPPRIMER UN RÉPERTOIRE (Fonction 3Ah)                      }
+{==============================================================================}
+
+Function GetClusterSector(Drive:Byte;BootSec:BootSectorRec;Cluster:Word):LongInt;
+{ Calcule le secteur de départ d'un cluster donné }
+Begin
+ If Cluster = 0 Then
+  { Répertoire racine }
+  GetClusterSector:=BootSec.ReservedSectors+
+                    (BootSec.NumberOfFATs*BootSec.SectorsPerFAT)
+ Else
+  { Cluster de données }
+  GetClusterSector:=BootSec.ReservedSectors+
+                    (BootSec.NumberOfFATs*BootSec.SectorsPerFAT)+
+                    (BootSec.RootDirEntries*32+511)div 512+
+                    (Cluster-2)*BootSec.SectorsPerCluster;
+End;
+
+Function FindDirectoryEntry(Drive:Byte;BootSec:BootSectorRec;
+                           ParentCluster:Word;DirName:String;
+                           Var Entry:DirectoryEntry;
+                           Var EntryOffset:Word):Boolean;
+{ Trouve l'entrée de répertoire dans le répertoire parent }
+Var
+ DirBuffer:Array[0..511] of Byte;
+ DirSector:LongInt;
+ SectorsToRead:Word;
+ I,J:Word;
+ EntryPtr:^DirectoryEntry;
+ FoundName:String;
+Begin
+ FindDirectoryEntry:=False;
+ EntryOffset:=0;
+ 
+ { Convertir nom en format 8.3 majuscules }
+ DirName:=Copy(DirName+'        ',1,8); { Pad avec espaces }
+ For I:=1 To Length(DirName) Do
+  If (DirName[I]>='a')and(DirName[I]<='z') Then
+   DirName[I]:=Chr(Ord(DirName[I])-32);
+   
+ { Calculer secteur et nombre de secteurs à lire }
+ DirSector:=GetClusterSector(Drive,BootSec,ParentCluster);
+ If ParentCluster = 0 Then
+  SectorsToRead:=(BootSec.RootDirEntries*32+511)div 512
+ Else
+  SectorsToRead:=BootSec.SectorsPerCluster;
+  
+ { Parcourir les secteurs du répertoire }
+ For I:=0 To SectorsToRead-1 Do Begin
+  If ReadSector(Drive,DirSector+I,@DirBuffer) Then Begin
+   { Parcourir les entrées du secteur }
+   For J:=0 To 15 Do Begin { 16 entrées par secteur (512/32) }
+    EntryPtr:=@DirBuffer[J*32];
+    
+    { Vérifier si l'entrée est valide }
+    If (EntryPtr^.FileName[0]<>#0)and(EntryPtr^.FileName[0]<>#$E5) Then Begin
+     { Construire le nom de l'entrée }
+     FoundName:='';
+     For I:=0 To 7 Do Begin
+      If EntryPtr^.FileName[I]<>' ' Then
+       FoundName:=FoundName+EntryPtr^.FileName[I];
+     End;
+     
+     { Comparer avec le nom recherché }
+     If (FoundName = Copy(DirName,1,Length(FoundName)))and
+        (EntryPtr^.Attributes and $10 <> 0) Then Begin { Répertoire }
+      Entry:=EntryPtr^;
+      EntryOffset:=(I*16+J)*32;
+      FindDirectoryEntry:=True;
+      Exit;
+     End;
+    End;
+   End;
+  End;
+ End;
+End;
+
+Function IsDirectoryEmpty(Drive:Byte;BootSec:BootSectorRec;DirCluster:Word):Boolean;
+{ Vérifie si un répertoire est vide (contient seulement . et ..) }
+Var
+ DirBuffer:Array[0..511] of Byte;
+ DirSector:LongInt;
+ I,J:Word;
+ EntryPtr:^DirectoryEntry;
+ ValidEntries:Word;
+Begin
+ IsDirectoryEmpty:=False;
+ ValidEntries:=0;
+ 
+ DirSector:=GetClusterSector(Drive,BootSec,DirCluster);
+ 
+ { Parcourir tous les secteurs du cluster }
+ For I:=0 To BootSec.SectorsPerCluster-1 Do Begin
+  If ReadSector(Drive,DirSector+I,@DirBuffer) Then Begin
+   For J:=0 To 15 Do Begin { 16 entrées par secteur }
+    EntryPtr:=@DirBuffer[J*32];
+    
+    { Compter les entrées valides }
+    If (EntryPtr^.FileName[0]<>#0)and(EntryPtr^.FileName[0]<>#$E5) Then Begin
+     Inc(ValidEntries);
+     
+     { Plus de 2 entrées = répertoire non vide }
+     If ValidEntries > 2 Then Exit;
+    End;
+   End;
+  End;
+ End;
+ 
+ { Répertoire vide si seulement . et .. }
+ IsDirectoryEmpty:=(ValidEntries <= 2);
+End;
+
+Function FreeFATChain(Drive:Byte;BootSec:BootSectorRec;StartCluster:Word):Boolean;
+{ Libère une chaîne de clusters dans la FAT }
+Var
+ FATBuffer:Array[0..511] of Byte;
+ FATSector:LongInt;
+ CurrentCluster,NextCluster:Word;
+ FATOffset:Word;
+ FATEntry:^Word;
+Begin
+ FreeFATChain:=False;
+ CurrentCluster:=StartCluster;
+ 
+ While (CurrentCluster >= 2)and(CurrentCluster < $FFF0) Do Begin
+  { Calculer secteur FAT et offset }
+  FATOffset:=CurrentCluster * 2; { FAT16: 2 octets par entrée }
+  FATSector:=BootSec.ReservedSectors + (FATOffset div 512);
+  
+  { Lire le secteur FAT }
+  If Not ReadSector(Drive,FATSector,@FATBuffer) Then Exit;
+  
+  { Lire la prochaine entrée de cluster }
+  FATEntry:=@FATBuffer[FATOffset mod 512];
+  NextCluster:=FATEntry^;
+  
+  { Marquer le cluster comme libre }
+  FATEntry^:=0;
+  
+  { Écrire le secteur FAT modifié }
+  If Not WriteSector(Drive,FATSector,@FATBuffer) Then Exit;
+  
+  { Écrire aussi la copie de la FAT si elle existe }
+  If BootSec.NumberOfFATs > 1 Then Begin
+   FATSector:=FATSector + BootSec.SectorsPerFAT;
+   If Not WriteSector(Drive,FATSector,@FATBuffer) Then Exit;
+  End;
+  
+  { Passer au cluster suivant }
+  CurrentCluster:=NextCluster;
+ End;
+ 
+ FreeFATChain:=True;
+End;
+
+Function DeleteDirEntry(Drive:Byte;BootSec:BootSectorRec;ParentCluster:Word;EntryOffset:Word):Boolean;
+{ Supprime une entrée de répertoire }
+Var
+ DirBuffer:Array[0..511] of Byte;
+ DirSector:LongInt;
+ SectorOffset:Word;
+ EntryInSector:Word;
+Begin
+ DeleteDirEntry:=False;
+ 
+ { Calculer secteur et position dans le secteur }
+ DirSector:=GetClusterSector(Drive,BootSec,ParentCluster);
+ SectorOffset:=EntryOffset div 512;
+ EntryInSector:=EntryOffset mod 512;
+ 
+ { Lire le secteur contenant l'entrée }
+ If ReadSector(Drive,DirSector+SectorOffset,@DirBuffer) Then Begin
+  { Marquer l'entrée comme supprimée }
+  DirBuffer[EntryInSector]:=$E5; { Premier caractère = E5h }
+  
+  { Écrire le secteur modifié }
+  If WriteSector(Drive,DirSector+SectorOffset,@DirBuffer) Then
+   DeleteDirEntry:=True;
+ End;
+End;
+
+Function DOS3Ah_RemoveDirectory(PathPtr:Pointer):Word;
+{ Fonction principale pour supprimer un répertoire }
+Var
+ Path:String;
+ Drive:Byte;
+ DirName:String;
+ BootSec:BootSectorRec;
+ ParentCluster:Word;
+ Entry:DirectoryEntry;
+ EntryOffset:Word;
+ DirCluster:Word;
+ P:^Char;
+ I:Byte;
+Begin
+ DOS3Ah_RemoveDirectory:=3; { Par défaut: Path not found }
+ 
+ { Convertir pointeur en chaîne Pascal }
+ P:=PathPtr;
+ Path:='';
+ I:=0;
+ While (P^ <> #0) and (I < 255) Do Begin
+  Path:=Path + P^;
+  Inc(P);
+  Inc(I);
+ End;
+ 
+ { Analyser le chemin }
+ If Not ParsePath(Path,Drive,DirName) Then Begin
+  DOS3Ah_RemoveDirectory:=3; { Path not found }
+  Exit;
+ End;
+ 
+ { Lire le secteur de boot }
+ If Not ReadBootSector(Drive,BootSec) Then Begin
+  DOS3Ah_RemoveDirectory:=15; { Invalid drive }
+  Exit;
+ End;
+ 
+ { Trouver le répertoire parent }
+ If Not FindParentDirectory(Drive,BootSec,Path,ParentCluster) Then Begin
+  DOS3Ah_RemoveDirectory:=3; { Path not found }
+  Exit;
+ End;
+ 
+ { Trouver l'entrée du répertoire à supprimer }
+ If Not FindDirectoryEntry(Drive,BootSec,ParentCluster,DirName,Entry,EntryOffset) Then Begin
+  DOS3Ah_RemoveDirectory:=2; { File not found }
+  Exit;
+ End;
+ 
+ { Vérifier que c'est bien un répertoire }
+ If (Entry.Attributes and $10) = 0 Then Begin
+  DOS3Ah_RemoveDirectory:=16; { Cannot remove current directory }
+  Exit;
+ End;
+ 
+ { Construire le numéro de cluster }
+ DirCluster:=Entry.FirstClusterLow or (Word(Entry.FirstClusterHigh) shl 16);
+ 
+ { Vérifier si le répertoire est vide }
+ If Not IsDirectoryEmpty(Drive,BootSec,DirCluster) Then Begin
+  DOS3Ah_RemoveDirectory:=16; { Directory not empty }
+  Exit;
+ End;
+ 
+ { Libérer les clusters du répertoire }
+ If DirCluster <> 0 Then Begin
+  If Not FreeFATChain(Drive,BootSec,DirCluster) Then Begin
+   DOS3Ah_RemoveDirectory:=5; { Access denied }
+   Exit;
+  End;
+ End;
+ 
+ { Supprimer l'entrée du répertoire parent }
+ If Not DeleteDirEntry(Drive,BootSec,ParentCluster,EntryOffset) Then Begin
+  DOS3Ah_RemoveDirectory:=5; { Access denied }
+  Exit;
+ End;
+ 
+ DOS3Ah_RemoveDirectory:=0; { Succès }
 End;
 
 Procedure SetIntVec(AL:Byte;DS,DX:Word);
