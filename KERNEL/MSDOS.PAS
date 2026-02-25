@@ -90,6 +90,8 @@
   - 49h : Free Memory Block (libérer bloc mémoire)
   - 4Ah : Modify Memory Block (modifier taille bloc mémoire)
   - 4Bh : EXEC - Load and Execute Program (charger et exécuter programme)
+  - 4Ch : Terminate Program (terminer programme)
+  - 4Dh : Get Return Code (obtenir code de retour)
 
   @target: Turbo Pascal 7 (syntaxe assembleur Intel)
 }
@@ -199,6 +201,8 @@ Type
   DTASegment:Word;    { Segment de la DTA }
   DTAOffset:Word;     { Offset de la DTA }
   CurrentCountry:Word; { Code pays actuel }
+  LastReturnCode:Word; { Code de retour du dernier programme (AH=raison, AL=code) }
+  CurrentPSP:Word;     { Segment du PSP courant }
  End;
 
  { Structure pour les informations pays }
@@ -430,6 +434,8 @@ Function DOS48h_AllocateMemory(BlockSize:Word):Word;Near;Forward;
 Function DOS49h_FreeMemory(BlockSegment:Word):Word;Near;Forward;
 Function DOS4Ah_ModifyMemory(BlockSegment:Word;NewSize:Word):Word;Near;Forward;
 Function DOS4Bh_ExecProgram(ExecType:Byte;ProgramPath:String;ParamBlock:ExecParameterBlock):Word;Near;Forward;
+Function DOS4Ch_TerminateProgram(ExitCode:Byte):Word;Near;Forward;
+Function DOS4Dh_GetReturnCode:Word;Near;Forward;
 
 { Fonctions utilitaires pour EXEC }
 Function LoadExeFile(FileName:String;Var LoadSegment:Word;Var ExeHdr:ExeHeader):Boolean;Near;Forward;
@@ -480,6 +486,12 @@ Procedure SetFileTableAttributes(Index: Byte; Attributes: Byte);Near;Forward;
 Procedure SetFileTableCurrentCluster(Index: Byte; CurrentCluster: Word);Near;Forward;
 Procedure SetFileTableClusterOffset(Index: Byte; ClusterOffset: Word);Near;Forward;
 
+{ Fonctions d'accès aux nouvelles variables }
+Function GetLastReturnCode: Word;Near;Forward;
+Procedure SetLastReturnCode(ReturnCode: Word);Near;Forward;
+Function GetCurrentPSP: Word;Near;Forward;
+Procedure SetCurrentPSP(PSP: Word);Near;Forward;
+
 Procedure BEGIN_KERNEL;
 Var I:Byte;
 Begin
@@ -522,6 +534,8 @@ Procedure Data;Assembler;ASM
  DW 0          { DTASegment: Segment DTA (initialisé à 0) }
  DW 80h        { DTAOffset: Offset DTA (par défaut 80h) }
  DW 33         { CurrentCountry: Pays actuel (33=France par défaut) }
+ DW 0          { LastReturnCode: Code de retour du dernier programme }
+ DW 1000h      { CurrentPSP: Segment du PSP courant (par défaut 1000h) }
 
  { Variables pour gestion répertoires courants }
  DB 2          { CurrentDrive: Lecteur courant (0=A:, 1=B:, 2=C:) }
@@ -809,6 +823,8 @@ Procedure Intr21h;Assembler;ASM
  DW @49h { Fonction 49h - Free Memory Block }
  DW @4Ah { Fonction 4Ah - Modify Memory Block }
  DW @4Bh { Fonction 4Bh - EXEC - Load and Execute Program }
+ DW @4Ch { Fonction 4Ch - Terminate Program }
+ DW @4Dh { Fonction 4Dh - Get Return Code }
 
  {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
  { Interruption 21h - Fonction 00h: Terminer le programme                      }
@@ -2948,6 +2964,43 @@ Procedure Intr21h;Assembler;ASM
  POP BX
  JMP @Xit
 
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+ { Interruption 21h - Fonction 4Ch: Terminate Program                         }
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+@4Ch:
+ PUSH CX                    { Sauvegarder les registres }
+ PUSH SI
+ PUSH DI
+
+ { Paramètres: AL = code de retour }
+ PUSH AX                    { Code de retour (AL) }
+
+ CALL DOS4Ch_TerminateProgram { Appeler fonction Pascal }
+ ADD SP,2                   { Nettoyer pile (1 mot = 2 octets) }
+
+ { Cette fonction ne retourne jamais - elle termine le programme }
+ { En cas d'erreur, continuer quand même }
+ JMP @Xit
+
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+ { Interruption 21h - Fonction 4Dh: Get Return Code                           }
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+@4Dh:
+ PUSH CX                    { Sauvegarder les registres }
+ PUSH SI
+ PUSH DI
+
+ CALL DOS4Dh_GetReturnCode  { Appeler fonction Pascal }
+ { AX contient le code de retour (AH = raison, AL = code) }
+
+ { Pas de modification du Carry Flag - cette fonction réussit toujours }
+ CLC                        { Clear Carry Flag }
+
+ POP DI
+ POP SI
+ POP CX
+ JMP @Xit
+
 @Xit:
  DEC Data.DataMOS.InDos
 END;
@@ -3718,6 +3771,29 @@ ASM
  MOV BX,AX
  MOV AX,ClusterOffset
  MOV WORD PTR [Data + BX],AX
+END;
+
+{ Fonctions d'accès aux nouvelles variables DataMOS }
+Function GetLastReturnCode: Word;Assembler;
+ASM
+ MOV AX,WORD PTR [Data.DataMOS.LastReturnCode]
+END;
+
+Procedure SetLastReturnCode(ReturnCode: Word);Assembler;
+ASM
+ MOV AX,ReturnCode
+ MOV WORD PTR [Data.DataMOS.LastReturnCode],AX
+END;
+
+Function GetCurrentPSP: Word;Assembler;
+ASM
+ MOV AX,WORD PTR [Data.DataMOS.CurrentPSP]
+END;
+
+Procedure SetCurrentPSP(PSP: Word);Assembler;
+ASM
+ MOV AX,PSP
+ MOV WORD PTR [Data.DataMOS.CurrentPSP],AX
 END;
 
 { Lire une entrée complète de la FileTable }
@@ -7613,6 +7689,69 @@ Begin
    Exit;
   End;
  End;
+End;
+
+{ Fonctions 4Ch et 4Dh - Terminaison et code de retour }
+
+{ Fonction 4Ch - Terminate Program }
+Function DOS4Ch_TerminateProgram(ExitCode:Byte):Word;
+Var
+ CurrentPSP: Word;
+ ParentPSP: Word;
+Begin
+ DOS4Ch_TerminateProgram:=0;
+ 
+ { Obtenir le PSP courant }
+ CurrentPSP:=GetCurrentPSP;
+ If CurrentPSP = 0 Then CurrentPSP:=$1000; { PSP par défaut si non défini }
+ 
+ { Lire le PSP pour obtenir le parent }
+ ParentPSP:=0; { Valeur par défaut }
+ ASM
+  PUSH DS
+  MOV AX,CurrentPSP
+  MOV DS,AX
+  
+  { Lire ParentPSP à l'offset $16 }
+  MOV AX,[16h]       { Offset $16 = ParentPSP }
+  MOV ParentPSP,AX
+  
+  POP DS
+ END;
+ 
+ { Sauvegarder le code de retour }
+ { AH = 0 (terminaison normale), AL = code de sortie }
+ SetLastReturnCode(ExitCode);
+ 
+ { Fermer les handles ouverts (implémentation simplifiée) }
+ { Dans un vrai DOS, on fermerait tous les handles du processus }
+ 
+ { Libérer la mémoire du PSP et du programme }
+ If CurrentPSP <> $1000 Then Begin { Ne pas libérer le PSP système }
+  DOS49h_FreeMemory(CurrentPSP);
+ End;
+ 
+ { Restaurer le PSP parent }
+ SetCurrentPSP(ParentPSP);
+ 
+ { Dans un vrai DOS, on ferait un JMP vers le parent }
+ { Pour l'instant, on retourne simplement }
+ 
+ DOS4Ch_TerminateProgram:=0;
+End;
+
+{ Fonction 4Dh - Get Return Code }
+Function DOS4Dh_GetReturnCode:Word;
+Var
+ ReturnCode: Word;
+Begin
+ { Obtenir le code de retour du dernier programme terminé }
+ ReturnCode:=GetLastReturnCode;
+ 
+ { Effacer le code de retour après lecture (comportement DOS) }
+ SetLastReturnCode(0);
+ 
+ DOS4Dh_GetReturnCode:=ReturnCode;
 End;
 
 Procedure SetIntVec(_AL:Byte;_DS,_DX:Word);Assembler;ASM
