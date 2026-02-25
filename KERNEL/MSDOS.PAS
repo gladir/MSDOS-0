@@ -198,6 +198,22 @@ Type
   DataListSep:Array[0..1] of Char; { Séparateur liste }
  End;
 
+{ Structure pour la table des fichiers ouverts }
+Type
+ FileTableEntry = Record
+  InUse: Boolean;         { Fichier en cours d'utilisation }
+  Drive: Byte;           { Lecteur (0=A:, 1=B:, etc.) }
+  FirstCluster: Word;    { Premier cluster du fichier }
+  FileSize: LongInt;     { Taille du fichier }
+  CurrentPos: LongInt;   { Position courante dans le fichier }
+  Attributes: Byte;      { Attributs du fichier }
+  CurrentCluster: Word;  { Cluster courant pour lecture/écriture }
+  ClusterOffset: Word;   { Offset dans le cluster courant }
+ End;
+
+Var
+ FileTable: Array[0..19] of FileTableEntry; { Max 20 fichiers ouverts }
+
 {$IFDEF FPC}
 Var
  Data:Record
@@ -262,6 +278,17 @@ Function FindDirectoryByPath(Drive:Byte;BootSec:BootSectorRec;Path:String;Var Di
 Function SetCurrentDirectory(Drive:Byte;DirCluster:Word):Boolean;Near;Forward;
 Function DOS3Bh_ChangeDirectory(PathPtr:Pointer):Word;Near;Forward;
 
+{ Procédures spécifiques pour fonction 3Ch - Create or Open File }
+Function ParseFilePath(Path:String;Var Drive:Byte;Var DirPath,FileName:String):Boolean;Near;Forward;
+Function FindOrCreateFile(Drive:Byte;BootSec:BootSectorRec;DirPath,FileName:String;
+                         Attributes:Byte;Var FileHandle:Word):Word;Near;Forward;
+Function AllocateFileHandle(Drive:Byte;FirstCluster,FileSize:LongInt;
+                           Attributes:Byte;Var Handle:Word):Boolean;Near;Forward;
+Function CreateFileEntry(Drive:Byte;BootSec:BootSectorRec;DirCluster:Word;
+                        FileName:String;Attributes:Byte;Var FirstCluster:Word):Word;Near;Forward;
+Function OpenExistingFile(Drive:Byte;Entry:DirectoryEntry;Var Handle:Word):Word;Near;Forward;
+Function DOS3Ch_CreateOpenFile(PathPtr:Pointer):Word;Near;Forward;
+
 { Fonctions d'accès aux données dans Code Segment }
 Function GetCurrentDrive: Byte;Near;Forward;
 Procedure SetCurrentDrive(Drive: Byte);Near;Forward;
@@ -282,7 +309,12 @@ Begin
   SetCurrentDirCluster(I, 0); { Répertoire racine }
   SetCurrentDirPath(I, '\');
  End;
- 
+
+ { Initialiser table des fichiers ouverts }
+ For I:=0 To 19 Do Begin
+  FileTable[I].InUse:=False;
+ End;
+
  SetIntVec($20,CSeg,Ofs(Intr21h));
  SetIntVec($21,CSeg,Ofs(Intr21h));
  SetIntVec($25,CSeg,Ofs(Intr25h));
@@ -304,10 +336,10 @@ Procedure Data;Assembler;ASM
  DW 0          { DTASegment: Segment DTA (initialisé à 0) }
  DW 80h        { DTAOffset: Offset DTA (par défaut 80h) }
  DW 33         { CurrentCountry: Pays actuel (33=France par défaut) }
- 
+
  { Variables pour gestion répertoires courants }
  DB 2          { CurrentDrive: Lecteur courant (0=A:, 1=B:, 2=C:) }
- 
+
  { CurrentDir: Array[0..25] of Record - Structure pour chaque drive }
  { Drive A: (0) }
  DB 0          { Drive }
@@ -550,6 +582,7 @@ Procedure Intr21h;Assembler;ASM
  DW @39h { Fonction 39h - Create Subdirectory }
  DW @3Ah { Fonction 3Ah - Remove Directory }
  DW @3Bh { Fonction 3Bh - Change Directory }
+ DW @3Ch { Fonction 3Ch - Create or Open File }
 
  {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
  { Interruption 21h - Fonction 00h: Terminer le programme                      }
@@ -2047,33 +2080,33 @@ Procedure Intr21h;Assembler;ASM
  { Entrée: DS:DX pointe sur le chemin ASCIIZ }
  { Sortie: AX = code d'erreur (0 = succès) }
  { Carry Flag: 0 = succès, 1 = erreur }
- 
+
  PUSH CX                    { Sauver registres }
  PUSH SI
  PUSH DI
- 
+
  MOV SI,DX                  { SI pointe sur le chemin }
- 
+
  { Appeler la fonction Pascal pour supprimer le répertoire }
  PUSH DS                    { Paramètre: segment chaîne }
  PUSH SI                    { Paramètre: offset chaîne }
  CALL DOS3Ah_RemoveDirectory
  ADD SP,4                   { Nettoyer pile (2 paramètres) }
- 
+
  { AX contient le résultat (0 = succès, autre = code erreur) }
  OR AX,AX                   { Tester le résultat }
  JZ @3AhSuccess             { Si 0, succès }
- 
+
  { Erreur }
  STC                        { Set Carry Flag }
  JMP @3AhEnd
- 
+
 @3AhSuccess:
  CLC                        { Clear Carry Flag }
- 
+
 @3AhEnd:
  POP DI
- POP SI 
+ POP SI
  POP CX
  JMP @Xit
 
@@ -2084,33 +2117,67 @@ Procedure Intr21h;Assembler;ASM
  { Entrée: DS:DX pointe sur le chemin ASCIIZ }
  { Sortie: AX = code d'erreur (0 = succès) }
  { Carry Flag: 0 = succès, 1 = erreur }
- 
+
  PUSH CX                    { Sauver registres }
  PUSH SI
  PUSH DI
- 
+
  MOV SI,DX                  { SI pointe sur le chemin }
- 
+
  { Appeler la fonction Pascal pour changer de répertoire }
  PUSH DS                    { Paramètre: segment chaîne }
  PUSH SI                    { Paramètre: offset chaîne }
  CALL DOS3Bh_ChangeDirectory
  ADD SP,4                   { Nettoyer pile (2 paramètres) }
- 
+
  { AX contient le résultat (0 = succès, autre = code erreur) }
  OR AX,AX                   { Tester le résultat }
  JZ @3BhSuccess             { Si 0, succès }
- 
+
  { Erreur }
  STC                        { Set Carry Flag }
  JMP @3BhEnd
- 
+
 @3BhSuccess:
  CLC                        { Clear Carry Flag }
- 
+
 @3BhEnd:
  POP DI
- POP SI 
+ POP SI
+ POP CX
+ JMP @Xit
+
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+ { Interruption 21h - Fonction 3Ch: Create or Open File                        }
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+@3Ch:
+ PUSH CX                    { Sauvegarder les registres }
+ PUSH SI
+ PUSH DI
+
+ { Paramètres: DS:DX = pointeur vers nom fichier ASCIIZ, CX = attributs }
+ PUSH DX                    { Pointeur fichier (offset) }
+ PUSH DS                    { Pointeur fichier (segment) }
+
+ CALL DOS3Ch_CreateOpenFile  { Appeler fonction Pascal }
+ ADD SP,4                   { Nettoyer pile (2 paramètres) }
+
+ { AX contient le résultat : si succès = handle, si erreur = $FFFF }
+ CMP AX,0FFFFh              { Vérifier si erreur }
+ JE @3ChError               { Si erreur }
+
+ { Succès - AX contient le handle de fichier }
+ CLC                        { Clear Carry Flag }
+ JMP @3ChEnd
+
+@3ChError:
+ { En cas d'erreur, mettre code d'erreur standard }
+ MOV AX,2                   { File not found }
+ STC                        { Set Carry Flag }
+
+@3ChEnd:
+ POP DI
+ POP SI
  POP CX
  JMP @Xit
 
@@ -2253,14 +2320,14 @@ Procedure Intr25h;Assembler;ASM
  { COMPORTEMENT SPÉCIAL INT 25h: }
  { INT 25h laisse les FLAGS sur la pile pour l'appelant }
  { L'appelant doit faire POPF ou ADD SP,2 pour nettoyer }
- 
+
  { Récupérer l'adresse de retour et les flags depuis la pile }
  POP DX                     { DX = adresse de retour (offset) }
  POP CX                     { CX = adresse de retour (segment) }
  PUSHF                      { Pousser les flags actuels }
  PUSH CX                    { Repousser segment de retour }
  PUSH DX                    { Repousser offset de retour }
- 
+
  { Retour normal - les flags restent sur la pile pour l'appelant }
 END;
 
@@ -2396,14 +2463,14 @@ Procedure Intr26h;Assembler;ASM
  { COMPORTEMENT SPÉCIAL INT 26h: }
  { INT 26h laisse les FLAGS sur la pile pour l'appelant }
  { L'appelant doit faire POPF ou ADD SP,2 pour nettoyer }
- 
+
  { Récupérer l'adresse de retour et les flags depuis la pile }
  POP DX                     { DX = adresse de retour (offset) }
  POP CX                     { CX = adresse de retour (segment) }
  PUSHF                      { Pousser les flags actuels }
  PUSH CX                    { Repousser segment de retour }
  PUSH DX                    { Repousser offset de retour }
- 
+
  { Retour normal - les flags restent sur la pile pour l'appelant }
 END;
 
@@ -2608,14 +2675,14 @@ Var
  BaseOffset: Word;
 Begin
  BaseOffset := 7 + (Index * 131) + 3;  { Base + Index*RecordSize + Drive(1) + Cluster(2) }
- 
+
  { Lire la longueur de la chaîne }
  ASM
   MOV BX,BaseOffset
   MOV AL,BYTE PTR [Data + BX]
   MOV Len,AL
  END;
- 
+
  { Lire les caractères }
  Path[0] := Chr(Len);
  For I := 1 To Len Do Begin
@@ -2625,7 +2692,7 @@ Begin
    ADD AX,BaseOffset
    MOV BX,AX
    MOV AL,BYTE PTR [Data + BX]
-   
+
    { Stocker le caractère dans Path[I] }
    LEA BX,Path
    MOV CL,I
@@ -2634,7 +2701,7 @@ Begin
    MOV BYTE PTR [BX],AL
   END;
  End;
- 
+
  GetCurrentDirPath := Path;
 End;
 
@@ -2667,14 +2734,14 @@ Var
 Begin
  Len := Length(Path);
  BaseOffset := 7 + (Index * 131) + 3;  { Base + Index*RecordSize + Drive(1) + Cluster(2) }
- 
+
  { Stocker la longueur }
  ASM
   MOV BX,BaseOffset
   MOV AL,Len
   MOV BYTE PTR [Data + BX],AL
  END;
- 
+
  { Stocker les caractères }
  For I := 1 To Len Do Begin
   ASM
@@ -2683,14 +2750,14 @@ Begin
    MOV AH,0
    ADD AX,BaseOffset
    MOV DI,AX           { DI = adresse destination dans Data }
-   
+
    { Lire le caractère depuis Path[I] }
    LEA BX,Path
    MOV CL,I
    MOV CH,0
    ADD BX,CX
    MOV AL,BYTE PTR [BX] { AL = Path[I] }
-   
+
    { Stocker dans Data }
    MOV BYTE PTR [Data + DI],AL
   END;
@@ -3578,27 +3645,27 @@ Var
 Begin
  FindDirectoryEntry:=False;
  EntryOffset:=0;
- 
+
  { Convertir nom en format 8.3 majuscules }
  DirName:=Copy(DirName+'        ',1,8); { Pad avec espaces }
  For I:=1 To Length(DirName) Do
   If (DirName[I]>='a')and(DirName[I]<='z') Then
    DirName[I]:=Chr(Ord(DirName[I])-32);
-   
+
  { Calculer secteur et nombre de secteurs à lire }
  DirSector:=GetClusterSector(Drive,BootSec,ParentCluster);
  If ParentCluster = 0 Then
   SectorsToRead:=(BootSec.RootDirEntries*32+511)div 512
  Else
   SectorsToRead:=BootSec.SectorsPerCluster;
-  
+
  { Parcourir les secteurs du répertoire }
  For I:=0 To SectorsToRead-1 Do Begin
   If ReadSector(Drive,DirSector+I,@DirBuffer) Then Begin
    { Parcourir les entrées du secteur }
    For J:=0 To 15 Do Begin { 16 entrées par secteur (512/32) }
     EntryPtr:=@DirBuffer[J*32];
-    
+
     { Vérifier si l'entrée est valide }
     If (EntryPtr^.FileName[0]<>#0)and(EntryPtr^.FileName[0]<>#$E5) Then Begin
      { Construire le nom de l'entrée }
@@ -3607,7 +3674,7 @@ Begin
       If EntryPtr^.FileName[I]<>' ' Then
        FoundName:=FoundName+EntryPtr^.FileName[I];
      End;
-     
+
      { Comparer avec le nom recherché }
      If (FoundName = Copy(DirName,1,Length(FoundName)))and
         (EntryPtr^.Attributes and $10 <> 0) Then Begin { Répertoire }
@@ -3633,26 +3700,26 @@ Var
 Begin
  IsDirectoryEmpty:=False;
  ValidEntries:=0;
- 
+
  DirSector:=GetClusterSector(Drive,BootSec,DirCluster);
- 
+
  { Parcourir tous les secteurs du cluster }
  For I:=0 To BootSec.SectorsPerCluster-1 Do Begin
   If ReadSector(Drive,DirSector+I,@DirBuffer) Then Begin
    For J:=0 To 15 Do Begin { 16 entrées par secteur }
     EntryPtr:=@DirBuffer[J*32];
-    
+
     { Compter les entrées valides }
     If (EntryPtr^.FileName[0]<>#0)and(EntryPtr^.FileName[0]<>#$E5) Then Begin
      Inc(ValidEntries);
-     
+
      { Plus de 2 entrées = répertoire non vide }
      If ValidEntries > 2 Then Exit;
     End;
    End;
   End;
  End;
- 
+
  { Répertoire vide si seulement . et .. }
  IsDirectoryEmpty:=(ValidEntries <= 2);
 End;
@@ -3668,35 +3735,35 @@ Var
 Begin
  FreeFATChain:=False;
  CurrentCluster:=StartCluster;
- 
+
  While (CurrentCluster >= 2)and(CurrentCluster < $FFF0) Do Begin
   { Calculer secteur FAT et offset }
   FATOffset:=CurrentCluster * 2; { FAT16: 2 octets par entrée }
   FATSector:=BootSec.ReservedSectors + (FATOffset div 512);
-  
+
   { Lire le secteur FAT }
   If Not ReadSector(Drive,FATSector,@FATBuffer) Then Exit;
-  
+
   { Lire la prochaine entrée de cluster }
   FATEntry:=@FATBuffer[FATOffset mod 512];
   NextCluster:=FATEntry^;
-  
+
   { Marquer le cluster comme libre }
   FATEntry^:=0;
-  
+
   { Écrire le secteur FAT modifié }
   If Not WriteSector(Drive,FATSector,@FATBuffer) Then Exit;
-  
+
   { Écrire aussi la copie de la FAT si elle existe }
   If BootSec.NumberOfFATs > 1 Then Begin
    FATSector:=FATSector + BootSec.SectorsPerFAT;
    If Not WriteSector(Drive,FATSector,@FATBuffer) Then Exit;
   End;
-  
+
   { Passer au cluster suivant }
   CurrentCluster:=NextCluster;
  End;
- 
+
  FreeFATChain:=True;
 End;
 
@@ -3709,17 +3776,17 @@ Var
  EntryInSector:Word;
 Begin
  DeleteDirEntry:=False;
- 
+
  { Calculer secteur et position dans le secteur }
  DirSector:=GetClusterSector(Drive,BootSec,ParentCluster);
  SectorOffset:=EntryOffset div 512;
  EntryInSector:=EntryOffset mod 512;
- 
+
  { Lire le secteur contenant l'entrée }
  If ReadSector(Drive,DirSector+SectorOffset,@DirBuffer) Then Begin
   { Marquer l'entrée comme supprimée }
   DirBuffer[EntryInSector]:=$E5; { Premier caractère = E5h }
-  
+
   { Écrire le secteur modifié }
   If WriteSector(Drive,DirSector+SectorOffset,@DirBuffer) Then
    DeleteDirEntry:=True;
@@ -3741,7 +3808,7 @@ Var
  I:Byte;
 Begin
  DOS3Ah_RemoveDirectory:=3; { Par défaut: Path not found }
- 
+
  { Convertir pointeur en chaîne Pascal }
  P:=PathPtr;
  Path:='';
@@ -3751,46 +3818,46 @@ Begin
   Inc(P);
   Inc(I);
  End;
- 
+
  { Analyser le chemin }
  If Not ParsePath(Path,Drive,DirName) Then Begin
   DOS3Ah_RemoveDirectory:=3; { Path not found }
   Exit;
  End;
- 
+
  { Lire le secteur de boot }
  If Not ReadBootSector(Drive,BootSec) Then Begin
   DOS3Ah_RemoveDirectory:=15; { Invalid drive }
   Exit;
  End;
- 
+
  { Trouver le répertoire parent }
  If Not FindParentDirectory(Drive,BootSec,Path,ParentCluster) Then Begin
   DOS3Ah_RemoveDirectory:=3; { Path not found }
   Exit;
  End;
- 
+
  { Trouver l'entrée du répertoire à supprimer }
  If Not FindDirectoryEntry(Drive,BootSec,ParentCluster,DirName,Entry,EntryOffset) Then Begin
   DOS3Ah_RemoveDirectory:=2; { File not found }
   Exit;
  End;
- 
+
  { Vérifier que c'est bien un répertoire }
  If (Entry.Attributes and $10) = 0 Then Begin
   DOS3Ah_RemoveDirectory:=16; { Cannot remove current directory }
   Exit;
  End;
- 
+
  { Construire le numéro de cluster }
  DirCluster:=Entry.FirstClusterLow or (Word(Entry.FirstClusterHigh) shl 16);
- 
+
  { Vérifier si le répertoire est vide }
  If Not IsDirectoryEmpty(Drive,BootSec,DirCluster) Then Begin
   DOS3Ah_RemoveDirectory:=16; { Directory not empty }
   Exit;
  End;
- 
+
  { Libérer les clusters du répertoire }
  If DirCluster <> 0 Then Begin
   If Not FreeFATChain(Drive,BootSec,DirCluster) Then Begin
@@ -3798,13 +3865,13 @@ Begin
    Exit;
   End;
  End;
- 
+
  { Supprimer l'entrée du répertoire parent }
  If Not DeleteDirEntry(Drive,BootSec,ParentCluster,EntryOffset) Then Begin
   DOS3Ah_RemoveDirectory:=5; { Access denied }
   Exit;
  End;
- 
+
  DOS3Ah_RemoveDirectory:=0; { Succès }
 End;
 
@@ -3825,22 +3892,22 @@ Var
 Begin
  FindDirectoryByPath:=False;
  DirCluster:=0;
- 
+
  { Traiter le cas du répertoire racine }
  If (Path = '\') or (Path = '') Then Begin
   DirCluster:=0; { Répertoire racine }
   FindDirectoryByPath:=True;
   Exit;
  End;
- 
+
  { Décomposer le chemin en parties }
  TempPath:=Path;
  PartCount:=0;
- 
+
  { Enlever le \ initial s'il existe }
  If (Length(TempPath) > 0) and (TempPath[1] = '\') Then
   Delete(TempPath,1,1);
-  
+
  { Séparer par \ }
  While (Length(TempPath) > 0) and (PartCount < 16) Do Begin
   J:=Pos('\',TempPath);
@@ -3854,19 +3921,19 @@ Begin
   End;
   Inc(PartCount);
  End;
- 
+
  { Commencer par le répertoire racine }
  CurrentCluster:=0;
- 
+
  { Parcourir chaque partie du chemin }
  For I:=0 To PartCount-1 Do Begin
   If Not FindDirectoryEntry(Drive,BootSec,CurrentCluster,PathParts[I],Entry,EntryOffset) Then
    Exit; { Partie non trouvée }
-   
+
   { Vérifier que c'est un répertoire }
   If (Entry.Attributes and $10) = 0 Then
    Exit; { Pas un répertoire }
-   
+
   { Passer au cluster suivant }
   CurrentCluster:=Entry.FirstClusterLow or (Word(Entry.FirstClusterHigh) shl 16);
  End;
@@ -3886,13 +3953,13 @@ Begin
  { Mettre à jour via les fonctions d'accès Code Segment }
  SetCurrentDirDrive(Drive, Drive);
  SetCurrentDirCluster(Drive, DirCluster);
- 
+
  { Pour l'instant, path sera mis à jour plus tard }
  If DirCluster = 0 Then
   SetCurrentDirPath(Drive, '\')
  Else
   SetCurrentDirPath(Drive, '\SUBDIR'); { Simplifié pour le test }
-  
+
  SetCurrentDirectory:=True;
 End;
 
@@ -3909,7 +3976,7 @@ Var
  I,J:Byte;
 Begin
  DOS3Bh_ChangeDirectory:=3; { Par défaut: Path not found }
- 
+
  { Convertir pointeur en chaîne Pascal }
  P:=PathPtr;
  Path:='';
@@ -3919,7 +3986,7 @@ Begin
   Inc(P);
   Inc(I);
  End;
- 
+
  { Déterminer le lecteur }
  If (Length(Path) >= 2) and (Path[2] = ':') Then Begin
   Drive:=Ord(UpCase(Path[1])) - Ord('A');
@@ -3929,19 +3996,19 @@ Begin
   Drive:=GetCurrentDrive; { Lecteur courant }
   FullPath:=Path;
  End;
- 
+
  { Vérifier validité du lecteur }
  If Drive > 25 Then Begin
   DOS3Bh_ChangeDirectory:=15; { Invalid drive }
   Exit;
  End;
- 
+
  { Lire le secteur de boot }
  If Not ReadBootSector(Drive,BootSec) Then Begin
   DOS3Bh_ChangeDirectory:=15; { Invalid drive }
   Exit;
  End;
- 
+
  { Traiter les cas spéciaux }
  If FullPath = '' Then Begin
   { Pas de chemin = juste changer de lecteur }
@@ -3949,7 +4016,7 @@ Begin
   DOS3Bh_ChangeDirectory:=0;
   Exit;
  End;
- 
+
  { Gérer chemin relatif vs absolu }
  If (Length(FullPath) = 0) or (FullPath[1] <> '\') Then Begin
   { Chemin relatif - partir du répertoire courant }
@@ -3958,7 +4025,7 @@ Begin
   Else
    FullPath:='\' + FullPath;
  End;
- 
+
  { Gérer ".." (répertoire parent) }
  While Pos('\..\',FullPath) > 0 Do Begin
   I:=Pos('\..\',FullPath);
@@ -3971,32 +4038,332 @@ Begin
   Else
    Delete(FullPath,1,4); { Enlever "\.." au début }
  End;
- 
+
  { Gérer "." (répertoire courant) }
  While Pos('\.\',FullPath) > 0 Do Begin
   I:=Pos('\.\',FullPath);
   Delete(FullPath,I,2); { Enlever "\." }
  End;
- 
+
  { Chercher le répertoire }
  If Not FindDirectoryByPath(Drive,BootSec,FullPath,DirCluster) Then Begin
   DOS3Bh_ChangeDirectory:=3; { Path not found }
   Exit;
  End;
- 
+
  { Mettre à jour le répertoire courant }
  If Not SetCurrentDirectory(Drive,DirCluster) Then Begin
   DOS3Bh_ChangeDirectory:=5; { Access denied }
   Exit;
  End;
- 
+
  { Changer le lecteur courant si nécessaire }
  SetCurrentDrive(Drive);
- 
+
  DOS3Bh_ChangeDirectory:=0; { Succès }
 End;
 
-Procedure SetIntVec(AL:Byte;DS,DX:Word);
+{==============================================================================}
+{ FONCTIONS POUR 3Ch - CREATE OR OPEN FILE                                    }
+{==============================================================================}
+
+{ Analyser un chemin de fichier (séparé répertoire/fichier) }
+Function ParseFilePath(Path:String;Var Drive:Byte;Var DirPath,FileName:String):Boolean;
+Var
+ I,J:Byte;
+ FullPath:String;
+Begin
+ ParseFilePath:=False;
+ Drive:=GetCurrentDrive;
+ DirPath:='';
+ FileName:='';
+
+ If Length(Path) = 0 Then Exit;
+
+ FullPath:=Path;
+
+ { Analyser le lecteur }
+ If (Length(FullPath) >= 2) and (FullPath[2] = ':') Then Begin
+  Drive:=Ord(UpCase(FullPath[1])) - Ord('A');
+  Delete(FullPath,1,2);
+ End;
+
+ If Drive > 25 Then Exit; { Lecteur invalide }
+
+ { Trouver le dernier backslash }
+ I:=0;
+ For J:=1 To Length(FullPath) Do Begin
+  If FullPath[J] = '\' Then I:=J;
+ End;
+
+ If I > 0 Then Begin
+  { Il y a un chemin de répertoire }
+  DirPath:=Copy(FullPath,1,I-1);
+  FileName:=Copy(FullPath,I+1,255);
+ End
+ Else Begin
+  { Pas de chemin - fichier dans répertoire courant }
+  DirPath:='';
+  FileName:=FullPath;
+ End;
+
+ { Valider nom de fichier (format 8.3) }
+ If Length(FileName) = 0 Then Exit;
+ If Length(FileName) > 12 Then Exit; { nom.ext max }
+
+ ParseFilePath:=True;
+End;
+
+{ Allouer un handle de fichier libre }
+Function AllocateFileHandle(Drive:Byte;FirstCluster,FileSize:LongInt;
+                           Attributes:Byte;Var Handle:Word):Boolean;
+Var
+ I:Byte;
+Begin
+ AllocateFileHandle:=False;
+ Handle:=0;
+
+ { Chercher une entrée libre dans la table des fichiers }
+ For I:=0 To 19 Do Begin
+  If Not FileTable[I].InUse Then Begin
+   { Initialiser l'entrée }
+   FileTable[I].InUse:=True;
+   FileTable[I].Drive:=Drive;
+   FileTable[I].FirstCluster:=FirstCluster;
+   FileTable[I].FileSize:=FileSize;
+   FileTable[I].CurrentPos:=0;
+   FileTable[I].Attributes:=Attributes;
+   FileTable[I].CurrentCluster:=FirstCluster;
+   FileTable[I].ClusterOffset:=0;
+
+   Handle:=I;
+   AllocateFileHandle:=True;
+   Exit;
+  End;
+ End;
+End;
+
+{ Créer une nouvelle entrée de fichier dans le répertoire }
+Function CreateFileEntry(Drive:Byte;BootSec:BootSectorRec;DirCluster:Word;
+                        FileName:String;Attributes:Byte;Var FirstCluster:Word):Word;
+Var
+ Buffer: Array[0..511] of Byte;
+ Entry: DirectoryEntry;
+ Sector: LongInt;
+ I,J: Byte;
+ EntryPtr: Pointer;
+ Found: Boolean;
+ DirSector: LongInt;
+ EntriesPerSector: Byte;
+Begin
+ CreateFileEntry:=5; { Access denied par défaut }
+ FirstCluster:=0;
+
+ { Calculer le secteur du répertoire }
+ If DirCluster = 0 Then Begin
+  { Répertoire racine }
+  DirSector:=BootSec.ReservedSectors + (BootSec.NumberOfFATs * BootSec.SectorsPerFAT);
+ End
+ Else Begin
+  { Sous-répertoire }
+  DirSector:=GetClusterSector(Drive,BootSec,DirCluster);
+  If DirSector = -1 Then Begin
+   CreateFileEntry:=3; { Path not found }
+   Exit;
+  End;
+ End;
+
+ { Chercher une entrée libre }
+ EntriesPerSector:=BootSec.BytesPerSector Div 32;
+ Found:=False;
+
+ For I:=0 To 15 Do Begin { Maximum 16 secteurs à chercher }
+  If Not ReadSector(Drive,DirSector + I,@Buffer) Then Begin
+   CreateFileEntry:=5; { Access denied }
+   Exit;
+  End;
+
+  For J:=0 To EntriesPerSector-1 Do Begin
+   EntryPtr:=@Buffer[J * 32];
+   Move(EntryPtr^,Entry,32);
+
+   { Vérifier si l'entrée est libre }
+   If (Entry.FileName[0] = #0) or (Entry.FileName[0] = #$E5) Then Begin
+    Found:=True;
+    Break;
+   End;
+  End;
+
+  If Found Then Break;
+ End;
+
+ If Not Found Then Begin
+  CreateFileEntry:=5; { Access denied - répertoire plein }
+  Exit;
+ End;
+
+ { Allouer un cluster pour le fichier }
+ FirstCluster:=FindFreeCluster(Drive,BootSec);
+ If FirstCluster = 0 Then Begin
+  CreateFileEntry:=5; { Access denied - disque plein }
+  Exit;
+ End;
+
+ If Not AllocateCluster(Drive,BootSec,FirstCluster) Then Begin
+  CreateFileEntry:=5; { Access denied }
+  Exit;
+ End;
+
+ { Créer l'entrée de répertoire }
+ FillChar(Entry,32,0);
+
+ { Convertir nom fichier au format 8.3 }
+ FillChar(Entry.FileName,11,32); { Espaces }
+ J:=1;
+ For I:=0 To 7 Do Begin
+  If (J <= Length(FileName)) and (FileName[J] <> '.') Then Begin
+   Entry.FileName[I]:=UpCase(FileName[J]);
+   Inc(J);
+  End
+  Else Break;
+ End;
+
+ { Chercher l'extension }
+ While (J <= Length(FileName)) and (FileName[J] <> '.') Do Inc(J);
+ If J < Length(FileName) Then Begin
+  Inc(J); { Passer le point }
+  For I:=8 To 10 Do Begin
+   If J <= Length(FileName) Then Begin
+    Entry.Extension[I-8]:=UpCase(FileName[J]);
+    Inc(J);
+   End;
+  End;
+ End;
+
+ Entry.Attributes:=Attributes;
+ Entry.FirstClusterLow:=FirstCluster;
+ Entry.FirstClusterHigh:=0;
+ Entry.FileSize:=0;
+
+ { Écrire l'entrée }
+ Move(Entry,EntryPtr^,32);
+
+ If Not WriteSector(Drive,DirSector + I,@Buffer) Then Begin
+  CreateFileEntry:=5; { Access denied }
+  Exit;
+ End;
+
+ CreateFileEntry:=0; { Succès }
+End;
+
+{ Ouvrir un fichier existant }
+Function OpenExistingFile(Drive:Byte;Entry:DirectoryEntry;Var Handle:Word):Word;
+Var
+ FirstCluster: Word;
+ FileSize: LongInt;
+Begin
+ FirstCluster:=Entry.FirstClusterLow or (LongInt(Entry.FirstClusterHigh) shl 16);
+ FileSize:=Entry.FileSize;
+
+ If AllocateFileHandle(Drive,FirstCluster,FileSize,Entry.Attributes,Handle) Then
+  OpenExistingFile:=0 { Succès }
+ Else
+  OpenExistingFile:=4; { Too many open files }
+End;
+
+{ Trouver ou créer un fichier }
+Function FindOrCreateFile(Drive:Byte;BootSec:BootSectorRec;DirPath,FileName:String;
+                         Attributes:Byte;Var FileHandle:Word):Word;
+Var
+ DirCluster: Word;
+ Entry: DirectoryEntry;
+ EntryOffset: Word;
+ FirstCluster: Word;
+ Result: Word;
+Begin
+ FileHandle:=0;
+
+ { Trouver le répertoire parent }
+ If DirPath = '' Then
+  DirCluster:=0 { Répertoire racine }
+ Else Begin
+  If Not FindDirectoryByPath(Drive,BootSec,DirPath,DirCluster) Then Begin
+   FindOrCreateFile:=3; { Path not found }
+   Exit;
+  End;
+ End;
+
+ { Chercher si le fichier existe déjà }
+ If FindDirectoryEntry(Drive,BootSec,DirCluster,FileName + '        ',Entry,EntryOffset) Then Begin
+  { Fichier existant - l'ouvrir }
+  If (Entry.Attributes and $10) <> 0 Then Begin
+   FindOrCreateFile:=5; { Access denied - c'est un répertoire }
+   Exit;
+  End;
+
+  FindOrCreateFile:=OpenExistingFile(Drive,Entry,FileHandle);
+ End
+ Else Begin
+  { Fichier n'existe pas - le créer }
+  Result:=CreateFileEntry(Drive,BootSec,DirCluster,FileName,Attributes,FirstCluster);
+  If Result <> 0 Then Begin
+   FindOrCreateFile:=Result;
+   Exit;
+  End;
+
+  { Allouer un handle pour le nouveau fichier }
+  If AllocateFileHandle(Drive,FirstCluster,0,Attributes,FileHandle) Then
+   FindOrCreateFile:=0
+  Else
+   FindOrCreateFile:=4; { Too many open files }
+ End;
+End;
+
+{ Fonction principale 3Ch }
+Function DOS3Ch_CreateOpenFile(PathPtr:Pointer):Word;
+Var
+ Path: String;
+ Drive: Byte;
+ DirPath,FileName: String;
+ BootSec: BootSectorRec;
+ FileHandle: Word;
+ P: PChar;
+ I: Byte;
+ Result: Word;
+Begin
+ DOS3Ch_CreateOpenFile:=$FFFF; { Erreur par défaut }
+ 
+ { Convertir pointeur ASCIIZ en string Pascal }
+ P:=PChar(PathPtr);
+ Path:='';
+ I:=0;
+ While (P^ <> #0) and (I < 255) Do Begin
+  Path:=Path + P^;
+  Inc(P);
+  Inc(I);
+ End;
+ 
+ { Analyser le chemin }
+ If Not ParseFilePath(Path,Drive,DirPath,FileName) Then Begin
+  DOS3Ch_CreateOpenFile:=$FFFF; { Invalid path }
+  Exit;
+ End;
+ 
+ { Lire boot sector }
+ If Not ReadBootSector(Drive,BootSec) Then Begin
+  DOS3Ch_CreateOpenFile:=$FFFF; { Invalid drive }
+  Exit;
+ End;
+ 
+ { Trouver ou créer le fichier }
+ Result:=FindOrCreateFile(Drive,BootSec,DirPath,FileName,0,FileHandle);
+ 
+ { Si succès, retourner le handle }
+ If Result = 0 Then
+  DOS3Ch_CreateOpenFile:=FileHandle
+ Else
+  DOS3Ch_CreateOpenFile:=Result;
+End;Procedure SetIntVec(AL:Byte;DS,DX:Word);
 Var
  TableInt:Array[Byte]of Pointer Absolute 0:0;
 Begin
