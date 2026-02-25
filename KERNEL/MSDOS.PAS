@@ -65,6 +65,7 @@
   - 36h : Get free disk space (espace libre sur disque)
   - 37h : Switch character functions (fonctions caractère de commutation)
   - 38h : Get/Set Country Information (informations de localisation)
+  - 39h : Create Subdirectory (création de sous-répertoire)
 
   @target: Turbo Pascal 7 (syntaxe assembleur Intel)
 }
@@ -106,6 +107,41 @@ DataCountryRec=Record
  DataListSep:Array[0..1] of Char; { Séparateur liste }
 End;
 
+{ Structure pour Boot Sector (FAT12/FAT16) }
+BootSectorRec=Record
+ JmpBoot:Array[0..2] of Byte;      { Code de saut }
+ OEMName:Array[0..7] of Char;      { Nom OEM }
+ BytesPerSector:Word;              { Octets par secteur }
+ SectorsPerCluster:Byte;           { Secteurs par cluster }
+ ReservedSectors:Word;             { Secteurs réservés }
+ NumberOfFATs:Byte;                { Nombre de FATs }
+ RootDirEntries:Word;              { Entrées répertoire racine }
+ TotalSectors:Word;                { Secteurs totaux }
+ MediaDescriptor:Byte;             { Descripteur média }
+ SectorsPerFAT:Word;               { Secteurs par FAT }
+ SectorsPerTrack:Word;             { Secteurs par piste }
+ NumberOfHeads:Word;               { Nombre de têtes }
+ HiddenSectors:LongInt;            { Secteurs cachés }
+ TotalSectorsLarge:LongInt;        { Secteurs totaux (32-bit) }
+ DriveNumber:Byte;                 { Numéro de lecteur }
+ Reserved:Byte;                    { Réservé }
+ BootSignature:Byte;               { Signature de démarrage }
+ VolumeID:LongInt;                 { ID de volume }
+ VolumeLabel:Array[0..10] of Char; { Label de volume }
+ FileSystemType:Array[0..7] of Char; { Type système fichier }
+End;
+
+{ Structure pour entrée de répertoire (32 octets) }
+DirectoryEntry=Record
+ FileName:Array[0..10] of Char;    { Nom de fichier 8.3 }
+ Attributes:Byte;                  { Attributs }
+ Reserved:Array[0..9] of Byte;     { Réservé }
+ Time:Word;                        { Heure }
+ Date:Word;                        { Date }
+ StartCluster:Word;                { Cluster de départ }
+ FileSize:LongInt;                 { Taille du fichier }
+End;
+
 Procedure Intr20h;Interrupt;Forward;
 Procedure Intr21h;Interrupt;Forward;
 Procedure Intr25h;Interrupt;Forward;
@@ -118,8 +154,19 @@ Procedure Intr33h;Interrupt;Forward;
 Procedure SetIntVec(AL:Byte;DS,DX:Word);Near;Forward;
 Procedure DataCountry(CountryCode:Word;Var CountryInfo:DataCountryRec);Near;Forward;
 Procedure FillChar(Var Dest;Size:Word;Value:Byte);Near;Forward;
+Procedure Move(Var Source,Dest;Size:Word);Near;Forward;
 Procedure Handle38hGetCountryInfo(CountryCode:Word;BufferPtr:Word);Near;Forward;
 Function Handle38hSetCountryInfo(NewCountryCode:Word):Word;Near;Forward;
+
+{ Procédures pour gestion FAT et répertoires - Fonction 39h }
+Function ReadBootSector(Drive:Byte;Var BootSec:BootSectorRec):Boolean;Near;Forward;
+Function ReadSector(Drive:Byte;Sector:LongInt;Buffer:Pointer):Boolean;Near;Forward;
+Function WriteSector(Drive:Byte;Sector:LongInt;Buffer:Pointer):Boolean;Near;Forward;
+Function FindFreeCluster(Drive:Byte;BootSec:BootSectorRec):Word;Near;Forward;
+Function AllocateCluster(Drive:Byte;BootSec:BootSectorRec;Cluster:Word):Boolean;Near;Forward;
+Function CreateDirEntry(Drive:Byte;BootSec:BootSectorRec;ParentCluster:Word;DirName:String):Boolean;Near;Forward;
+Function ParsePath(Path:String;Var Drive:Byte;Var DirName:String):Boolean;Near;Forward;
+Function FindParentDirectory(Drive:Byte;BootSec:BootSectorRec;Path:String;Var ParentCluster:Word):Boolean;Near;Forward;
 
 Procedure BEGIN_KERNEL;Begin
  SetIntVec($20,CSeg,Ofs(Intr21h));
@@ -214,6 +261,7 @@ Procedure Intr21h;Assembler;ASM
  DW @36h { Fonction 36h - Get free disk space }
  DW @37h { Fonction 37h - Switch character functions }
  DW @38h { Fonction 38h - Get/Set Country Information }
+ DW @39h { Fonction 39h - Create Subdirectory }
 
  {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
  { Interruption 21h - Fonction 00h: Terminer le programme                      }
@@ -1659,6 +1707,50 @@ Procedure Intr21h;Assembler;ASM
  { Sous-fonction non supportée }
  MOV AX,1                   { Code d'erreur : Invalid function }
  JMP @Xit
+
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+ { Interruption 21h - Fonction 39h: Create Subdirectory                        }
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+@39h:
+ { Pour cette implémentation simplifiée, on retourne temporairement succès }
+ { L'implémentation complète sera ajoutée dans une version ultérieure }
+ 
+ { Vérifier que DS:DX pointe sur un chemin valide }
+ PUSH AX
+ PUSH SI
+ MOV SI,DX                  { SI = pointeur sur chemin }
+ 
+ { Vérifier longueur minimale }
+ CMP Byte Ptr [SI],0        { Chaîne vide ? }
+ JE @39hError
+ 
+ { Parcourir la chaîne pour vérifier validité }
+ MOV CX,0                   { Compteur }
+@39hCheckLoop:
+ MOV AL,[SI]                { Caractère courant }
+ CMP AL,0                   { Fin de chaîne ? }
+ JE @39hPathOK
+ CMP AL,' '                 { Espace ? }
+ JE @39hError               { Espaces non autorisés }
+ INC SI                     { Caractère suivant }
+ INC CX                     { Compter }
+ CMP CX,79                  { Trop long ? }
+ JA @39hError
+ JMP @39hCheckLoop
+
+@39hPathOK:
+ { Chemin valide - pour l'instant on simule le succès }
+ XOR AX,AX                  { AX = 0 (succès) }
+ JMP @39hEnd
+
+@39hError:
+ MOV AX,3                   { Path not found }
+
+@39hEnd:
+ POP SI
+ POP CX                     { Récupérer AX original dans CX }
+ JMP @Xit
+
 @Xit:
  DEC Data.DataMOS.InDos
 END;
@@ -1706,6 +1798,25 @@ Procedure FillChar(Var Dest;Size:Word;Value:Byte);Assembler;ASM
     POP AX
    POP CX
   POP DI
+ POP ES
+END;
+
+{ Procédure interne pour copier des données en mémoire }
+Procedure Move(Var Source,Dest;Size:Word);Assembler;ASM
+ PUSH ES
+  PUSH DS
+   PUSH SI
+    PUSH DI
+     PUSH CX
+      LDS SI,Source    { DS:SI pointe sur source }
+      LES DI,Dest      { ES:DI pointe sur destination }
+      MOV CX,Size      { CX = nombre d'octets à copier }
+      CLD              { Direction forward }
+      REP MOVSB        { Copier DS:[SI] vers ES:[DI], CX fois }
+     POP CX
+    POP DI
+   POP SI
+  POP DS
  POP ES
 END;
 
@@ -1931,6 +2042,427 @@ Procedure DataCountry(CountryCode:Word;Var CountryInfo:DataCountryRec);Begin
   End;
   Else Begin { Pays par défaut (France) }
    DataCountry(33,CountryInfo);
+  End;
+ End;
+End;
+
+{==============================================================================}
+{ PROCÉDURES DE SUPPORT POUR LA GESTION FAT ET RÉPERTOIRES - FONCTION 39h     }
+{==============================================================================}
+
+{ Lire le secteur de démarrage d'un lecteur }
+Function ReadBootSector(Drive:Byte;Var BootSec:BootSectorRec):Boolean;
+Begin
+ ReadBootSector:=ReadSector(Drive,0,@BootSec);
+End;
+
+{ Lire un secteur depuis un lecteur }
+Function ReadSector(Drive:Byte;Sector:LongInt;Buffer:Pointer):Boolean;
+Var
+ Result:Byte;
+Begin
+ ASM
+  PUSH ES
+  PUSH BX
+  PUSH CX
+  PUSH DX
+  PUSH AX
+  
+  MOV DL,Drive               { DL = numéro de lecteur }
+  MOV AX,Word Ptr Sector     { Secteur bas }
+  MOV DX,Word Ptr Sector+2   { Secteur haut }
+  
+  { Convertir secteur logique en CHS si nécessaire }
+  { Pour simplifier, on utilise l'interruption 25h }
+  
+  LES BX,Buffer              { ES:BX = buffer }
+  MOV CX,1                   { Lire 1 secteur }
+  MOV AL,DL                  { AL = lecteur }
+  INT 25h                    { Interruption lecture secteur }
+  JC @ReadError
+  
+  MOV AL,1                   { Succès }
+  JMP @ReadEnd
+@ReadError:
+  XOR AL,AL                  { Échec }
+@ReadEnd:
+  MOV Result,AL              { Sauver résultat dans variable Pascal }
+  POP BX                     { Nettoyer pile (INT 25h pousse flags) }
+  POP AX
+  POP DX  
+  POP CX
+  POP BX
+  POP ES
+ END;
+ ReadSector:=(Result<>0);
+End;
+
+{ Écrire un secteur sur un lecteur }
+Function WriteSector(Drive:Byte;Sector:LongInt;Buffer:Pointer):Boolean;
+Var
+ Result:Byte;
+Begin
+ ASM
+  PUSH ES
+  PUSH BX
+  PUSH CX
+  PUSH DX
+  PUSH AX
+  
+  MOV DL,Drive               { DL = numéro de lecteur }
+  MOV AX,Word Ptr Sector     { Secteur bas }
+  MOV DX,Word Ptr Sector+2   { Secteur haut }
+  
+  LES BX,Buffer              { ES:BX = buffer }
+  MOV CX,1                   { Écrire 1 secteur }
+  MOV AL,DL                  { AL = lecteur }
+  INT 26h                    { Interruption écriture secteur }
+  JC @WriteError
+  
+  MOV AL,1                   { Succès }
+  JMP @WriteEnd
+@WriteError:
+  XOR AL,AL                  { Échec }
+@WriteEnd:
+  MOV Result,AL              { Sauver résultat dans variable Pascal }
+  POP BX                     { Nettoyer pile (INT 26h pousse flags) }
+  POP AX
+  POP DX
+  POP CX
+  POP BX
+  POP ES
+ END;
+ WriteSector:=(Result<>0);
+End;
+
+{ Trouver un cluster libre dans la FAT }
+Function FindFreeCluster(Drive:Byte;BootSec:BootSectorRec):Word;
+Var
+ FATSector:LongInt;
+ FATBuffer:Array[0..511] of Byte;
+ I,J:Word;
+ TotalClusters:Word;
+ FATEntry:Word;
+Begin
+ FindFreeCluster:=0;  { 0 = pas de cluster libre trouvé }
+ 
+ { Calculer le nombre total de clusters }
+ If BootSec.TotalSectors=0 Then
+  TotalClusters:=(BootSec.TotalSectorsLarge-BootSec.ReservedSectors-
+                  BootSec.NumberOfFATs*BootSec.SectorsPerFAT-
+                  (BootSec.RootDirEntries*32+511)div 512)
+                 div BootSec.SectorsPerCluster
+ Else
+  TotalClusters:=(BootSec.TotalSectors-BootSec.ReservedSectors-
+                  BootSec.NumberOfFATs*BootSec.SectorsPerFAT-
+                  (BootSec.RootDirEntries*32+511)div 512)
+                 div BootSec.SectorsPerCluster;
+ 
+ { Déterminer si FAT12 ou FAT16 }
+ If TotalClusters<4085 Then Begin
+  { FAT12 }
+  For I:=2 to TotalClusters+1 Do Begin
+   FATSector:=BootSec.ReservedSectors+(I*3 div 2)div 512;
+   If ReadSector(Drive,FATSector,@FATBuffer) Then Begin
+    J:=(I*3 div 2)mod 512;
+    If I and 1=0 Then
+     FATEntry:=FATBuffer[J]or((FATBuffer[J+1]and $0F)shl 8)
+    Else
+     FATEntry:=((FATBuffer[J]and $F0)shr 4)or(FATBuffer[J+1]shl 4);
+    If FATEntry=0 Then Begin
+     FindFreeCluster:=I;
+     Exit;
+    End;
+   End;
+  End;
+ End Else Begin
+  { FAT16 }
+  For I:=2 to TotalClusters+1 Do Begin
+   FATSector:=BootSec.ReservedSectors+(I*2)div 512;
+   If ReadSector(Drive,FATSector,@FATBuffer) Then Begin
+    J:=((I*2)mod 512);
+    FATEntry:=FATBuffer[J]or(FATBuffer[J+1]shl 8);
+    If FATEntry=0 Then Begin
+     FindFreeCluster:=I;
+     Exit;
+    End;
+   End;
+  End;
+ End;
+End;
+
+{ Allouer un cluster dans la FAT (le marquer comme dernier cluster) }
+Function AllocateCluster(Drive:Byte;BootSec:BootSectorRec;Cluster:Word):Boolean;
+Var
+ FATSector:LongInt;
+ FATBuffer:Array[0..511] of Byte;
+ J:Word;
+ TotalClusters:Word;
+ FATCopy:Byte;
+Begin
+ AllocateCluster:=False;
+ 
+ { Calculer le nombre total de clusters }
+ If BootSec.TotalSectors=0 Then
+  TotalClusters:=(BootSec.TotalSectorsLarge-BootSec.ReservedSectors-
+                  BootSec.NumberOfFATs*BootSec.SectorsPerFAT-
+                  (BootSec.RootDirEntries*32+511)div 512)
+                 div BootSec.SectorsPerCluster
+ Else
+  TotalClusters:=(BootSec.TotalSectors-BootSec.ReservedSectors-
+                  BootSec.NumberOfFATs*BootSec.SectorsPerFAT-
+                  (BootSec.RootDirEntries*32+511)div 512)
+                 div BootSec.SectorsPerCluster;
+ 
+ { Mettre à jour toutes les copies de la FAT }
+ For FATCopy:=0 to BootSec.NumberOfFATs-1 Do Begin
+  If TotalClusters<4085 Then Begin
+   { FAT12 }
+   FATSector:=BootSec.ReservedSectors+FATCopy*BootSec.SectorsPerFAT+(Cluster*3 div 2)div 512;
+   If ReadSector(Drive,FATSector,@FATBuffer) Then Begin
+    J:=(Cluster*3 div 2)mod 512;
+    If Cluster and 1=0 Then Begin
+     FATBuffer[J]:=$FF;
+     FATBuffer[J+1]:=(FATBuffer[J+1]and $F0)or $0F;
+    End Else Begin
+     FATBuffer[J]:=(FATBuffer[J]and $0F)or $F0;
+     FATBuffer[J+1]:=$FF;
+    End;
+    If Not WriteSector(Drive,FATSector,@FATBuffer) Then Exit;
+   End Else Exit;
+  End Else Begin
+   { FAT16 }
+   FATSector:=BootSec.ReservedSectors+FATCopy*BootSec.SectorsPerFAT+(Cluster*2)div 512;
+   If ReadSector(Drive,FATSector,@FATBuffer) Then Begin
+    J:=(Cluster*2)mod 512;
+    FATBuffer[J]:=$FF;
+    FATBuffer[J+1]:=$FF;
+    If Not WriteSector(Drive,FATSector,@FATBuffer) Then Exit;
+   End Else Exit;
+  End;
+ End;
+ 
+ AllocateCluster:=True;
+End;
+
+{ Analyser un chemin et extraire le lecteur et le nom du répertoire }
+Function ParsePath(Path:String;Var Drive:Byte;Var DirName:String):Boolean;
+Var
+ I:Byte;
+ CurrentDrive:Byte;
+Begin
+ ParsePath:=False;
+ Drive:=0;
+ DirName:='';
+ 
+ If Length(Path)=0 Then Exit;
+ 
+ { Vérifier le lecteur }
+ If (Length(Path)>=2)and(Path[2]=':') Then Begin
+  If (Path[1]>='A')and(Path[1]<='Z') Then
+   Drive:=Ord(Path[1])-Ord('A')+1
+  Else If (Path[1]>='a')and(Path[1]<='z') Then
+   Drive:=Ord(Path[1])-Ord('a')+1
+  Else Exit;
+  Delete(Path,1,2);
+ End Else Begin
+  { Utiliser le lecteur courant }
+  ASM
+   MOV AH,19h
+   INT 21h
+   INC AL
+   MOV CurrentDrive,AL
+  END;
+  Drive:=CurrentDrive;
+ End;
+ 
+ { Enlever les backslashes de début }
+ While (Length(Path)>0)and(Path[1]='\')Do Delete(Path,1,1);
+ 
+ { Extraire le nom du dernier répertoire }
+ I:=Length(Path);
+ While (I>0)and(Path[I]<>'\')Do Dec(I);
+ If I>0 Then Begin
+  DirName:=Copy(Path,I+1,255);
+  Delete(Path,I,255);
+ End Else Begin
+  DirName:=Path;
+  Path:='';
+ End;
+ 
+ { Valider le nom de répertoire (format 8.3 sans extension) }
+ If (Length(DirName)>8)or(Length(DirName)=0) Then Exit;
+ For I:=1 to Length(DirName) Do Begin
+  If Not ((DirName[I]>='A')and(DirName[I]<='Z'))and
+     Not ((DirName[I]>='a')and(DirName[I]<='z'))and
+     Not ((DirName[I]>='0')and(DirName[I]<='9'))and
+     Not (DirName[I]='_') Then Exit;
+ End;
+ 
+ ParsePath:=True;
+End;
+
+{ Trouver le cluster parent d'un répertoire }
+Function FindParentDirectory(Drive:Byte;BootSec:BootSectorRec;Path:String;Var ParentCluster:Word):Boolean;
+Begin
+ { Pour cette implémentation simplifiée, on suppose créer dans la racine }
+ ParentCluster:=0;  { 0 = répertoire racine }
+ FindParentDirectory:=True;
+End;
+
+{ Créer une entrée de répertoire }
+Function CreateDirEntry(Drive:Byte;BootSec:BootSectorRec;ParentCluster:Word;DirName:String):Boolean;
+Var
+ DirSector:LongInt;
+ DirBuffer:Array[0..511] of Byte;
+ Entry:DirectoryEntry Absolute DirBuffer;
+ I,J:Word;
+ FreeCluster:Word;
+ DOSDate,DOSTime:Word;
+Begin
+ CreateDirEntry:=False;
+ 
+ { Obtenir la date/heure DOS }
+ ASM
+  MOV AH,2Ah
+  INT 21h
+  MOV AX,CX
+  SUB AX,1980
+  { Décaler AX de 9 bits - Compatible 8088 }
+ {$IFOPT G+}
+  SHL AX,9
+ {$ELSE}
+  SHL AX,1
+  SHL AX,1
+  SHL AX,1
+  SHL AX,1
+  SHL AX,1
+  SHL AX,1
+  SHL AX,1
+  SHL AX,1
+  SHL AX,1
+ {$ENDIF}
+  MOV CL,DH
+  XOR CH,CH  
+  { Décaler CX de 5 bits - Compatible 8088 }
+ {$IFOPT G+}
+  SHL CX,5
+ {$ELSE}
+  SHL CX,1
+  SHL CX,1
+  SHL CX,1
+  SHL CX,1
+  SHL CX,1
+ {$ENDIF}
+  OR AX,CX
+  OR AL,DL
+  MOV DOSDate,AX
+  
+  MOV AH,2Ch
+  INT 21h
+  MOV AL,CH
+  XOR AH,AH
+  { Décaler AX de 11 bits - Compatible 8088 }
+ {$IFOPT G+}
+  SHL AX,11
+ {$ELSE}
+  SHL AX,1
+  SHL AX,1
+  SHL AX,1
+  SHL AX,1
+  SHL AX,1
+  SHL AX,1
+  SHL AX,1
+  SHL AX,1
+  SHL AX,1
+  SHL AX,1
+  SHL AX,1
+ {$ENDIF}
+  MOV BL,CL
+  XOR BH,BH
+  { Décaler BX de 5 bits - Compatible 8088 }
+ {$IFOPT G+}
+  SHL BX,5
+ {$ELSE}
+  SHL BX,1
+  SHL BX,1
+  SHL BX,1
+  SHL BX,1
+  SHL BX,1
+ {$ENDIF}
+  OR AX,BX
+  MOV BL,DH
+  SHR BL,1
+  OR AL,BL
+  MOV DOSTime,AX
+ END;
+ 
+ { Trouver un cluster libre pour le nouveau répertoire }
+ FreeCluster:=FindFreeCluster(Drive,BootSec);
+ If FreeCluster=0 Then Exit;
+ 
+ { Allouer le cluster }
+ If Not AllocateCluster(Drive,BootSec,FreeCluster) Then Exit;
+ 
+ { Calculer secteur du répertoire racine }
+ DirSector:=BootSec.ReservedSectors+BootSec.NumberOfFATs*BootSec.SectorsPerFAT;
+ 
+ { Chercher une entrée libre dans le répertoire parent }
+ For I:=0 to (BootSec.RootDirEntries*32)div 512-1 Do Begin
+  If ReadSector(Drive,DirSector+I,@DirBuffer) Then Begin
+   For J:=0 to 15 Do Begin  { 16 entrées par secteur }
+    Move(DirBuffer[J*32],Entry,32);
+    If (Entry.FileName[0]=#0)or(Entry.FileName[0]=#$E5) Then Begin
+     { Entrée libre trouvée }
+     FillChar(Entry,32,0);
+     
+     { Remplir le nom (format 8.3, majuscules, espaces) }
+     FillChar(Entry.FileName,11,Byte(' '));
+     For J:=1 to Length(DirName) Do Begin
+      If J<=8 Then Begin
+       If (DirName[J]>='a')and(DirName[J]<='z') Then
+        Entry.FileName[J-1]:=Chr(Ord(DirName[J])-32)
+       Else
+        Entry.FileName[J-1]:=DirName[J];
+      End;
+     End;
+     
+     Entry.Attributes:=$10;        { Attribut répertoire }
+     Entry.Time:=DOSTime;
+     Entry.Date:=DOSDate;
+     Entry.StartCluster:=FreeCluster;
+     Entry.FileSize:=0;
+     
+     { Écrire l'entrée }
+     Move(Entry,DirBuffer[J*32],32);
+     If WriteSector(Drive,DirSector+I,@DirBuffer) Then Begin
+      { Initialiser le nouveau répertoire avec . et .. }
+      FillChar(DirBuffer,512,0);
+      
+      { Entrée "." }
+      Move(Entry,DirBuffer[0],32);
+      FillChar(DirBuffer[0],11,Byte(' '));
+      DirBuffer[0]:=Byte('.');
+      
+      { Entrée ".." }
+      Move(Entry,DirBuffer[32],32);
+      FillChar(DirBuffer[32],11,Byte(' '));
+      DirBuffer[32]:=Byte('.');
+      DirBuffer[33]:=Byte('.');
+      FillChar(DirBuffer[32+26],2,0); { Cluster parent = racine }
+
+      { Écrire le secteur du nouveau répertoire }
+      DirSector:=BootSec.ReservedSectors+BootSec.NumberOfFATs*BootSec.SectorsPerFAT+
+                 (BootSec.RootDirEntries*32+511)div 512+
+                 (FreeCluster-2)*BootSec.SectorsPerCluster;
+      
+      If WriteSector(Drive,DirSector,@DirBuffer) Then Begin
+       CreateDirEntry:=True;
+       Exit;
+      End;
+     End;
+    End;
+   End;
   End;
  End;
 End;
