@@ -23,6 +23,18 @@
   - 0Ah : Lecture de chaine avec buffer
   - 0Bh : l'etat d'entree
   - 0Ch : Vider le tampon et appeler la fonction d'entree
+  - 39h : Creer un repertoire (MKDIR)
+  - 3Ah : Supprimer un repertoire (RMDIR) 
+  - 3Bh : Changer le repertoire courant (CHDIR)
+  - 3Ch : Creer ou ouvrir un fichier
+  - 3Dh : Ouvrir un fichier existant
+  - 3Eh : Fermer un handle de fichier
+  - 3Fh : Lire depuis un fichier
+  - 40h : Ecrire dans un fichier
+  - 41h : Supprimer un fichier (DELETE)
+  - 42h : Deplacer le pointeur de fichier (LSEEK)
+  - 43h : Obtenir/Definir les attributs de fichier
+  - 44h : IOCTL (Controle d'entree/sortie)
   - 0Dh : Reinitialisation du disque
   - 0Eh : Selectionne le lecteur courant
   - 0Fh : Ouvrir un fichier avec FCB
@@ -338,6 +350,15 @@ Function GetFileAttributes(Drive:Byte;BootSec:BootSectorRec;DirCluster:Word;
 Function SetFileAttributes(Drive:Byte;BootSec:BootSectorRec;DirCluster:Word;
                            FileName:String;NewAttributes:Byte):Boolean;Near;Forward;
 Function DOS43h_GetSetFileAttributes(PathPtr:Pointer;Action:Byte;NewAttributes:Byte):Word;Near;Forward;
+
+{ Forward declarations pour fonction 44h }
+Function IOCTL_GetDeviceInfo(Handle:Word):Word;Near;Forward;
+Function IOCTL_SetDeviceInfo(Handle:Word;DeviceInfo:Word):Word;Near;Forward;
+Function IOCTL_GetDriveInfo(Drive:Byte):Word;Near;Forward;
+Function IOCTL_SetDriveInfo(Drive:Byte;DeviceInfo:Word):Word;Near;Forward;
+Function IOCTL_ReadControlData(Handle:Word;Buffer:Pointer;BytesToRead:Word):Word;Near;Forward;
+Function IOCTL_WriteControlData(Handle:Word;Buffer:Pointer;BytesToWrite:Word):Word;Near;Forward;
+Function DOS44h_IOCTL(Handle:Word;SubFunction:Byte;Buffer:Pointer;ByteCount:Word):Word;Near;Forward;
 
 { Fonctions d'accès aux données dans Code Segment }
 Function GetCurrentDrive: Byte;Near;Forward;
@@ -683,6 +704,7 @@ Procedure Intr21h;Assembler;ASM
  DW @41h { Fonction 41h - Delete File }
  DW @42h { Fonction 42h - Seek File }
  DW @43h { Fonction 43h - Get/Set File Attributes }
+ DW @44h { Fonction 44h - IOCTL (Input/Output Control) }
 
  {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
  { Interruption 21h - Fonction 00h: Terminer le programme                      }
@@ -2538,6 +2560,42 @@ Procedure Intr21h;Assembler;ASM
  STC                        { Set Carry Flag }
 
 @43hEnd:
+ POP DI
+ POP SI
+ POP CX
+ JMP @Xit
+
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+ { Interruption 21h - Fonction 44h: IOCTL (Input/Output Control)              }
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+@44h:
+ PUSH CX                    { Sauvegarder les registres }
+ PUSH SI
+ PUSH DI
+
+ { Paramètres: BX = handle, AL = sous-fonction, CX = nombre d'octets, DS:DX = buffer }
+ PUSH CX                    { Nombre d'octets }
+ PUSH DX                    { Buffer (offset) }
+ PUSH DS                    { Buffer (segment) }
+ PUSH AX                    { Sous-fonction (AL) }
+ PUSH BX                    { Handle }
+
+ CALL DOS44h_IOCTL          { Appeler fonction Pascal }
+ ADD SP,10                  { Nettoyer pile (5 mots = 10 octets) }
+
+ { AX contient le résultat }
+ CMP AX,0                   { Vérifier si succès }
+ JE @44hSuccess             { Si succès }
+
+ { Erreur }
+ STC                        { Set Carry Flag }
+ JMP @44hEnd
+
+@44hSuccess:
+ { Succès }
+ CLC                        { Clear Carry Flag }
+
+@44hEnd:
  POP DI
  POP SI
  POP CX
@@ -6240,6 +6298,194 @@ Begin
   
   Else
    DOS43h_GetSetFileAttributes:=$FFFF; { Invalid action }
+ End;
+End;
+
+{ Obtenir les informations d'un périphérique (sous-fonction 00h) }
+Function IOCTL_GetDeviceInfo(Handle:Word):Word;
+Var
+ FileEntry: FileTableEntry;
+ DeviceInfo: Word;
+Begin
+ IOCTL_GetDeviceInfo:=$FFFF; { Erreur par défaut }
+ 
+ { Vérifier la validité du handle }
+ If Handle >= 20 Then Exit;
+ 
+ If Not GetFileTableEntry(Handle, FileEntry) Then Exit;
+ 
+ { Vérifier si le handle est utilisé }
+ If Not FileEntry.InUse Then Exit;
+ 
+ { Construire les informations du périphérique }
+ DeviceInfo:=0;
+ 
+ { Handle 0-4 sont les périphériques standard }
+ Case Handle Of
+  0: DeviceInfo:=$80D3; { STDIN - caractère, pas EOF, standard input }
+  1: DeviceInfo:=$80D2; { STDOUT - caractère, standard output }
+  2: DeviceInfo:=$80D2; { STDERR - caractère, standard error }
+  3: DeviceInfo:=$80C0; { STDAUX - caractère, null device }
+  4: DeviceInfo:=$80A0; { STDPRN - caractère, printer }
+  Else Begin
+   { Fichier normal - informations basées sur le lecteur }
+   DeviceInfo:=FileEntry.Drive - 1; { Numéro de lecteur (0=A:, 1=B:, etc.) }
+   { Pas de flags spéciaux pour les fichiers normaux }
+  End;
+ End;
+ 
+ IOCTL_GetDeviceInfo:=DeviceInfo;
+End;
+
+{ Définir les informations d'un périphérique (sous-fonction 01h) }
+Function IOCTL_SetDeviceInfo(Handle:Word;DeviceInfo:Word):Word;
+Var
+ FileEntry: FileTableEntry;
+Begin
+ IOCTL_SetDeviceInfo:=1; { Invalid function par défaut }
+ 
+ { Vérifier la validité du handle }
+ If Handle >= 20 Then Exit;
+ 
+ If Not GetFileTableEntry(Handle, FileEntry) Then Exit;
+ 
+ { Vérifier si le handle est utilisé }
+ If Not FileEntry.InUse Then Exit;
+ 
+ { Les handles 0-4 sont en lecture seule pour les informations }
+ If Handle <= 4 Then Exit;
+ 
+ { Pour les fichiers normaux, on ne peut pas changer les infos de périphérique }
+ { Cette fonction est principalement pour les drivers de périphériques }
+ 
+ IOCTL_SetDeviceInfo:=0; { Succès simulé }
+End;
+
+{ Obtenir les informations d'un lecteur (sous-fonction 08h) }
+Function IOCTL_GetDriveInfo(Drive:Byte):Word;
+Var
+ BootSec: BootSectorRec;
+ DriveInfo: Word;
+Begin
+ IOCTL_GetDriveInfo:=$FFFF; { Erreur par défaut }
+ 
+ { Vérifier que le lecteur est valide }
+ If Drive >= 26 Then Exit; { A: à Z: seulement }
+ 
+ { Lire le boot sector pour vérifier que le lecteur existe }
+ If Not ReadBootSector(Drive, BootSec) Then Exit;
+ 
+ { Construire les informations du lecteur }
+ DriveInfo:=0;
+ 
+ { Bit 0: 0=amovible, 1=fixe }
+ If Drive >= 2 Then { C: et plus sont considérés comme fixes }
+  DriveInfo:=DriveInfo or $01;
+ 
+ { Bits supplémentaires pour type de média et capacités }
+ Case Drive Of
+  0, 1: DriveInfo:=DriveInfo or $00; { A:, B: - disquettes amovibles }
+  Else  DriveInfo:=DriveInfo or $01; { Disques durs fixes }
+ End;
+ 
+ IOCTL_GetDriveInfo:=DriveInfo;
+End;
+
+{ Définir les informations d'un lecteur (sous-fonction 09h) }
+Function IOCTL_SetDriveInfo(Drive:Byte;DeviceInfo:Word):Word;
+Begin
+ IOCTL_SetDriveInfo:=1; { Invalid function }
+ 
+ { Vérifier que le lecteur est valide }
+ If Drive >= 26 Then Exit;
+ 
+ { Cette fonction n'est généralement pas implémentée }
+ { Elle permettrait de changer les paramètres du lecteur }
+ 
+ IOCTL_SetDriveInfo:=0; { Succès simulé }
+End;
+
+{ Lire les données de contrôle (sous-fonction 02h) }
+Function IOCTL_ReadControlData(Handle:Word;Buffer:Pointer;BytesToRead:Word):Word;
+Begin
+ IOCTL_ReadControlData:=1; { Invalid function par défaut }
+ 
+ { Cette fonction lit des données spéciales du périphérique }
+ { Non implémentée dans cette version basique }
+ 
+ IOCTL_ReadControlData:=0; { Pas de données lues }
+End;
+
+{ Écrire les données de contrôle (sous-fonction 03h) }
+Function IOCTL_WriteControlData(Handle:Word;Buffer:Pointer;BytesToWrite:Word):Word;
+Begin
+ IOCTL_WriteControlData:=1; { Invalid function par défaut }
+ 
+ { Cette fonction écrit des données spéciales vers le périphérique }
+ { Non implémentée dans cette version basique }
+ 
+ IOCTL_WriteControlData:=0; { Pas de données écrites }
+End;
+
+{ Fonction principale 44h - IOCTL }
+Function DOS44h_IOCTL(Handle:Word;SubFunction:Byte;Buffer:Pointer;ByteCount:Word):Word;
+Var
+ Result: Word;
+ Drive: Byte;
+Begin
+ DOS44h_IOCTL:=1; { Invalid function par défaut }
+ 
+ { Dispatcher selon la sous-fonction }
+ Case SubFunction Of
+  $00: Begin { Get device information }
+   Result:=IOCTL_GetDeviceInfo(Handle);
+   If Result <> $FFFF Then Begin
+    { Retourner l'information dans DX }
+    ASM
+     MOV AX,Result
+     MOV DX,AX
+    END;
+    DOS44h_IOCTL:=0;
+   End;
+  End;
+  
+  $01: Begin { Set device information }
+   { ByteCount contient les nouvelles informations }
+   Result:=IOCTL_SetDeviceInfo(Handle, ByteCount);
+   DOS44h_IOCTL:=Result;
+  End;
+  
+  $02: Begin { Read control data from character device }
+   Result:=IOCTL_ReadControlData(Handle, Buffer, ByteCount);
+   DOS44h_IOCTL:=Result;
+  End;
+  
+  $03: Begin { Write control data to character device }
+   Result:=IOCTL_WriteControlData(Handle, Buffer, ByteCount);
+   DOS44h_IOCTL:=Result;
+  End;
+  
+  $08: Begin { Get drive information }
+   Drive:=Handle; { Pour cette sous-fonction, Handle contient le numéro de lecteur }
+   Result:=IOCTL_GetDriveInfo(Drive);
+   If Result <> $FFFF Then Begin
+    { Retourner l'information dans DX }
+    ASM
+     MOV AX,Result
+     MOV DX,AX
+    END;
+    DOS44h_IOCTL:=0;
+   End;
+  End;
+  
+  $09: Begin { Set drive information }
+   Drive:=Handle;
+   Result:=IOCTL_SetDriveInfo(Drive, ByteCount);
+   DOS44h_IOCTL:=Result;
+  End;
+  
+  Else
+   DOS44h_IOCTL:=1; { Invalid function }
  End;
 End;
 
