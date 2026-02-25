@@ -62,6 +62,8 @@
     - 06h : Get DOS version
   - 34h : Demande l'adresse du drapeau InDos
   - 35h : Demande le vecteur d'interruption
+  - 36h : Get free disk space (espace libre sur disque)
+  - 37h : Switch character functions (fonctions caractère de commutation)
 
   @target: Turbo Pascal 7 (syntaxe assembleur Intel)
 }
@@ -187,6 +189,8 @@ Procedure Intr21h;Assembler;ASM
  DW @33h { Fonction 33h - Multi-fonction }
  DW @34h { Fonction 34h - Demande l'adresse du drapeau "InDos" }
  DW @35h { Fonction 35h - Demande le vecteur d'Interruption}
+ DW @36h { Fonction 36h - Get free disk space }
+ DW @37h { Fonction 37h - Switch character functions }
 
  {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
  { Interruption 21h - Fonction 00h: Terminer le programme                      }
@@ -1453,6 +1457,106 @@ Procedure Intr21h;Assembler;ASM
  SHL BX,1
  SHL BX,1
  LES BX,DWord Ptr ES:[BX]
+ JMP @Xit
+
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+ { Interruption 21h - Fonction 36h: Get free disk space                }
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
+@36h:
+ { Obtenir l'espace libre sur un lecteur spécifié }
+ { Entrée : DL = numéro de lecteur (0=défaut, 1=A:, 2=B:, 3=C:, etc.) }
+ { Sortie : AX = secteurs par cluster (-1 si erreur) }
+ {         BX = clusters libres disponibles }
+ {         CX = octets par secteur }  
+ {         DX = total clusters sur le lecteur }
+ PUSH AX                    { Sauver registres }
+ PUSH BX
+ PUSH CX
+ 
+ { Vérifier le numéro de lecteur }
+ CMP DL,0                   { Lecteur par défaut ? }
+ JE @36hDefaultDrive
+ CMP DL,26                  { Vérifier limite (A-Z) }
+ JA @36hError
+ 
+@36hDefaultDrive:
+ { Dans un DOS complet, cette fonction interrogerait le système de fichiers }
+ { Pour cette implémentation simplifiée, on simule les valeurs d'une disquette 1.44MB }
+ 
+ { Simuler les paramètres d'une disquette 1.44MB }
+ MOV AX,1                   { 1 secteur par cluster }
+ MOV BX,1440                { Environ 1440 clusters libres (exemple) }
+ MOV CX,512                 { 512 octets par secteur }
+ MOV DX,2880                { 2880 clusters total sur disquette 1.44MB }
+ 
+ POP CX                     { Restaurer les registres sauvés }
+ POP BX                     { mais on va les écraser avec nos valeurs }
+ POP AX
+ 
+ { Remettre nos valeurs calculées }
+ MOV AX,1                   { 1 secteur par cluster }
+ MOV BX,1440                { 1440 clusters libres }
+ MOV CX,512                 { 512 octets par secteur }
+ MOV DX,2880                { 2880 clusters total }
+ JMP @Xit
+
+@36hError:
+ { Lecteur invalide }
+ POP CX                     { Restaurer registres }
+ POP BX
+ POP AX
+ MOV AX,0FFFFh              { Code d'erreur : -1 dans AX }
+ JMP @Xit
+
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+ { Interruption 21h - Fonction 37h: Switch character functions         }
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
+@37h:
+ { Fonctions de caractère de commutation DOS }
+ { AL = sous-fonction : }
+ { 00h = Get switch character (généralement '/') }
+ { 01h = Set switch character }
+ { 02h = Get available device list }
+ { 03h = Set available device list }
+ 
+ CMP AL,00h                 { Sous-fonction 00h : Get switch character ? }
+ JE @37h00h
+ CMP AL,01h                 { Sous-fonction 01h : Set switch character ? }
+ JE @37h01h
+ CMP AL,02h                 { Sous-fonction 02h : Get device list ? }
+ JE @37h02h
+ CMP AL,03h                 { Sous-fonction 03h : Set device list ? }
+ JE @37h03h
+ JMP @37hUnknown
+
+@37h00h:
+ { Sous-fonction 00h : Get switch character }
+ { Sortie : DL = caractère de commutation (généralement '/') }
+ MOV DL,'/'                 { Caractère de commutation standard DOS }
+ JMP @Xit
+
+@37h01h:
+ { Sous-fonction 01h : Set switch character }
+ { Entrée : DL = nouveau caractère de commutation }
+ { Dans un DOS complet, on sauvegarderait ce caractère }
+ { Pour cette implémentation, on accepte mais on ne change rien }
+ JMP @Xit
+
+@37h02h:
+ { Sous-fonction 02h : Get available device list }
+ { Cette fonction était utilisée par certaines versions de DOS }
+ { pour obtenir des informations sur les périphériques disponibles }
+ MOV DL,0                   { Valeur par défaut }
+ JMP @Xit
+
+@37h03h:
+ { Sous-fonction 03h : Set available device list }
+ { Accepter la commande sans effet réel }
+ JMP @Xit
+
+@37hUnknown:
+ { Sous-fonction non supportée }
+ JMP @Xit
 
 @Xit:
  DEC Data.DataMOS.InDos
