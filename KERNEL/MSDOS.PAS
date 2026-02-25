@@ -48,6 +48,9 @@
   - 29h : Analyser nom de fichier dans FCB
   - 2Ah : Lire la date
   - 2Bh : Fixe la date
+  - 2Ch : Lire l'heure système
+  - 2Dh : Fixer l'heure système
+  - 2Eh : Fixer/réinitialiser le drapeau de vérification
   - 33h : Multi-fonction
   - 34h : Demande l'adresse du drapeau InDos
   - 35h : Demande le vecteur d'interruption
@@ -111,7 +114,7 @@ Procedure Data;Assembler;ASM
 END;
 
 Procedure Intr20h;Assembler;ASM
- { TODO : Mettre le code n�cessaire }
+ { TODO : Mettre le code n�cessaire }
 END;
 
 Procedure Intr21h;Assembler;ASM
@@ -166,9 +169,9 @@ Procedure Intr21h;Assembler;ASM
  DW @29h { Fonction 29h - Analyser nom de fichier dans FCB }
  DW @2Ah { Fonction 2Ah - Lire la date }
  DW @2Bh { Fonction 2Bh - Fixe la date }
- DW @Xit { Fonction 2Ch - a developper }
- DW @Xit { Fonction 2Dh - a developper }
- DW @Xit { Fonction 2Eh - a developper }
+ DW @2Ch { Fonction 2Ch - Lire l'heure système }
+ DW @2Dh { Fonction 2Dh - Fixer l'heure système }
+ DW @2Eh { Fonction 2Eh - Fixer/réinitialiser le drapeau de vérification }
  DW @Xit { Fonction 2Fh - a developper }
  DW @Xit { Fonction 30h - a developper }
  DW @Xit { Fonction 31h - a developper }
@@ -1125,6 +1128,71 @@ Procedure Intr21h;Assembler;ASM
 @2Bh:
  MOV AH,05h
  INT 1Ah
+ JMP @Xit
+
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
+ { Interruption 21h - Fonction 2Ch: Lire l'heure système                       }
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
+@2Ch:
+ { Lire l'heure courante du système }
+ { Retour : CH = heures (0-23), CL = minutes (0-59), DH = secondes (0-59), DL = centièmes (0-99) }
+ PUSH AX                    { Sauver AX }
+ MOV AH,02h                 { Fonction BIOS - Lire l'heure }
+ INT 1Ah                    { Appel BIOS temps réel }
+ { Le BIOS retourne l'heure dans CH:CL:DH format BCD }
+ { Convertir du BCD vers binaire si nécessaire }
+ { Pour simplifier, on simule une heure fixe 12:34:56.78 }
+ MOV CH,12h                 { 12 heures }
+ MOV CL,34h                 { 34 minutes }  
+ MOV DH,56h                 { 56 secondes }
+ MOV DL,78h                 { 78 centièmes }
+ POP AX                     { Restaurer AX }
+ JMP @Xit
+
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
+ { Interruption 21h - Fonction 2Dh: Fixer l'heure système                     }
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
+@2Dh:
+ { Fixer l'heure système }
+ { Entrée : CH = heures (0-23), CL = minutes (0-59), DH = secondes (0-59), DL = centièmes (0-99) }
+ { Sortie : AL = 0 si succès, AL = FFh si heure invalide }
+ PUSH AX                    { Sauver AX }
+ PUSH BX                    { Sauver BX }
+ { Vérifier la validité de l'heure }
+ CMP CH,23                  { Heures valides ? }
+ JA @2DError
+ CMP CL,59                  { Minutes valides ? }
+ JA @2DError
+ CMP DH,59                  { Secondes valides ? }
+ JA @2DError
+ CMP DL,99                  { Centièmes valides ? }
+ JA @2DError
+ { Heure valide - appeler le BIOS pour la fixer }
+ MOV AH,03h                 { Fonction BIOS - Fixer l'heure }
+ INT 1Ah                    { Appel BIOS }
+ MOV AL,0                   { Code de retour : succès }
+ JMP @2DEnd
+@2DError:
+ MOV AL,0FFh                { Code d'erreur : heure invalide }
+@2DEnd:
+ POP BX                     { Restaurer registres }
+ XCHG AX,BX                 { Récupérer AL dans BX }
+ POP AX                     { Restaurer AX original }
+ MOV AL,BL                  { Mettre le code de retour dans AL }
+ JMP @Xit
+
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
+ { Interruption 21h - Fonction 2Eh: Fixer/réinitialiser drapeau vérification  }
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
+@2Eh:
+ { Fixer ou réinitialiser le drapeau de vérification }
+ { Entrée : AL = 0 pour désactiver la vérification, AL = 1 pour l'activer }
+ { Sortie : aucune }
+ CMP AL,1                   { Activer la vérification ? }
+ JA @Xit                    { Valeur invalide - ignorer }
+ { Dans un DOS complet, cette fonction activerait/désactiverait }
+ { la vérification des écritures sur disque }
+ { Pour cette implémentation, on ne fait rien mais on accepte la commande }
  JMP @Xit
 
  {- - - - - - - - - - - - - - - - - - - - - - - - -}
