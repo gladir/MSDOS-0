@@ -23,18 +23,6 @@
   - 0Ah : Lecture de chaine avec buffer
   - 0Bh : l'etat d'entree
   - 0Ch : Vider le tampon et appeler la fonction d'entree
-  - 39h : Creer un repertoire (MKDIR)
-  - 3Ah : Supprimer un repertoire (RMDIR) 
-  - 3Bh : Changer le repertoire courant (CHDIR)
-  - 3Ch : Creer ou ouvrir un fichier
-  - 3Dh : Ouvrir un fichier existant
-  - 3Eh : Fermer un handle de fichier
-  - 3Fh : Lire depuis un fichier
-  - 40h : Ecrire dans un fichier
-  - 41h : Supprimer un fichier (DELETE)
-  - 42h : Deplacer le pointeur de fichier (LSEEK)
-  - 43h : Obtenir/Definir les attributs de fichier
-  - 44h : IOCTL (Controle d'entree/sortie)
   - 0Dh : Reinitialisation du disque
   - 0Eh : Selectionne le lecteur courant
   - 0Fh : Ouvrir un fichier avec FCB
@@ -94,6 +82,8 @@
   - 41h : Delete File (suppression de fichier)
   - 42h : Seek File (positionnement dans fichier)
   - 43h : Get/Set File Attributes (lecture/modification attributs fichier)
+  - 44h : IOCTL (contrôle d'entrée/sortie)
+  - 45h : Duplicate Handle (duplication de handle)
 
   @target: Turbo Pascal 7 (syntaxe assembleur Intel)
 }
@@ -359,6 +349,7 @@ Function IOCTL_SetDriveInfo(Drive:Byte;DeviceInfo:Word):Word;Near;Forward;
 Function IOCTL_ReadControlData(Handle:Word;Buffer:Pointer;BytesToRead:Word):Word;Near;Forward;
 Function IOCTL_WriteControlData(Handle:Word;Buffer:Pointer;BytesToWrite:Word):Word;Near;Forward;
 Function DOS44h_IOCTL(Handle:Word;SubFunction:Byte;Buffer:Pointer;ByteCount:Word):Word;Near;Forward;
+Function DOS45h_DuplicateHandle(SourceHandle:Word):Word;Near;Forward;
 
 { Fonctions d'accès aux données dans Code Segment }
 Function GetCurrentDrive: Byte;Near;Forward;
@@ -705,6 +696,7 @@ Procedure Intr21h;Assembler;ASM
  DW @42h { Fonction 42h - Seek File }
  DW @43h { Fonction 43h - Get/Set File Attributes }
  DW @44h { Fonction 44h - IOCTL (Input/Output Control) }
+ DW @45h { Fonction 45h - Duplicate Handle }
 
  {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
  { Interruption 21h - Fonction 00h: Terminer le programme                      }
@@ -2434,7 +2426,7 @@ Procedure Intr21h;Assembler;ASM
 
  CALL DOS40h_WriteFile      { Appeler fonction Pascal }
  ADD SP,10                  { Nettoyer pile (5 mots = 10 octets) }
- 
+
  { Le résultat de DOS40h_WriteFile est dans AX (0=succès, autre=erreur) }
  CMP AX,0                   { Vérifier si erreur }
  JNE @40hError              { Si erreur }
@@ -2596,6 +2588,39 @@ Procedure Intr21h;Assembler;ASM
  CLC                        { Clear Carry Flag }
 
 @44hEnd:
+ POP DI
+ POP SI
+ POP CX
+ JMP @Xit
+
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+ { Interruption 21h - Fonction 45h: Duplicate Handle                           }
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+@45h:
+ PUSH CX                    { Sauvegarder les registres }
+ PUSH SI
+ PUSH DI
+
+ { Paramètres: BX = handle source }
+ PUSH BX                    { Handle source }
+
+ CALL DOS45h_DuplicateHandle { Appeler fonction Pascal }
+ ADD SP,2                   { Nettoyer pile (1 mot = 2 octets) }
+
+ { AX contient le résultat (nouveau handle ou $FFFF si erreur) }
+ CMP AX,$FFFF               { Vérifier si erreur }
+ JE @45hError               { Si erreur }
+
+ { Succès - AX contient le nouveau handle }
+ CLC                        { Clear Carry Flag }
+ JMP @45hEnd
+
+@45hError:
+ { Erreur }
+ MOV AX,6                   { Code d'erreur "Invalid handle" }
+ STC                        { Set Carry Flag }
+
+@45hEnd:
  POP DI
  POP SI
  POP CX
@@ -5550,7 +5575,7 @@ Begin
  ClusterSector:=FirstDataSector + (LongInt(Cluster - 2) * BootSec.SectorsPerCluster);
 
  BytesRemaining:=BytesToWrite;
- 
+
  { Extraire segment et offset du pointeur }
  ASM
   LES DI,Buffer
@@ -5582,18 +5607,18 @@ Begin
    PUSH SI
    PUSH ES
    PUSH DI
-   
+
    MOV AX,BufferSeg
    MOV DS,AX
    MOV SI,BufferOfs
-   
+
    LEA DI,SectorBuffer
    ADD DI,ByteInSector
-   
+
    MOV CX,BytesThisWrite
    CLD
    REP MOVSB
-   
+
    POP DI
    POP ES
    POP SI
@@ -5752,14 +5777,14 @@ Begin
  End;
 
  TotalBytesWritten:=0;
- 
+
  { Extraire segment et offset du pointeur }
  ASM
   LES DI,Buffer
   MOV BufferSeg,ES
   MOV BufferOfs,DI
  END;
- 
+
  CurrentCluster:=FileEntry.CurrentCluster;
  If CurrentCluster = 0 Then CurrentCluster:=FileEntry.FirstCluster;
  If CurrentCluster = 0 Then Begin
@@ -5791,13 +5816,13 @@ Begin
 
   { Mettre à jour les pointeurs et compteurs }
   Inc(BufferOfs, BytesToWriteNow);
-  
+
   { Gérer le débordement de segment }
   If BufferOfs >= $10000 Then Begin
    Inc(BufferSeg, $1000);
    Dec(BufferOfs, $10000);
   End;
-  
+
   Inc(TotalBytesWritten, BytesToWriteNow);
   Dec(BytesToWrite, BytesToWriteNow);
   Inc(FileEntry.CurrentPos, BytesToWriteNow);
@@ -5996,22 +6021,22 @@ Var
  I: Word;
 Begin
  CalculateClusterFromPosition:=False;
- 
+
  If FirstCluster < 2 Then Exit; { Cluster invalide }
- 
+
  ClusterSize:=BootSec.SectorsPerCluster * BootSec.BytesPerSector;
- 
+
  { Calculer combien de clusters complets à ignorer }
  ClustersToSkip:=Position div ClusterSize;
  ClusterOffset:=Position mod ClusterSize;
- 
+
  { Parcourir la chaîne de clusters }
  CurrentCluster:=FirstCluster;
  For I:=1 To ClustersToSkip Do Begin
   CurrentCluster:=GetNextCluster(Drive, BootSec, CurrentCluster);
   If (CurrentCluster = $FFFF) or (CurrentCluster < 2) Then Exit;
  End;
- 
+
  TargetCluster:=CurrentCluster;
  CalculateClusterFromPosition:=True;
 End;
@@ -6028,18 +6053,18 @@ Var
  BootSec: BootSectorRec;
 Begin
  DOS42h_SeekFile:=$FFFFFFFF; { Erreur par défaut }
- 
+
  { Vérifier la validité du handle }
  If Handle >= 20 Then Exit;
- 
+
  If Not GetFileTableEntry(Handle, FileEntry) Then Exit;
- 
+
  { Vérifier si le handle est utilisé }
  If Not FileEntry.InUse Then Exit;
- 
+
  { Construire l'offset 32-bit }
  Offset:=(LongInt(OffsetHi) shl 16) or OffsetLo;
- 
+
  { Calculer la nouvelle position selon la méthode }
  Case Method Of
   0: NewPosition:=Offset;                        { Depuis le début }
@@ -6047,18 +6072,18 @@ Begin
   2: NewPosition:=FileEntry.FileSize + Offset;   { Depuis la fin }
   Else Exit; { Méthode invalide }
  End;
- 
+
  { Vérifier que la position est valide }
  If NewPosition < 0 Then Exit;
- 
+
  { Pour les fichiers, on peut seek au-delà de la fin }
  { Mais on ne peut pas lire/écrire au-delà sans étendre le fichier }
- 
+
  Drive:=FileEntry.Drive - 1; { Conversion en index 0-based }
- 
+
  { Lire boot sector }
  If Not ReadBootSector(Drive, BootSec) Then Exit;
- 
+
  { Si la nouvelle position est dans le fichier, calculer le cluster }
  If NewPosition <= FileEntry.FileSize Then Begin
   If NewPosition = 0 Then Begin
@@ -6089,13 +6114,13 @@ Begin
    { L'offset sera géré lors de la prochaine opération de lecture/écriture }
   End;
  End;
- 
+
  { Mettre à jour la position courante }
  FileEntry.CurrentPos:=NewPosition;
- 
+
  { Sauvegarder l'entrée modifiée }
  If Not SetFileTableEntry(Handle, FileEntry) Then Exit;
- 
+
  DOS42h_SeekFile:=NewPosition;
 End;
 
@@ -6288,14 +6313,14 @@ Begin
    Else
     DOS43h_GetSetFileAttributes:=$FFFF; { File not found }
   End;
-  
+
   1: Begin { Set attributes }
    If SetFileAttributes(Drive, BootSec, DirCluster, FileName + '        ', NewAttributes) Then
     DOS43h_GetSetFileAttributes:=0 { Succès }
    Else
     DOS43h_GetSetFileAttributes:=$FFFF; { File not found }
   End;
-  
+
   Else
    DOS43h_GetSetFileAttributes:=$FFFF; { Invalid action }
  End;
@@ -6308,18 +6333,18 @@ Var
  DeviceInfo: Word;
 Begin
  IOCTL_GetDeviceInfo:=$FFFF; { Erreur par défaut }
- 
+
  { Vérifier la validité du handle }
  If Handle >= 20 Then Exit;
- 
+
  If Not GetFileTableEntry(Handle, FileEntry) Then Exit;
- 
+
  { Vérifier si le handle est utilisé }
  If Not FileEntry.InUse Then Exit;
- 
+
  { Construire les informations du périphérique }
  DeviceInfo:=0;
- 
+
  { Handle 0-4 sont les périphériques standard }
  Case Handle Of
   0: DeviceInfo:=$80D3; { STDIN - caractère, pas EOF, standard input }
@@ -6333,7 +6358,7 @@ Begin
    { Pas de flags spéciaux pour les fichiers normaux }
   End;
  End;
- 
+
  IOCTL_GetDeviceInfo:=DeviceInfo;
 End;
 
@@ -6343,21 +6368,21 @@ Var
  FileEntry: FileTableEntry;
 Begin
  IOCTL_SetDeviceInfo:=1; { Invalid function par défaut }
- 
+
  { Vérifier la validité du handle }
  If Handle >= 20 Then Exit;
- 
+
  If Not GetFileTableEntry(Handle, FileEntry) Then Exit;
- 
+
  { Vérifier si le handle est utilisé }
  If Not FileEntry.InUse Then Exit;
- 
+
  { Les handles 0-4 sont en lecture seule pour les informations }
  If Handle <= 4 Then Exit;
- 
+
  { Pour les fichiers normaux, on ne peut pas changer les infos de périphérique }
  { Cette fonction est principalement pour les drivers de périphériques }
- 
+
  IOCTL_SetDeviceInfo:=0; { Succès simulé }
 End;
 
@@ -6368,26 +6393,26 @@ Var
  DriveInfo: Word;
 Begin
  IOCTL_GetDriveInfo:=$FFFF; { Erreur par défaut }
- 
+
  { Vérifier que le lecteur est valide }
  If Drive >= 26 Then Exit; { A: à Z: seulement }
- 
+
  { Lire le boot sector pour vérifier que le lecteur existe }
  If Not ReadBootSector(Drive, BootSec) Then Exit;
- 
+
  { Construire les informations du lecteur }
  DriveInfo:=0;
- 
+
  { Bit 0: 0=amovible, 1=fixe }
  If Drive >= 2 Then { C: et plus sont considérés comme fixes }
   DriveInfo:=DriveInfo or $01;
- 
+
  { Bits supplémentaires pour type de média et capacités }
  Case Drive Of
   0, 1: DriveInfo:=DriveInfo or $00; { A:, B: - disquettes amovibles }
   Else  DriveInfo:=DriveInfo or $01; { Disques durs fixes }
  End;
- 
+
  IOCTL_GetDriveInfo:=DriveInfo;
 End;
 
@@ -6395,13 +6420,13 @@ End;
 Function IOCTL_SetDriveInfo(Drive:Byte;DeviceInfo:Word):Word;
 Begin
  IOCTL_SetDriveInfo:=1; { Invalid function }
- 
+
  { Vérifier que le lecteur est valide }
  If Drive >= 26 Then Exit;
- 
+
  { Cette fonction n'est généralement pas implémentée }
  { Elle permettrait de changer les paramètres du lecteur }
- 
+
  IOCTL_SetDriveInfo:=0; { Succès simulé }
 End;
 
@@ -6409,10 +6434,10 @@ End;
 Function IOCTL_ReadControlData(Handle:Word;Buffer:Pointer;BytesToRead:Word):Word;
 Begin
  IOCTL_ReadControlData:=1; { Invalid function par défaut }
- 
+
  { Cette fonction lit des données spéciales du périphérique }
  { Non implémentée dans cette version basique }
- 
+
  IOCTL_ReadControlData:=0; { Pas de données lues }
 End;
 
@@ -6420,10 +6445,10 @@ End;
 Function IOCTL_WriteControlData(Handle:Word;Buffer:Pointer;BytesToWrite:Word):Word;
 Begin
  IOCTL_WriteControlData:=1; { Invalid function par défaut }
- 
+
  { Cette fonction écrit des données spéciales vers le périphérique }
  { Non implémentée dans cette version basique }
- 
+
  IOCTL_WriteControlData:=0; { Pas de données écrites }
 End;
 
@@ -6434,7 +6459,7 @@ Var
  Drive: Byte;
 Begin
  DOS44h_IOCTL:=1; { Invalid function par défaut }
- 
+
  { Dispatcher selon la sous-fonction }
  Case SubFunction Of
   $00: Begin { Get device information }
@@ -6448,23 +6473,23 @@ Begin
     DOS44h_IOCTL:=0;
    End;
   End;
-  
+
   $01: Begin { Set device information }
    { ByteCount contient les nouvelles informations }
    Result:=IOCTL_SetDeviceInfo(Handle, ByteCount);
    DOS44h_IOCTL:=Result;
   End;
-  
+
   $02: Begin { Read control data from character device }
    Result:=IOCTL_ReadControlData(Handle, Buffer, ByteCount);
    DOS44h_IOCTL:=Result;
   End;
-  
+
   $03: Begin { Write control data to character device }
    Result:=IOCTL_WriteControlData(Handle, Buffer, ByteCount);
    DOS44h_IOCTL:=Result;
   End;
-  
+
   $08: Begin { Get drive information }
    Drive:=Handle; { Pour cette sous-fonction, Handle contient le numéro de lecteur }
    Result:=IOCTL_GetDriveInfo(Drive);
@@ -6477,16 +6502,66 @@ Begin
     DOS44h_IOCTL:=0;
    End;
   End;
-  
+
   $09: Begin { Set drive information }
    Drive:=Handle;
    Result:=IOCTL_SetDriveInfo(Drive, ByteCount);
    DOS44h_IOCTL:=Result;
   End;
-  
+
   Else
    DOS44h_IOCTL:=1; { Invalid function }
  End;
+End;
+
+{ Fonction 45h - Duplicate Handle }
+Function DOS45h_DuplicateHandle(SourceHandle:Word):Word;
+Var
+ SourceEntry: FileTableEntry;
+ NewHandle: Word;
+ NewEntry: FileTableEntry;
+Begin
+ DOS45h_DuplicateHandle:=$FFFF; { Erreur par défaut }
+ 
+ { Vérifier la validité du handle source }
+ If SourceHandle >= 20 Then Exit;
+ 
+ If Not GetFileTableEntry(SourceHandle, SourceEntry) Then Exit;
+ 
+ { Vérifier si le handle source est utilisé }
+ If Not SourceEntry.InUse Then Exit;
+ 
+ { Trouver un nouveau handle libre }
+ For NewHandle:=0 To 19 Do Begin
+  If GetFileTableEntry(NewHandle, NewEntry) Then Begin
+   If Not NewEntry.InUse Then Begin
+    { Copier toutes les informations du handle source }
+    NewEntry.InUse:=True;
+    NewEntry.Drive:=SourceEntry.Drive;
+    NewEntry.FirstCluster:=SourceEntry.FirstCluster;
+    NewEntry.CurrentCluster:=SourceEntry.CurrentCluster;
+    NewEntry.CurrentPos:=SourceEntry.CurrentPos;
+    NewEntry.FileSize:=SourceEntry.FileSize;
+    NewEntry.Attributes:=SourceEntry.Attributes;
+    NewEntry.ClusterOffset:=SourceEntry.ClusterOffset;
+    
+    { Sauvegarder la nouvelle entrée }
+    If SetFileTableEntry(NewHandle, NewEntry) Then Begin
+     { Incrémenter le compteur de références si c'est un fichier }
+     If SourceHandle >= 5 Then Begin
+      { Pour les fichiers normaux, on incrémente un compteur de références }
+      { Dans cette implémentation simplifiée, on marque juste comme dupliqué }
+     End;
+     
+     DOS45h_DuplicateHandle:=NewHandle;
+     Exit;
+    End;
+   End;
+  End;
+ End;
+ 
+ { Aucun handle libre trouvé }
+ DOS45h_DuplicateHandle:=$FFFF;
 End;
 
 Procedure SetIntVec(_AL:Byte;_DS,_DX:Word);Assembler;ASM
