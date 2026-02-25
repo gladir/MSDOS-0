@@ -72,6 +72,15 @@
   - 37h : Switch character functions (fonctions caractère de commutation)
   - 38h : Get/Set Country Information (informations de localisation)
   - 39h : Create Subdirectory (création de sous-répertoire)
+  - 3Ah : Remove Directory (suppression de sous-répertoire)
+  - 3Bh : Change Directory (changement de répertoire courant)
+  - 3Ch : Create or Open File (création ou ouverture de fichier)
+  - 3Dh : Open File (ouverture de fichier existant)
+  - 3Eh : Close File (fermeture de fichier)
+  - 3Fh : Read File (lecture de fichier)
+  - 40h : Write File (écriture de fichier)
+  - 41h : Delete File (suppression de fichier)
+  - 42h : Seek File (positionnement dans fichier)
 
   @target: Turbo Pascal 7 (syntaxe assembleur Intel)
 }
