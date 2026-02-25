@@ -340,6 +340,47 @@ DTAStruct = Record
  Name: Array[0..12] of Char;        { Nom 8.3 + terminateur }
  End;
 
+{ Structure Liste des Listes (List of Lists) - DOS 52h }
+ListOfLists = Record
+ FirstDPB: Pointer;                 { Pointeur vers premier DPB }
+ FirstSFT: Pointer;                 { Pointeur vers première SFT }
+ ClockDevice: Pointer;              { Pointeur vers driver horloge }
+ ConDevice: Pointer;                { Pointeur vers driver console }
+ MaxSectorLength: Word;             { Longueur max secteur }
+ FirstBuffer: Pointer;              { Pointeur vers premier buffer disque }
+ FirstDirtyBuffer: Pointer;         { Pointeur vers premier buffer sale }
+ FreeClusters: Word;                { Nombre clusters libres (-1 si inconnu) }
+ NextFreeDPB: Pointer;              { Pointeur prochain DPB libre }
+ NumberOfBuffers: Word;             { Nombre de buffers disque }
+ NumberOfLookaheadBuffers: Byte;    { Nombre buffers anticipation }
+ BootDrive: Byte;                   { Lecteur de démarrage (1=A:, 2=B:, etc.) }
+ DOSDataSeg: Word;                  { Segment données DOS }
+ LastDrive: Byte;                   { Dernier lecteur valide }
+ NULDevice: Pointer;                { Pointeur vers driver NUL }
+End;
+
+{ Structure Drive Parameter Block (DPB) }
+DriveParameterBlock = Record
+ DriveNumber: Byte;                 { Numéro lecteur (0=A:, 1=B:, etc.) }
+ UnitNumber: Byte;                  { Numéro unité }
+ BytesPerSector: Word;              { Octets par secteur }
+ LastSectorInCluster: Byte;         { Dernier secteur dans cluster }
+ SectorsPerClusterShift: Byte;      { Décalage secteurs/cluster }
+ ReservedSectors: Word;             { Secteurs réservés }
+ NumberOfFATs: Byte;                { Nombre de FATs }
+ MaxRootEntries: Word;              { Entrées max répertoire racine }
+ FirstDataSector: Word;             { Premier secteur de données }
+ HighestCluster: Word;              { Plus haut numéro de cluster }
+ SectorsPerFAT: Word;               { Secteurs par FAT }
+ FirstDirSector: Word;              { Premier secteur répertoire racine }
+ DeviceDriverHeader: Pointer;       { En-tête driver périphérique }
+ MediaID: Byte;                     { ID média }
+ AccessFlag: Byte;                  { Flag d'accès }
+ NextDPB: Pointer;                  { Pointeur DPB suivant }
+ FirstFreeCluster: Word;            { Premier cluster libre }
+ NumberFreeClusters: Word;          { Nombre clusters libres }
+End;
+
 { Variables globales supprimées - maintenant dans Code Segment }
 {$IFNDEF FPC}
 { Aucune variable globale nécessaire en mode Turbo Pascal }
@@ -488,6 +529,10 @@ Function DOS4Dh_GetReturnCode:Word;Near;Forward;
 { Fonctions 50h et 51h - Gestion PSP }
 Function DOS50h_SetPSPAddress(PSPSegment:Word):Word;Near;Forward;
 Function DOS51h_GetPSPAddress:Word;Near;Forward;
+
+{ Fonctions 52h et 53h - Structures internes DOS }
+Function DOS52h_GetListOfLists:Pointer;Near;Forward;
+Function DOS53h_TranslateBPBtoDPB(BPBPtr:Pointer;DPBPtr:Pointer):Word;Near;Forward;
 
 { Fonctions utilitaires pour EXEC }
 Function LoadExeFile(FileName:String;Var LoadSegment:Word;Var ExeHdr:ExeHeader):Boolean;Near;Forward;
@@ -785,6 +830,25 @@ Procedure Data;Assembler;ASM
  DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0  { FileTable[17] }
  DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0  { FileTable[18] }
  DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0  { FileTable[19] }
+
+ { Structure Liste des Listes pour fonction 52h }
+@DOSListOfLists:
+ DW 0,0        { FirstDPB: Pointer }
+ DW 0,0        { FirstSFT: Pointer }
+ DW 0,0        { ClockDevice: Pointer }
+ DW 0,0        { ConDevice: Pointer }
+ DW 512        { MaxSectorLength: 512 bytes standard }
+ DW 0,0        { FirstBuffer: Pointer }
+ DW 0,0        { FirstDirtyBuffer: Pointer }
+ DW 0FFFFh     { FreeClusters: -1 = inconnu }
+ DW 0,0        { NextFreeDPB: Pointer }
+ DW 20         { NumberOfBuffers: 20 buffers }
+ DB 4          { NumberOfLookaheadBuffers: 4 }
+ DB 3          { BootDrive: C: (3) par défaut }
+ DW 0          { DOSDataSeg: Segment données DOS }
+ DB 26         { LastDrive: Z: (26 drives max) }
+ DW 0,0        { NULDevice: Pointer vers driver NUL }
+
 END;
 
 Procedure Intr20h;Assembler;ASM
@@ -881,6 +945,8 @@ Procedure Intr21h;Assembler;ASM
  DW @4Fh { Fonction 4Fh - Find Next File }
  DW @50h { Fonction 50h - Set PSP Address }
  DW @51h { Fonction 51h - Get PSP Address }
+ DW @52h { Fonction 52h - Get List of Lists }
+ DW @53h { Fonction 53h - Translate BPB to DPB }
 
  {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
  { Interruption 21h - Fonction 00h: Terminer le programme                      }
@@ -3169,6 +3235,58 @@ Procedure Intr21h;Assembler;ASM
  MOV BX,AX                  { Retourner PSP dans BX }
  CLC                        { Clear Carry Flag - toujours succès }
  
+ POP CX
+ JMP @Xit
+
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+ { Interruption 21h - Fonction 52h: Get List of Lists                         }
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+@52h:
+ PUSH CX                    { Sauvegarder les registres }
+ 
+ CALL DOS52h_GetListOfLists { Appeler fonction Pascal }
+ { AX:DX contient le pointeur vers Liste des Listes }
+ 
+ MOV BX,AX                  { BX = offset }
+ MOV ES,DX                  { ES = segment }
+ CLC                        { Clear Carry Flag - toujours succès }
+ 
+ POP CX
+ JMP @Xit
+
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+ { Interruption 21h - Fonction 53h: Translate BPB to DPB                      }
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+@53h:
+ PUSH CX                    { Sauvegarder les registres }
+ PUSH BX
+ PUSH DX
+ PUSH SI
+ PUSH DI
+ 
+ { DS:SI pointe vers BPB, ES:BP pointe vers DPB }
+ PUSH DS                    { Segment BPB }
+ PUSH SI                    { Offset BPB }
+ PUSH ES                    { Segment DPB }
+ PUSH BP                    { Offset DPB }
+ 
+ CALL DOS53h_TranslateBPBtoDPB { Appeler fonction Pascal }
+ { AX contient le code d'erreur }
+ 
+ ADD SP,8                   { Nettoyer la pile (4 paramètres * 2) }
+ 
+ OR AX,AX                   { Tester le résultat }
+ JZ @53hSuccess
+ STC                        { Set Carry Flag si erreur }
+ JMP @53hEnd
+@53hSuccess:
+ CLC                        { Clear Carry Flag si succès }
+@53hEnd:
+
+ POP DI
+ POP SI
+ POP DX
+ POP BX
  POP CX
  JMP @Xit
 
@@ -8369,6 +8487,107 @@ Function DOS51h_GetPSPAddress:Word;
 Begin
  { Retourner l'adresse du PSP courant }
  DOS51h_GetPSPAddress:=GetCurrentPSP;
+End;
+
+{ Fonctions 52h et 53h - Structures internes DOS }
+
+{ Fonction 52h - Get List of Lists }
+Function DOS52h_GetListOfLists:Pointer;
+Begin
+ { Retourner un pointeur vers la structure Liste des Listes }
+ { L'adresse est calculée dynamiquement }
+ ASM
+  MOV AX,CS
+  MOV DX,AX              { DX = segment }
+  
+  { Calculer l'offset de la structure dans le segment de données }
+  MOV AX,OFFSET Data
+  ADD AX,3500            { Offset approximatif vers la structure }
+  
+  { Retourner le pointeur dans AX:DX }
+  { En Pascal, Pointer est retourné dans AX (offset) et DX (segment) }
+ END;
+End;
+
+{ Fonction 53h - Translate BPB to DPB }
+Function DOS53h_TranslateBPBtoDPB(BPBPtr:Pointer;DPBPtr:Pointer):Word;
+Var
+ BPB: BIOSParameterBlock;
+ DPB: DriveParameterBlock;
+ SectorsPerCluster: Byte;
+ Temp: Word;
+Begin
+ DOS53h_TranslateBPBtoDPB:=$FFFF; { Erreur par défaut }
+ 
+ { Vérifier que les pointeurs ne sont pas nuls }
+ If (BPBPtr = Nil) Or (DPBPtr = Nil) Then Exit;
+ 
+ { Copier le BPB depuis l'adresse fournie }
+ ASM
+  PUSH DS
+  LDS SI,BPBPtr
+  LEA DI,BPB
+  MOV CX,TYPE BIOSParameterBlock
+  CLD
+  REP MOVSB
+  POP DS
+ END;
+ 
+ { Convertir BPB vers DPB }
+ FillChar(DPB, SizeOf(DPB), 0);
+ 
+ { Copier les champs de base }
+ DPB.BytesPerSector:=BPB.BytesPerSector;
+ DPB.ReservedSectors:=BPB.ReservedSectors;
+ DPB.NumberOfFATs:=BPB.NumberOfFATs;
+ DPB.MaxRootEntries:=BPB.RootDirEntries;
+ DPB.SectorsPerFAT:=BPB.SectorsPerFAT;
+ DPB.MediaID:=BPB.MediaDescriptor;
+ 
+ { Calculer les champs dérivés }
+ SectorsPerCluster:=BPB.SectorsPerCluster;
+ DPB.LastSectorInCluster:=SectorsPerCluster - 1;
+ 
+ { Calculer le décalage pour secteurs par cluster (log2) }
+ DPB.SectorsPerClusterShift:=0;
+ Temp:=SectorsPerCluster;
+ While Temp > 1 Do Begin
+  Temp:=Temp Shr 1;
+  Inc(DPB.SectorsPerClusterShift);
+ End;
+ 
+ { Calculer secteur de début des données }
+ DPB.FirstDirSector:=BPB.ReservedSectors + (BPB.NumberOfFATs * BPB.SectorsPerFAT);
+ DPB.FirstDataSector:=DPB.FirstDirSector + ((BPB.RootDirEntries * 32) div BPB.BytesPerSector);
+ 
+ { Calculer nombre total de clusters }
+ If BPB.TotalSectors = 0 Then
+  Temp:=BPB.TotalSectorsLarge
+ Else
+  Temp:=BPB.TotalSectors;
+  
+ DPB.HighestCluster:=(Temp - DPB.FirstDataSector) div SectorsPerCluster + 1;
+ 
+ { Initialiser autres champs }
+ DPB.DriveNumber:=0; { A: par défaut }
+ DPB.UnitNumber:=0;
+ DPB.AccessFlag:=0;
+ DPB.NextDPB:=Nil;
+ DPB.FirstFreeCluster:=2; { Premier cluster utilisable }
+ DPB.NumberFreeClusters:=$FFFF; { Inconnu }
+ 
+ { Copier le DPB vers l'adresse de destination }
+ ASM
+  PUSH ES
+  LES DI,DPBPtr
+  LEA SI,DPB
+  MOV CX,TYPE DriveParameterBlock
+  CLD
+  REP MOVSB
+  POP ES
+ END;
+ 
+ DOS53h_TranslateBPBtoDPB:=0; { Succès }
 End;
 
 Procedure SetIntVec(_AL:Byte;_DS,_DX:Word);Assembler;ASM
