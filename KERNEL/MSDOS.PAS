@@ -278,6 +278,13 @@ Function CreateFileEntry(Drive:Byte;BootSec:BootSectorRec;DirCluster:Word;
 Function OpenExistingFile(Drive:Byte;Entry:DirectoryEntry;Var Handle:Word):Word;Near;Forward;
 Function DOS3Ch_CreateOpenFile(PathPtr:Pointer):Word;Near;Forward;
 
+{ Procédures spécifiques pour fonction 3Dh - Open File }
+Function ValidateAccessMode(AccessMode:Byte):Boolean;Near;Forward;
+Function OpenFileReadOnly(Drive:Byte;Entry:DirectoryEntry;Var Handle:Word):Word;Near;Forward;
+Function OpenFileWriteOnly(Drive:Byte;Entry:DirectoryEntry;Var Handle:Word):Word;Near;Forward;
+Function OpenFileReadWrite(Drive:Byte;Entry:DirectoryEntry;Var Handle:Word):Word;Near;Forward;
+Function DOS3Dh_OpenFile(PathPtr:Pointer;AccessMode:Byte):Word;Near;Forward;
+
 { Fonctions d'accès aux données dans Code Segment }
 Function GetCurrentDrive: Byte;Near;Forward;
 Procedure SetCurrentDrive(Drive: Byte);Near;Forward;
@@ -615,6 +622,7 @@ Procedure Intr21h;Assembler;ASM
  DW @3Ah { Fonction 3Ah - Remove Directory }
  DW @3Bh { Fonction 3Bh - Change Directory }
  DW @3Ch { Fonction 3Ch - Create or Open File }
+ DW @3Dh { Fonction 3Dh - Open File }
 
  {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
  { Interruption 21h - Fonction 00h: Terminer le programme                      }
@@ -2208,6 +2216,42 @@ Procedure Intr21h;Assembler;ASM
  STC                        { Set Carry Flag }
 
 @3ChEnd:
+ POP DI
+ POP SI
+ POP CX
+ JMP @Xit
+
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+ { Interruption 21h - Fonction 3Dh: Open File                                  }
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+@3Dh:
+ PUSH CX                    { Sauvegarder les registres }
+ PUSH SI
+ PUSH DI
+
+ { Paramètres: DS:DX = pointeur vers nom fichier ASCIIZ, AL = mode d'accès }
+ MOV AH,0                   { Étendre AL en AX pour mode d'accès }
+ PUSH AX                    { Mode d'accès }
+ PUSH DX                    { Pointeur fichier (offset) }
+ PUSH DS                    { Pointeur fichier (segment) }
+
+ CALL DOS3Dh_OpenFile       { Appeler fonction Pascal }
+ ADD SP,6                   { Nettoyer pile (3 mots = 6 octets) }
+
+ { AX contient le résultat : si succès = handle, si erreur = $FFFF }
+ CMP AX,0FFFFh              { Vérifier si erreur }
+ JE @3DhError               { Si erreur }
+
+ { Succès - AX contient le handle de fichier }
+ CLC                        { Clear Carry Flag }
+ JMP @3DhEnd
+
+@3DhError:
+ { En cas d'erreur, mettre code d'erreur standard }
+ MOV AX,2                   { File not found }
+ STC                        { Set Carry Flag }
+
+@3DhEnd:
  POP DI
  POP SI
  POP CX
@@ -4584,7 +4628,142 @@ Begin
   DOS3Ch_CreateOpenFile:=FileHandle
  Else
   DOS3Ch_CreateOpenFile:=Result;
-End;Procedure SetIntVec(AL:Byte;DS,DX:Word);
+End;
+
+{ Valider mode d'accès pour fonction 3Dh }
+Function ValidateAccessMode(AccessMode:Byte):Boolean;
+Begin
+ { Modes valides : 0=lecture seule, 1=écriture seule, 2=lecture/écriture }
+ ValidateAccessMode:=(AccessMode and $03) <= 2;
+End;
+
+{ Ouvrir fichier en lecture seule }
+Function OpenFileReadOnly(Drive:Byte;Entry:DirectoryEntry;Var Handle:Word):Word;
+Var
+ FirstCluster: Word;
+ FileSize: LongInt;
+Begin
+ FirstCluster:=Entry.FirstClusterLow or (LongInt(Entry.FirstClusterHigh) shl 16);
+ FileSize:=Entry.FileSize;
+
+ If AllocateFileHandle(Drive,FirstCluster,FileSize,$00,Handle) Then
+  OpenFileReadOnly:=0 { Succès }
+ Else
+  OpenFileReadOnly:=4; { Too many open files }
+End;
+
+{ Ouvrir fichier en écriture seule }
+Function OpenFileWriteOnly(Drive:Byte;Entry:DirectoryEntry;Var Handle:Word):Word;
+Var
+ FirstCluster: Word;
+ FileSize: LongInt;
+Begin
+ FirstCluster:=Entry.FirstClusterLow or (LongInt(Entry.FirstClusterHigh) shl 16);
+ FileSize:=Entry.FileSize;
+
+ If AllocateFileHandle(Drive,FirstCluster,FileSize,$01,Handle) Then
+  OpenFileWriteOnly:=0 { Succès }
+ Else
+  OpenFileWriteOnly:=4; { Too many open files }
+End;
+
+{ Ouvrir fichier en lecture/écriture }
+Function OpenFileReadWrite(Drive:Byte;Entry:DirectoryEntry;Var Handle:Word):Word;
+Var
+ FirstCluster: Word;
+ FileSize: LongInt;
+Begin
+ FirstCluster:=Entry.FirstClusterLow or (LongInt(Entry.FirstClusterHigh) shl 16);
+ FileSize:=Entry.FileSize;
+
+ If AllocateFileHandle(Drive,FirstCluster,FileSize,$02,Handle) Then
+  OpenFileReadWrite:=0 { Succès }
+ Else
+  OpenFileReadWrite:=4; { Too many open files }
+End;
+
+{ Fonction principale 3Dh }
+Function DOS3Dh_OpenFile(PathPtr:Pointer;AccessMode:Byte):Word;
+Var
+ Path: String;
+ Drive: Byte;
+ DirPath,FileName: String;
+ BootSec: BootSectorRec;
+ DirCluster: Word;
+ Entry: DirectoryEntry;
+ EntryOffset: Word;
+ FileHandle: Word;
+ P: PChar;
+ I: Byte;
+ Result: Word;
+Begin
+ DOS3Dh_OpenFile:=$FFFF; { Erreur par défaut }
+
+ { Valider le mode d'accès }
+ If Not ValidateAccessMode(AccessMode) Then Begin
+  DOS3Dh_OpenFile:=$FFFF; { Invalid access mode }
+  Exit;
+ End;
+
+ { Convertir pointeur ASCIIZ en string Pascal }
+ P:=PChar(PathPtr);
+ Path:='';
+ I:=0;
+ While (P^ <> #0) and (I < 255) Do Begin
+  Path:=Path + P^;
+  Inc(P);
+  Inc(I);
+ End;
+
+ { Analyser le chemin }
+ If Not ParseFilePath(Path,Drive,DirPath,FileName) Then Begin
+  DOS3Dh_OpenFile:=$FFFF; { Invalid path }
+  Exit;
+ End;
+
+ { Lire boot sector }
+ If Not ReadBootSector(Drive,BootSec) Then Begin
+  DOS3Dh_OpenFile:=$FFFF; { Invalid drive }
+  Exit;
+ End;
+
+ { Trouver le répertoire parent }
+ If DirPath = '' Then
+  DirCluster:=0 { Répertoire racine }
+ Else Begin
+  If Not FindDirectoryByPath(Drive,BootSec,DirPath,DirCluster) Then Begin
+   DOS3Dh_OpenFile:=$FFFF; { Path not found }
+   Exit;
+  End;
+ End;
+
+ { Chercher le fichier }
+ If Not FindDirectoryEntry(Drive,BootSec,DirCluster,FileName + '        ',Entry,EntryOffset) Then Begin
+  DOS3Dh_OpenFile:=$FFFF; { File not found }
+  Exit;
+ End;
+
+ { Vérifier que c'est bien un fichier (pas un répertoire) }
+ If (Entry.Attributes and $10) <> 0 Then Begin
+  DOS3Dh_OpenFile:=$FFFF; { Access denied - c'est un répertoire }
+  Exit;
+ End;
+
+ { Ouvrir selon le mode d'accès }
+ Case AccessMode and $03 Of
+  0: Result:=OpenFileReadOnly(Drive,Entry,FileHandle);
+  1: Result:=OpenFileWriteOnly(Drive,Entry,FileHandle);
+  2: Result:=OpenFileReadWrite(Drive,Entry,FileHandle);
+ End;
+
+ { Si succès, retourner le handle }
+ If Result = 0 Then
+  DOS3Dh_OpenFile:=FileHandle
+ Else
+  DOS3Dh_OpenFile:=$FFFF;
+End;
+
+Procedure SetIntVec(AL:Byte;DS,DX:Word);
 Var
  TableInt:Array[Byte]of Pointer Absolute 0:0;
 Begin
