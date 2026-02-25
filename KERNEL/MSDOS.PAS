@@ -155,6 +155,12 @@ Procedure SetIntVec(AL:Byte;DS,DX:Word);Near;Forward;
 Procedure DataCountry(CountryCode:Word;Var CountryInfo:DataCountryRec);Near;Forward;
 Procedure FillChar(Var Dest;Size:Word;Value:Byte);Near;Forward;
 Procedure Move(Var Source,Dest;Size:Word);Near;Forward;
+
+{ Fonctions de manipulation de chaînes internes }
+Function Length(S:String):Byte;Near;Forward;
+Function Copy(S:String;Index,Count:Byte):String;Near;Forward;
+Procedure Delete(Var S:String;Index,Count:Byte);Near;Forward;
+
 Procedure Handle38hGetCountryInfo(CountryCode:Word;BufferPtr:Word);Near;Forward;
 Function Handle38hSetCountryInfo(NewCountryCode:Word):Word;Near;Forward;
 
@@ -1819,6 +1825,69 @@ Procedure Move(Var Source,Dest;Size:Word);Assembler;ASM
   POP DS
  POP ES
 END;
+
+{==============================================================================}
+{ FONCTIONS DE MANIPULATION DE CHAÎNES INTERNES                               }
+{==============================================================================}
+
+{ Fonction Length - retourne la longueur d'une chaîne Pascal }
+Function Length(S:String):Byte;
+Begin
+ Length:=Ord(S[0]);
+End;
+
+{ Fonction Copy - extrait une sous-chaîne }
+Function Copy(S:String;Index,Count:Byte):String;
+Var
+ I,Len:Byte;
+ Result:String;
+Begin
+ Result:='';
+ Len:=Ord(S[0]);
+ 
+ { Validation des paramètres }
+ If (Index=0)or(Index>Len)or(Count=0) Then Begin
+  Copy:=Result;
+  Exit;
+ End;
+ 
+ { Ajuster Count si nécessaire }
+ If Index+Count-1>Len Then Count:=Len-Index+1;
+ If Count>255 Then Count:=255;
+ 
+ { Copier les caractères }
+ Result[0]:=Chr(Count);
+ For I:=1 to Count Do Begin
+  Result[I]:=S[Index+I-1];
+ End;
+ 
+ Copy:=Result;
+End;
+
+{ Procédure Delete - supprime une portion de chaîne }
+Procedure Delete(Var S:String;Index,Count:Byte);
+Var
+ I,Len,NewLen:Byte;
+Begin
+ Len:=Ord(S[0]);
+ 
+ { Validation des paramètres }
+ If (Index=0)or(Index>Len)or(Count=0) Then Exit;
+ 
+ { Ajuster Count si nécessaire }
+ If Index+Count-1>Len Then Count:=Len-Index+1;
+ 
+ { Calculer nouvelle longueur }
+ NewLen:=Len-Count;
+ 
+ { Décaler les caractères restants }
+ For I:=Index to NewLen Do Begin
+  S[I]:=S[I+Count];
+ End;
+ 
+ { Mettre à jour la longueur }
+ S[0]:=Chr(NewLen);
+End;
 
 Procedure Handle38hGetCountryInfo(CountryCode:Word;BufferPtr:Word);
 { Procedure helper pour remplir le buffer avec les informations pays }
