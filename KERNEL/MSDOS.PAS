@@ -200,6 +200,8 @@ Type
 
 { Structure pour la table des fichiers ouverts }
 Type
+ PBytePtr = ^Byte;       { Pointeur vers Byte pour Turbo Pascal }
+
  FileTableEntry = Record
   InUse: Boolean;         { Fichier en cours d'utilisation }
   Drive: Byte;           { Lecteur (0=A:, 1=B:, etc.) }
@@ -217,16 +219,16 @@ Type
 {$ENDIF}
 
 { Déclarations Forward }
-Procedure Intr20h;Interrupt;Forward;
-Procedure Intr21h;Interrupt;Forward;
-Procedure Intr25h;Interrupt;Forward;
-Procedure Intr26h;Interrupt;Forward;
-Procedure Intr28h;Interrupt;Forward;
-Procedure Intr2Ah;Interrupt;Forward;
-Procedure Intr2Fh;Interrupt;Forward;
-Procedure Intr33h;Interrupt;Forward;
+Procedure Intr20h;Forward;
+Procedure Intr21h;Forward;
+Procedure Intr25h;Forward;
+Procedure Intr26h;Forward;
+Procedure Intr28h;Forward;
+Procedure Intr2Ah;Forward;
+Procedure Intr2Fh;Forward;
+Procedure Intr33h;Forward;
 
-Procedure SetIntVec(AL:Byte;DS,DX:Word);Near;Forward;
+Procedure SetIntVec(_AL:Byte;_DS,_DX:Word);Near;Forward;
 Procedure DataCountry(CountryCode:Word;Var CountryInfo:DataCountryRec);Near;Forward;
 Procedure FillChar(Var Dest;Size:Word;Value:Byte);Near;Forward;
 Procedure Move(Var Source,Dest;Size:Word);Near;Forward;
@@ -292,6 +294,14 @@ Function CloseFileHandle(Handle:Word):Word;Near;Forward;
 Function FlushFileBuffers(Handle:Word):Word;Near;Forward;
 Function UpdateDirectoryEntry(Handle:Word):Word;Near;Forward;
 Function DOS3Eh_CloseFile(Handle:Word):Word;Near;Forward;
+
+{ Forward declarations pour fonction 3Fh }
+Function ReadFromCluster(Drive:Byte;BootSec:BootSectorRec;Cluster:Word;
+                         Offset:Word;Buffer:Pointer;
+                         BytesToRead:Word):Word;Near;Forward;
+Function GetNextCluster(Drive:Byte;BootSec:BootSectorRec;CurrentCluster:Word):Word;Near;Forward;
+Function ReadFileData(Handle:Word;Buffer:Pointer;BytesToRead:Word;Var BytesRead:Word):Word;Near;Forward;
+Function DOS3Fh_ReadFile(Handle:Word;Buffer:Pointer;BytesToRead:Word;Var BytesRead:Word):Word;Near;Forward;
 
 { Fonctions d'accès aux données dans Code Segment }
 Function GetCurrentDrive: Byte;Near;Forward;
@@ -632,6 +642,7 @@ Procedure Intr21h;Assembler;ASM
  DW @3Ch { Fonction 3Ch - Create or Open File }
  DW @3Dh { Fonction 3Dh - Open File }
  DW @3Eh { Fonction 3Eh - Close File }
+ DW @3Fh { Fonction 3Fh - Read File }
 
  {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
  { Interruption 21h - Fonction 00h: Terminer le programme                      }
@@ -2299,6 +2310,48 @@ Procedure Intr21h;Assembler;ASM
  POP CX
  JMP @Xit
 
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+ { Interruption 21h - Fonction 3Fh: Read File                                  }
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+@3Fh:
+ PUSH CX                    { Sauvegarder les registres }
+ PUSH SI
+ PUSH DI
+ PUSH AX                    { Sauvegarder AX aussi }
+
+ { Paramètres: BX = handle, CX = nombre d'octets à lire, DS:DX = buffer }
+ SUB SP,2                   { Réserver place pour BytesRead }
+ MOV AX,SP                  { AX = pointeur vers BytesRead }
+ PUSH AX                    { Pointeur vers BytesRead }
+ PUSH CX                    { Nombre d'octets à lire }
+ PUSH DX                    { Buffer (offset) }
+ PUSH DS                    { Buffer (segment) }
+ PUSH BX                    { Handle de fichier }
+
+ CALL DOS3Fh_ReadFile       { Appeler fonction Pascal }
+ ADD SP,10                  { Nettoyer pile (5 mots = 10 octets) }
+
+ { Le résultat de DOS3Fh_ReadFile est dans AX (0=succès, autre=erreur) }
+ CMP AX,0                   { Vérifier si erreur }
+ JNE @3FhError              { Si erreur }
+
+ { Succès - récupérer le nombre d'octets lus }
+ POP AX                     { BytesRead de la pile }
+ CLC                        { Clear Carry Flag }
+ JMP @3FhEnd
+
+@3FhError:
+ ADD SP,2                   { Nettoyer BytesRead de la pile }
+ MOV AX,6                   { Invalid handle par défaut }
+ STC                        { Set Carry Flag }
+
+@3FhEnd:
+ POP SI                     { Restaurer AX original (ignoré) }
+ POP DI
+ POP SI
+ POP CX
+ JMP @Xit
+
 @Xit:
  DEC Data.DataMOS.InDos
 END;
@@ -3075,13 +3128,13 @@ END;
 Function GetFileTableEntry(Handle:Word;Var Entry:FileTableEntry):Boolean;
 Begin
  GetFileTableEntry:=False;
- 
+
  { Vérifier la validité du handle }
  If Handle >= 20 Then Exit;
- 
+
  { Vérifier si l'entrée est utilisée }
  If Not GetFileTableInUse(Handle) Then Exit;
- 
+
  { Remplir la structure }
  Entry.InUse:=GetFileTableInUse(Handle);
  Entry.Drive:=GetFileTableDrive(Handle);
@@ -3091,7 +3144,7 @@ Begin
  Entry.Attributes:=GetFileTableAttributes(Handle);
  Entry.CurrentCluster:=GetFileTableCurrentCluster(Handle);
  Entry.ClusterOffset:=GetFileTableClusterOffset(Handle);
- 
+
  GetFileTableEntry:=True;
 End;
 
@@ -3099,10 +3152,10 @@ End;
 Function SetFileTableEntry(Handle:Word;Entry:FileTableEntry):Boolean;
 Begin
  SetFileTableEntry:=False;
- 
+
  { Vérifier la validité du handle }
  If Handle >= 20 Then Exit;
- 
+
  { Mettre à jour tous les champs }
  SetFileTableInUse(Handle, Entry.InUse);
  SetFileTableDrive(Handle, Entry.Drive);
@@ -3112,7 +3165,7 @@ Begin
  SetFileTableAttributes(Handle, Entry.Attributes);
  SetFileTableCurrentCluster(Handle, Entry.CurrentCluster);
  SetFileTableClusterOffset(Handle, Entry.ClusterOffset);
- 
+
  SetFileTableEntry:=True;
 End;
 
@@ -4976,13 +5029,269 @@ Begin
  DOS3Eh_CloseFile:=CloseFileHandle(Handle);
 End;
 
- { ATTENTION ! Ne pas mettre en assembleur la proc�dure SetIntVec }
-Procedure SetIntVec(AL:Byte;DS,DX:Word);
+{ Lire des données depuis un cluster spécifique }
+Function ReadFromCluster(Drive:Byte;BootSec:BootSectorRec;Cluster:Word;Offset:Word;Buffer:Pointer;BytesToRead:Word):Word;
 Var
- TableInt:Array[Byte]of Pointer Absolute 0:0;
+ FirstDataSector: LongInt;
+ ClusterSector: LongInt;
+ SectorInCluster: Word;
+ ByteInSector: Word;
+ SectorBuffer: Array[0..511] of Byte;
+ BytesThisRead: Word;
+ BytesRemaining: Word;
+ BufferOfs: Word;
+ BufferSeg: Word;
+ I: Word;
 Begin
- TableInt[AL]:=Ptr(DS,DX);
+ ReadFromCluster:=0; { Succès par défaut }
+
+ { Calculer le premier secteur de données }
+ FirstDataSector:=BootSec.ReservedSectors + (BootSec.NumberOfFATs * BootSec.SectorsPerFAT) +
+                  ((BootSec.RootDirEntries * 32) div BootSec.BytesPerSector);
+
+ { Calculer le secteur du cluster }
+ ClusterSector:=FirstDataSector + (LongInt(Cluster - 2) * BootSec.SectorsPerCluster);
+
+ BytesRemaining:=BytesToRead;
+
+ { Extraire segment et offset du pointeur }
+ ASM
+  LES DI,Buffer
+  MOV BufferSeg,ES
+  MOV BufferOfs,DI
+ END;
+
+ While BytesRemaining > 0 Do Begin
+  { Calculer secteur et offset dans le secteur }
+  SectorInCluster:=Offset div BootSec.BytesPerSector;
+  ByteInSector:=Offset mod BootSec.BytesPerSector;
+
+  { Lire le secteur }
+  If Not ReadSector(Drive, ClusterSector + SectorInCluster, @SectorBuffer) Then Begin
+   ReadFromCluster:=5; { Access denied }
+   Exit;
+  End;
+
+  { Calculer combien d'octets lire de ce secteur }
+  BytesThisRead:=BootSec.BytesPerSector - ByteInSector;
+  If BytesThisRead > BytesRemaining Then
+   BytesThisRead:=BytesRemaining;
+
+  { Copier les données }
+  ASM
+   PUSH DS
+   PUSH SI
+   PUSH ES
+   PUSH DI
+
+   MOV AX,BufferSeg
+   MOV ES,AX
+   MOV DI,BufferOfs
+
+   LEA SI,SectorBuffer
+   ADD SI,ByteInSector
+
+   MOV CX,BytesThisRead
+   CLD
+   REP MOVSB
+
+   POP DI
+   POP ES
+   POP SI
+   POP DS
+  END;
+
+  { Mettre à jour les compteurs }
+  Dec(BytesRemaining, BytesThisRead);
+  Inc(Offset, BytesThisRead);
+  Inc(BufferOfs, BytesThisRead);
+
+  { Gérer le débordement de segment }
+  If BufferOfs >= $10000 Then Begin
+   Inc(BufferSeg, $1000);
+   Dec(BufferOfs, $10000);
+  End;
+
+  { Si on a dépassé la taille du cluster, sortir }
+  If Offset >= (BootSec.SectorsPerCluster * BootSec.BytesPerSector) Then
+   Break;
+ End;
+
+ ReadFromCluster:=0; { Succès }
 End;
+
+{ Obtenir le cluster suivant dans la chaîne FAT }
+Function GetNextCluster(Drive:Byte;BootSec:BootSectorRec;CurrentCluster:Word):Word;
+Var
+ FATSector: Word;
+ FATOffset: Word;
+ Buffer: Array[0..511] of Byte;
+ NextCluster: Word;
+Begin
+ GetNextCluster:=$FFFF; { Fin de chaîne par défaut }
+
+ If BootSec.SectorsPerFAT = 0 Then Exit; { FAT32 non supportée }
+
+ If CurrentCluster < 2 Then Exit; { Cluster invalide }
+
+ { Pour FAT12 }
+ If BootSec.SectorsPerFAT <= 12 Then Begin
+  FATOffset:=(CurrentCluster * 3) div 2;
+  FATSector:=BootSec.ReservedSectors + (FATOffset div BootSec.BytesPerSector);
+  FATOffset:=FATOffset mod BootSec.BytesPerSector;
+
+  If Not ReadSector(Drive, FATSector, @Buffer) Then Exit;
+
+  If (CurrentCluster mod 2) = 0 Then
+   NextCluster:=(Buffer[FATOffset] or ((Buffer[FATOffset + 1] and $0F) shl 8))
+  Else
+   NextCluster:=((Buffer[FATOffset] shr 4) or (Buffer[FATOffset + 1] shl 4));
+
+  If NextCluster >= $FF8 Then NextCluster:=$FFFF; { Fin de chaîne }
+ End
+ Else Begin
+  { Pour FAT16 }
+  FATOffset:=CurrentCluster * 2;
+  FATSector:=BootSec.ReservedSectors + (FATOffset div BootSec.BytesPerSector);
+  FATOffset:=FATOffset mod BootSec.BytesPerSector;
+
+  If Not ReadSector(Drive, FATSector, @Buffer) Then Exit;
+
+  NextCluster:=Buffer[FATOffset] or (Buffer[FATOffset + 1] shl 8);
+
+  If NextCluster >= $FFF8 Then NextCluster:=$FFFF; { Fin de chaîne }
+ End;
+
+ GetNextCluster:=NextCluster;
+End;
+
+{ Lire les données d'un fichier }
+Function ReadFileData(Handle:Word;Buffer:Pointer;BytesToRead:Word;Var BytesRead:Word):Word;
+Var
+ FileEntry: FileTableEntry;
+ Drive: Byte;
+ BootSec: BootSectorRec;
+ CurrentCluster: Word;
+ ClusterSize: Word;
+ RemainingInCluster: Word;
+ BytesToReadNow: Word;
+ BufferOfs: Word;
+ BufferSeg: Word;
+ TotalBytesRead: Word;
+ Result: Word;
+Begin
+ ReadFileData:=6; { Invalid handle par défaut }
+ BytesRead:=0;
+
+ { Vérifier la validité du handle }
+ If Handle >= 20 Then Exit;
+
+ If Not GetFileTableEntry(Handle, FileEntry) Then Exit;
+
+ { Vérifier si le handle est utilisé }
+ If Not FileEntry.InUse Then Exit;
+
+ Drive:=FileEntry.Drive - 1; { Conversion en index 0-based }
+
+ { Lire boot sector }
+ If Not ReadBootSector(Drive, BootSec) Then Begin
+  ReadFileData:=5; { Access denied }
+  Exit;
+ End;
+
+ { Vérifier si on peut lire (pas en mode écriture seule) }
+ If (FileEntry.Attributes and $01) <> 0 Then Begin { Mode écriture seule }
+  ReadFileData:=5; { Access denied }
+  Exit;
+ End;
+
+ { Calculer combien on peut lire }
+ If FileEntry.CurrentPos >= FileEntry.FileSize Then Begin
+  ReadFileData:=0; { EOF - succès mais 0 octets lus }
+  Exit;
+ End;
+
+ If FileEntry.CurrentPos + BytesToRead > FileEntry.FileSize Then
+  BytesToRead:=FileEntry.FileSize - FileEntry.CurrentPos;
+
+ TotalBytesRead:=0;
+
+ { Extraire segment et offset du pointeur }
+ ASM
+  LES DI,Buffer
+  MOV BufferSeg,ES
+  MOV BufferOfs,DI
+ END;
+
+ CurrentCluster:=FileEntry.CurrentCluster;
+ If CurrentCluster = 0 Then CurrentCluster:=FileEntry.FirstCluster;
+
+ ClusterSize:=BootSec.SectorsPerCluster * BootSec.BytesPerSector;
+
+ While (BytesToRead > 0) and (CurrentCluster <> $FFFF) and (CurrentCluster >= 2) Do Begin
+  { Calculer combien on peut lire du cluster courant }
+  RemainingInCluster:=ClusterSize - FileEntry.ClusterOffset;
+  BytesToReadNow:=BytesToRead;
+  If BytesToReadNow > RemainingInCluster Then
+   BytesToReadNow:=RemainingInCluster;
+
+  { Lire du cluster courant }
+  Result:=ReadFromCluster(Drive, BootSec, CurrentCluster, FileEntry.ClusterOffset, Ptr(BufferSeg, BufferOfs), BytesToReadNow);
+  If Result <> 0 Then Begin
+   ReadFileData:=Result;
+   Exit;
+  End;
+
+  { Mettre à jour les pointeurs et compteurs }
+  Inc(BufferOfs, BytesToReadNow);
+
+  { Gérer le débordement de segment }
+  If BufferOfs >= $10000 Then Begin
+   Inc(BufferSeg, $1000);
+   Dec(BufferOfs, $10000);
+  End;
+
+  Inc(TotalBytesRead, BytesToReadNow);
+  Dec(BytesToRead, BytesToReadNow);
+  Inc(FileEntry.CurrentPos, BytesToReadNow);
+  Inc(FileEntry.ClusterOffset, BytesToReadNow);
+
+  { Si on a fini ce cluster, passer au suivant }
+  If FileEntry.ClusterOffset >= ClusterSize Then Begin
+   CurrentCluster:=GetNextCluster(Drive, BootSec, CurrentCluster);
+   FileEntry.CurrentCluster:=CurrentCluster;
+   FileEntry.ClusterOffset:=0;
+  End;
+ End;
+
+ { Mettre à jour l'entrée de fichier }
+ SetFileTableEntry(Handle, FileEntry);
+
+ BytesRead:=TotalBytesRead;
+ ReadFileData:=0; { Succès }
+End;
+
+{ Fonction principale 3Fh }
+Function DOS3Fh_ReadFile(Handle:Word;Buffer:Pointer;BytesToRead:Word;Var BytesRead:Word):Word;
+Begin
+ DOS3Fh_ReadFile:=ReadFileData(Handle, Buffer, BytesToRead, BytesRead);
+End;
+
+Procedure SetIntVec(_AL:Byte;_DS,_DX:Word);Assembler;ASM
+ { Mettre le vecteur d'interruption à l'adresse AL*4 }
+ PUSH ES
+  MOV AX,0000h
+  MOV ES,AX
+  MOV BL,_AL
+  MOV BH,0
+  SHL BX,1
+  SHL BX,1                  { BX = AL * 4 }
+  MOV AX,_DX
+  MOV ES:[BX],AX           { Offset }
+  MOV AX,_DS
+  MOV ES:[BX+2],AX         { Segment }
+ POP ES
+END;
 
 Procedure END_KERNEL;Begin
  ASM
