@@ -13,7 +13,7 @@
   - 06h : Entree/sortie directe de console
   - 07h : Entree de caractere directe sans sortie
   - 08h : Entree de caractere sans sortie (avec Ctrl+C)
-  - 09h : Affichage de chaine terminee par $
+  - 09h : Affichage de chaine de caracteres terminer par $
   - 0Ah : Lecture de chaine avec buffer
   - 0Bh : l'etat d'entree
   - 0Ch : Vider le tampon et appeler la fonction d'entree
@@ -30,6 +30,9 @@
   - 17h : Renommer un fichier avec FCB
   - 18h : Fonction réservée
   - 19h : Demande le lecteur courant
+  - 1Ah : Définir l'adresse DTA (Disk Transfer Area)
+  - 1Bh : Obtenir les informations d'allocation du lecteur par défaut
+  - 1Ch : Obtenir les informations d'allocation d'un lecteur spécifique
   - 20h : Terminer le programme (obsolète)
   - 21h : Lecture aléatoire avec FCB
   - 22h : Ecriture aléatoire avec FCB
@@ -64,6 +67,8 @@ Type DataMOS=Record
  Key:Byte;
  InDos:Byte;
  CurrDisk:Byte;
+ DTASegment:Word;    { Segment de la DTA }
+ DTAOffset:Word;     { Offset de la DTA }
 End;
 
 Procedure Intr25h;Interrupt;Forward;
@@ -73,7 +78,7 @@ Procedure SetIntVec(AL:Byte;DS,DX:Word);Near;Forward;
 Procedure BEGIN_KERNEL;Begin
  SetIntVec($21,CSeg,Ofs(Intr21h));
  SetIntVec($25,CSeg,Ofs(Intr25h));
-  { TODO : Charger un programme COMMAND.EXE, faire un JMP sur le point d'entr�e du programme charg� en m�moire }
+  { TODO : Charger un programme COMMAND.EXE, faire un JMP sur le point d'entr�e du programme charg� en m�moire }
  ASM
   DB 'DEBUT DU NOYAU MSDOS-0';
  END;
@@ -83,6 +88,8 @@ Procedure Data;Assembler;ASM
  DB 0          { Key:   Touche }
  DB 0          { InDos: Dans l'Interruption DOS? }
  DB 0          { CurrDisk: Disque courant }
+ DW 0          { DTASegment: Segment DTA (initialisé à 0) }
+ DW 80h        { DTAOffset: Offset DTA (par défaut 80h) }
 END;
 
 Procedure Intr21h;Assembler;ASM
@@ -119,9 +126,9 @@ Procedure Intr21h;Assembler;ASM
  DW @17h { Fonction 17h - Renommer un fichier avec FCB }
  DW @18h { Fonction 18h - Fonction réservée }
  DW @19h { Fonction 19h - Demande le lecteur courant }
- DW @Xit { Fonction 1Ah - a developper }
- DW @Xit { Fonction 1Bh - a developper }
- DW @Xit { Fonction 1Ch - a developper }
+ DW @1Ah { Fonction 1Ah - Définir l'adresse DTA }
+ DW @1Bh { Fonction 1Bh - Obtenir informations allocation drive par défaut }
+ DW @1Ch { Fonction 1Ch - Obtenir informations allocation drive spécifique }
  DW @Xit { Fonction 1Dh - a developper }
  DW @Xit { Fonction 1Eh - a developper }
  DW @Xit { Fonction 1Fh - a developper }
@@ -668,6 +675,86 @@ Procedure Intr21h;Assembler;ASM
  {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
 @19h:
  MOV AL,Data.DataMOS.CurrDisk
+ JMP @Xit
+
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
+ { Interruption 21h - Fonction 1Ah: Définir l'adresse DTA                      }
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
+@1Ah:
+ { Définir l'adresse du Disk Transfer Area (DTA) }
+ { DS:DX contient la nouvelle adresse DTA }
+ MOV Data.DataMOS.DTASegment,DS   { Sauvegarder le segment }
+ MOV Data.DataMOS.DTAOffset,DX    { Sauvegarder le deplacemnet }
+ { Pas de valeur de retour pour cette fonction }
+ JMP @Xit
+
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
+ { Interruption 21h - Fonction 1Bh: Obtenir infos allocation drive par défaut  }
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
+@1Bh:
+ { Retourner les informations d'allocation pour le lecteur par défaut }
+ { Format de retour dans les registres :
+   AL = Secteurs par cluster
+   CX = Taille d'un secteur en octets
+   DX = Nombre de clusters sur le lecteur
+   DS:BX pointe sur l'identificateur de média (FAT ID) }
+ PUSH ES                    { Sauver registres }
+ PUSH DI
+ { Valeurs simulées pour un disque standard }
+ MOV AL,1                   { 1 secteur par cluster }
+ MOV CX,512                 { 512 octets par secteur }
+ MOV DX,2880                { 2880 clusters (1.44MB disquette) }
+ { Pointer DS:BX sur un identificateur de média fictif }
+ PUSH CS
+ POP DS
+ MOV BX,OFFSET @MediaID
+ JMP @1BEnd
+@MediaID:
+ DB 0F0h                    { ID média pour disquette 1.44MB }
+@1BEnd:
+ POP DI
+ POP ES
+ JMP @Xit
+
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
+ { Interruption 21h - Fonction 1Ch: Obtenir infos allocation drive spécifique  }
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
+@1Ch:
+ { Retourner les informations d'allocation pour un lecteur spécifique }
+ { DL contient le numéro de lecteur (1=A:, 2=B:, etc.) }
+ { Même format de retour que 1Bh }
+ PUSH ES                    { Sauver registres }
+ PUSH DI
+ CMP DL,0                   { Drive 0 = lecteur par défaut ? }
+ JE @1CDefaultDrive
+ CMP DL,26                  { Vérifier que le lecteur est valide (A-Z) }
+ JA @1CError
+ { Lecteur spécifique - mêmes valeurs simulées }
+ MOV AL,1                   { 1 secteur par cluster }
+ MOV CX,512                 { 512 octets par secteur }
+ MOV DX,2880                { 2880 clusters }
+ PUSH CS
+ POP DS
+ MOV BX,OFFSET @MediaID1C
+ JMP @1CEnd
+@1CDefaultDrive:
+ { Utiliser le lecteur par défaut }
+ MOV AL,1
+ MOV CX,512
+ MOV DX,2880
+ PUSH CS
+ POP DS
+ MOV BX,OFFSET @MediaID1C
+ JMP @1CEnd
+@1CError:
+ { Lecteur invalide - retourner AL=FFh }
+ MOV AL,0FFh
+ JMP @1CEnd
+@MediaID1C:
+ DB 0F0h                    { ID média }
+@1CEnd:
+ POP DI
+ POP ES
  JMP @Xit
 
  {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
