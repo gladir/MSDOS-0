@@ -54,7 +54,12 @@
   - 2Fh : DOS Multiplex Interrupt (interface TSR/utilitaires)
   - 30h : Get DOS Version (obtenir version DOS)
   - 31h : Terminate Stay Resident (TSR avec code de retour)
-  - 33h : Multi-fonction
+  - 32h : Get Drive Parameter Block (DPB - paramètres lecteur)
+  - 33h : Multi-fonction (Control Break, Boot Drive)
+    - 00h : Get Control Break check state
+    - 01h : Set Control Break check state  
+    - 05h : Get boot drive
+    - 06h : Get DOS version
   - 34h : Demande l'adresse du drapeau InDos
   - 35h : Demande le vecteur d'interruption
 
@@ -178,7 +183,7 @@ Procedure Intr21h;Assembler;ASM
  DW @2Fh { Fonction 2Fh - DOS Multiplex Interrupt }
  DW @30h { Fonction 30h - Get DOS Version }
  DW @31h { Fonction 31h - Terminate Stay Resident (TSR) }
- DW @Xit { Fonction 32h - a developper }
+ DW @32h { Fonction 32h - Get Drive Parameter Block (DPB) }
  DW @33h { Fonction 33h - Multi-fonction }
  DW @34h { Fonction 34h - Demande l'adresse du drapeau "InDos" }
  DW @35h { Fonction 35h - Demande le vecteur d'Interruption}
@@ -1302,18 +1307,131 @@ Procedure Intr21h;Assembler;ASM
  INT 21h
  JMP @Xit
 
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
+ { Interruption 21h - Fonction 32h: Get Drive Parameter Block (DPB)            }
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
+@32h:
+ { Obtenir le DPB (Drive Parameter Block) pour un lecteur spécifié }
+ { Entrée : DL = numéro de lecteur (0=défaut, 1=A:, 2=B:, etc.) }
+ { Sortie : AL = 0 si succès, FFh si erreur; DS:BX pointe sur le DPB }
+ PUSH AX                    { Sauver registres }
+ PUSH CX
+ PUSH DX
+ PUSH DI
+ PUSH ES
+ 
+ { Vérifier le numéro de lecteur }
+ CMP DL,0                   { Lecteur par défaut ? }
+ JE @32hDefaultDrive
+ CMP DL,26                  { Vérifier limite (A-Z) }
+ JA @32hError
+ 
+@32hDefaultDrive:
+ { Dans un DOS complet, le DPB contient les informations détaillées du lecteur :
+   - Octets par secteur
+   - Secteurs par cluster  
+   - Secteurs réservés
+   - Nombre de FAT
+   - Entrées répertoire racine
+   - Secteurs par FAT
+   - Type de média
+   etc. }
+   
+ { Pour cette implémentation simplifiée, on simule un DPB basique }
+ { Créer un DPB fictif en mémoire }
+ PUSH CS
+ POP DS                     { DS pointe sur notre segment }
+ MOV BX,OFFSET @DPB32h      { BX pointe sur le DPB simulé }
+ MOV AL,0                   { Code de retour : succès }
+ JMP @32hEnd
+
+@32hError:
+ { Lecteur invalide }
+ MOV AL,0FFh                { Code d'erreur : lecteur invalide }
+ XOR BX,BX                  { Pas de DPB valide }
+ JMP @32hEnd
+
+@DPB32h:
+ { Structure DPB simplifiée (format DOS standard) }
+ DB 0                       { Drive number (0=A:, 1=B:, etc.) }
+ DB 1                       { Unit number }
+ DW 512                     { Bytes per sector }
+ DB 0                       { Sectors per cluster - 1 }
+ DB 1                       { Shift count for sectors per cluster }
+ DW 1                       { Reserved sectors }
+ DB 2                       { Number of FATs }
+ DW 224                     { Root directory entries }
+ DW 2880                    { Total sectors }
+ DB 0F0h                    { Media descriptor }
+ DW 9                       { Sectors per FAT }
+ DW 18                      { Sectors per track }
+ DW 2                       { Number of heads }
+ DD 0                       { Hidden sectors }
+ DD 0                       { Large total sectors }
+ DB 0                       { Reserved }
+ DB 0                       { Reserved }
+ DB 0                       { Reserved }
+ 
+@32hEnd:
+ POP ES                     { Restaurer registres }
+ POP DI
+ POP DX
+ POP CX
+ { Le code de retour est déjà dans AL }
+ { BX contient déjà l'offset du DPB }
+ { Restaurer AX original mais garder AL }
+ XCHG AL,AH                 { Échanger AL et AH temporairement }
+ POP AX                     { Restaurer AX original }
+ XCHG AL,AH                 { Remettre le code de retour dans AL }
+ JMP @Xit
+
  {- - - - - - - - - - - - - - - - - - - - - - - - -}
  { Interruption 21h - Fonction 33h: Multi-fonction }
  {- - - - - - - - - - - - - - - - - - - - - - - - -}
 @33h:
- CMP AL,06h
- JNE @Unknown33h
- MOV BL,VerDos
- MOV BH,SubVerDos
- XOR DX,DX
- MOV AL,0FFh
+ { Multi-fonction de contrôle système }
+ CMP AL,00h                 { Sous-fonction 00h : Get Control Break state ? }
+ JE @33h00h
+ CMP AL,01h                 { Sous-fonction 01h : Set Control Break state ? }
+ JE @33h01h
+ CMP AL,05h                 { Sous-fonction 05h : Get boot drive ? }
+ JE @33h05h
+ CMP AL,06h                 { Sous-fonction 06h : Get DOS version (existante) ? }
+ JE @33h06h
+ JMP @Unknown33h
+
+@33h00h:
+ { Sous-fonction 00h : Get Control Break check state }
+ { Sortie : DL = état actuel (0=désactivé, 1=activé) }
+ MOV DL,1                   { Pour cette implémentation, toujours activé }
  JMP @Xit
+
+@33h01h:
+ { Sous-fonction 01h : Set Control Break check state }
+ { Entrée : DL = nouvel état (0=désactiver, 1=activer) }
+ { Dans un DOS complet, ceci contrôlerait si Ctrl+C est vérifié pendant les E/S }
+ { Pour cette implémentation, on accepte la commande mais sans effet réel }
+ CMP DL,1                   { Valeur valide ? }
+ JA @Xit                    { Ignorer les valeurs invalides }
+ { État accepté, pas de valeur de retour }
+ JMP @Xit
+
+@33h05h:
+ { Sous-fonction 05h : Get boot drive }
+ { Sortie : DL = lecteur de boot (1=A:, 2=B:, 3=C:, etc.) }
+ MOV DL,3                   { Simuler boot depuis C: (lecteur 3) }
+ JMP @Xit
+
+@33h06h:
+ { Sous-fonction 06h : Get DOS version (fonction existante) }
+ MOV BL,VerDos              { Version majeure }
+ MOV BH,SubVerDos           { Version mineure }
+ XOR DX,DX                  { Pas d'information supplémentaire }
+ MOV AL,0FFh                { Indicateur de succès }
+ JMP @Xit
+
 @Unknown33h:
+ { Sous-fonction non supportée }
  JMP @Xit
 
  {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
