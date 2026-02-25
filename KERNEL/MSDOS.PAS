@@ -88,6 +88,22 @@ Type DataMOS=Record
  CurrDisk:Byte;
  DTASegment:Word;    { Segment de la DTA }
  DTAOffset:Word;     { Offset de la DTA }
+ CurrentCountry:Word; { Code pays actuel }
+End;
+
+{ Structure pour les informations pays }
+DataCountryRec=Record
+ CountryCode:Word;           { Code pays }
+ DateFormat:Byte;            { 0=USA, 1=Europe, 2=Japan }
+ Currency:Array[0..4] of Char; { Symbole monétaire }
+ ThousandsSep:Array[0..1] of Char; { Séparateur milliers }
+ DecimalSep:Array[0..1] of Char;   { Séparateur décimal }
+ DateSep:Array[0..1] of Char;      { Séparateur date }
+ TimeSep:Array[0..1] of Char;      { Séparateur heure }
+ CurrencyFormat:Byte;        { Format monétaire }
+ DecimalDigits:Byte;         { Chiffres après virgule }
+ TimeFormat:Byte;            { 0=12h, 1=24h }
+ DataListSep:Array[0..1] of Char; { Séparateur liste }
 End;
 
 Procedure Intr20h;Interrupt;Forward;
@@ -100,6 +116,8 @@ Procedure Intr2Fh;Interrupt;Forward;
 Procedure Intr33h;Interrupt;Forward;
 
 Procedure SetIntVec(AL:Byte;DS,DX:Word);Near;Forward;
+Procedure DataCountry(CountryCode:Word;Var CountryInfo:DataCountryRec);Near;Forward;
+Procedure FillChar(Var Dest;Size:Word;Value:Byte);Near;Forward;
 
 Procedure BEGIN_KERNEL;Begin
  SetIntVec($20,CSeg,Ofs(Intr21h));
@@ -122,6 +140,7 @@ Procedure Data;Assembler;ASM
  DB 0          { CurrDisk: Disque courant }
  DW 0          { DTASegment: Segment DTA (initialisé à 0) }
  DW 80h        { DTAOffset: Offset DTA (par défaut 80h) }
+ DW 33         { CurrentCountry: Pays actuel (33=France par défaut) }
 END;
 
 Procedure Intr20h;Assembler;ASM
@@ -1583,95 +1602,218 @@ Procedure Intr21h;Assembler;ASM
  PUSH CX
  PUSH DI
  PUSH ES
+ PUSH SI
+ PUSH BP
  
- { Pour cette implémentation simplifiée, on simule les informations pour la France }
- MOV BX,33                  { Code pays France (33) }
+ { Obtenir le code pays actuel }
+ MOV BX,Data.DataMOS.CurrentCountry { Code pays actuel }
  
- { Vérifier si DX pointe vers un buffer valide pour les informations étendues }
+ { Vérifier si DX pointe vers un buffer valide }
  CMP DX,0                   { Buffer fourni ? }
  JE @38h00hNoBuf
  
- { Remplir le buffer avec les informations pays (structure de 38 octets) }
- PUSH DS
- MOV DI,DX                  { ES:DI pointe sur le buffer destination }
+ { Remplir le buffer avec les informations pays selon le code pays actuel }
+ MOV DI,DX                  { ES:DI = buffer destination }
+ MOV SI,BX                  { SI = code pays }
  
- { Structure Country Info (format DOS) : }
- { +00 : Date format (0=USA mm/dd/yy, 1=Europe dd/mm/yy, 2=Japan yy/mm/dd) }
+ { Remplir les informations selon le pays }
+ CMP SI,1                   { États-Unis ? }
+ JE @38hUSA
+ CMP SI,2                   { Canada ? }
+ JE @38hCanada  
+ CMP SI,33                  { France ? }
+ JE @38hFrance
+ CMP SI,34                  { Espagne ? }
+ JE @38hSpain
+ { Pays non supporté - utiliser France par défaut }
+ JMP @38hFrance
+
+@38hUSA:
+ { États-Unis (Code 1) }
+ MOV BYTE PTR ES:[DI],0     { Format USA mm/dd/yy }
+ INC DI
+ MOV AL,'$'                 { Dollar }
+ STOSB
+ XOR AL,AL
+ STOSB
+ STOSB
+ STOSB
+ STOSB                      { Padding }
+ MOV AL,','                 { Virgule pour milliers }
+ STOSB
+ XOR AL,AL
+ STOSB
+ MOV AL,'.'                 { Point décimal }
+ STOSB
+ XOR AL,AL
+ STOSB
+ MOV AL,'/'                 { Séparateur date }
+ STOSB
+ XOR AL,AL
+ STOSB
+ MOV AL,':'                 { Séparateur heure }
+ STOSB
+ XOR AL,AL
+ STOSB
+ MOV BYTE PTR ES:[DI],0     { $ précède }
+ INC DI
+ MOV BYTE PTR ES:[DI],2     { 2 chiffres }
+ INC DI
+ MOV BYTE PTR ES:[DI],0     { Format 12h }
+ INC DI
+ XOR AX,AX                  { Adresse routine }
+ STOSW
+ STOSW
+ MOV AL,','                 { Séparateur liste }
+ STOSB
+ XOR AL,AL
+ STOSB
+ JMP @38hFillRest
+
+@38hCanada:
+ { Canada (Code 2) }
  MOV BYTE PTR ES:[DI],1     { Format européen dd/mm/yy }
  INC DI
- 
- { +01 : Currency symbol (5 bytes ASCIIZ) }
- MOV AL,'F'
- STOSB                      { F }
- MOV AL,'R'
- STOSB                      { R }
- MOV AL,0
- STOSB                      { Terminateur }
+ MOV AL,'$'                 { Dollar }
+ STOSB
+ XOR AL,AL
+ STOSB
+ STOSB
+ STOSB
  STOSB                      { Padding }
- STOSB                      { Padding }
- 
- { +06 : Thousands separator (2 bytes ASCIIZ) }
- MOV AL,' '                 { Espace pour milliers en français }
+ MOV AL,' '                 { Espace pour milliers }
  STOSB
- MOV AL,0
+ XOR AL,AL
  STOSB
- 
- { +08 : Decimal separator (2 bytes ASCIIZ) }
- MOV AL,','                 { Virgule décimale française }
+ MOV AL,','                 { Virgule décimale }
  STOSB
- MOV AL,0
+ XOR AL,AL
  STOSB
- 
- { +0A : Date separator (2 bytes ASCIIZ) }
- MOV AL,'/'
+ MOV AL,'/'                 { Séparateur date }
  STOSB
- MOV AL,0
+ XOR AL,AL
  STOSB
- 
- { +0C : Time separator (2 bytes ASCIIZ) }
- MOV AL,':'
+ MOV AL,':'                 { Séparateur heure }
  STOSB
- MOV AL,0
+ XOR AL,AL
  STOSB
- 
- { +0E : Currency format (1 byte) }
- MOV BYTE PTR ES:[DI],0     { 0 = currency symbol precedes value }
+ MOV BYTE PTR ES:[DI],0     { $ précède }
  INC DI
- 
- { +0F : Digits after decimal in currency (1 byte) }
- MOV BYTE PTR ES:[DI],2     { 2 digits après virgule pour francs }
+ MOV BYTE PTR ES:[DI],2     { 2 chiffres }
  INC DI
- 
- { +10 : Time format (1 byte: 0=12hr, 1=24hr) }
- MOV BYTE PTR ES:[DI],1     { Format 24h européen }
+ MOV BYTE PTR ES:[DI],1     { Format 24h }
  INC DI
- 
- { +11 : Case conversion routine address (4 bytes) - on met 0 }
- XOR AX,AX
+ XOR AX,AX                  { Adresse routine }
  STOSW
  STOSW
- 
- { +15 : Data list separator (2 bytes ASCIIZ) }
  MOV AL,';'                 { Point-virgule }
  STOSB
- MOV AL,0
+ XOR AL,AL
  STOSB
- 
- { +17 : Reserved (10 bytes) }
+ JMP @38hFillRest
+
+@38hFrance:
+ { France (Code 33) }
+ MOV BYTE PTR ES:[DI],1     { Format européen dd/mm/yy }
+ INC DI
+ MOV AL,'F'                 { Franc }
+ STOSB
+ MOV AL,'R'
+ STOSB
+ XOR AL,AL
+ STOSB
+ STOSB
+ STOSB                      { Padding }
+ MOV AL,' '                 { Espace pour milliers }
+ STOSB
+ XOR AL,AL
+ STOSB
+ MOV AL,','                 { Virgule décimale }
+ STOSB
+ XOR AL,AL
+ STOSB
+ MOV AL,'/'                 { Séparateur date }
+ STOSB
+ XOR AL,AL
+ STOSB
+ MOV AL,':'                 { Séparateur heure }
+ STOSB
+ XOR AL,AL
+ STOSB
+ MOV BYTE PTR ES:[DI],0     { FR précède }
+ INC DI
+ MOV BYTE PTR ES:[DI],2     { 2 chiffres }
+ INC DI
+ MOV BYTE PTR ES:[DI],1     { Format 24h }
+ INC DI
+ XOR AX,AX                  { Adresse routine }
+ STOSW
+ STOSW
+ MOV AL,';'                 { Point-virgule }
+ STOSB
+ XOR AL,AL
+ STOSB
+ JMP @38hFillRest
+
+@38hSpain:
+ { Espagne (Code 34) }
+ MOV BYTE PTR ES:[DI],1     { Format européen dd/mm/yy }
+ INC DI
+ MOV AL,'P'                 { Peseta }
+ STOSB
+ MOV AL,'t'
+ STOSB
+ MOV AL,'s'
+ STOSB
+ XOR AL,AL
+ STOSB
+ STOSB                      { Padding }
+ MOV AL,'.'                 { Point pour milliers }
+ STOSB
+ XOR AL,AL
+ STOSB
+ MOV AL,','                 { Virgule décimale }
+ STOSB
+ XOR AL,AL
+ STOSB
+ MOV AL,'/'                 { Séparateur date }
+ STOSB
+ XOR AL,AL
+ STOSB
+ MOV AL,':'                 { Séparateur heure }
+ STOSB
+ XOR AL,AL
+ STOSB
+ MOV BYTE PTR ES:[DI],0     { Pts précède }
+ INC DI
+ MOV BYTE PTR ES:[DI],2     { 2 chiffres }
+ INC DI
+ MOV BYTE PTR ES:[DI],1     { Format 24h }
+ INC DI
+ XOR AX,AX                  { Adresse routine }
+ STOSW
+ STOSW
+ MOV AL,';'                 { Point-virgule }
+ STOSB
+ XOR AL,AL
+ STOSB
+
+@38hFillRest:
+ { Remplir les 10 octets réservés }
  MOV CX,10
 @38hFillZero:
  XOR AL,AL
  STOSB
  LOOP @38hFillZero
- 
- POP DS                     { Restaurer DS }
 
 @38h00hNoBuf:
- POP ES                     { Restaurer registres }
+ POP BP                     { Restaurer registres }
+ POP SI
+ POP ES
  POP DI
  POP CX
  POP AX
- { BX contient déjà le code pays (33) }
+ { BX contient déjà le code pays }
  JMP @Xit
 
 @38hFFh:
@@ -1679,21 +1821,32 @@ Procedure Intr21h;Assembler;ASM
  { Entrée : DX = code pays à définir }
  PUSH AX                    { Sauver registres }
  PUSH BX
+ PUSH CX
  
- { Dans un DOS complet, on sauvegarderait le nouveau code pays }
- { Pour cette implémentation, on accepte mais on ne change rien réellement }
- { Vérifier que c'est un code pays raisonnable }
- CMP DX,999                 { Code pays raisonnable ? }
- JA @38hFFhError
- 
- { Code pays accepté }
+ { Vérifier que c'est un code pays supporté }
+ CMP DX,1                   { États-Unis ? }
+ JE @38hFFhValid
+ CMP DX,2                   { Canada ? }
+ JE @38hFFhValid
+ CMP DX,33                  { France ? }
+ JE @38hFFhValid
+ CMP DX,34                  { Espagne ? }
+ JE @38hFFhValid
+ JMP @38hFFhError
+
+@38hFFhValid:
+ { Code pays valide - le sauvegarder }
+ MOV Data.DataMOS.CurrentCountry,DX
  MOV BX,DX                  { Retourner le code pays dans BX }
- POP BX                     { Restaurer BX original }
+ XOR AX,AX                  { Code de succès }
+ POP CX
+ POP BX
  POP AX
  JMP @Xit
 
 @38hFFhError:
  { Code pays invalide }
+ POP CX
  POP BX
  POP AX
  MOV AX,2                   { Code d'erreur : Invalid country code }
@@ -1736,6 +1889,115 @@ END;
 Procedure Intr33h;Assembler;ASM
  XOR AX,AX
 END;
+
+Procedure FillChar(Var Dest;Size:Word;Value:Byte);Assembler;
+{ Procédure interne pour remplir une zone mémoire avec une valeur }
+ ASM
+  PUSH ES
+  PUSH DI
+  PUSH CX
+  PUSH AX
+
+  LES DI,Dest       { ES:DI pointe sur destination }
+  MOV CX,Size       { CX = nombre d'octets }
+  MOV AL,Value      { AL = valeur à remplir }
+  CLD               { Direction forward }
+  REP STOSB         { Remplir ES:[DI] avec AL, CX fois }
+
+  POP AX
+  POP CX
+  POP DI
+  POP ES
+ END;
+
+
+Procedure DataCountry(CountryCode:Word;Var CountryInfo:DataCountryRec);
+Begin
+ { Remplir les informations selon le code pays }
+ FillChar(CountryInfo,SizeOf(CountryInfo),0);
+ CountryInfo.CountryCode:=CountryCode;
+ 
+ Case CountryCode of
+  1: Begin { États-Unis }
+   CountryInfo.DateFormat:=0;          { Format USA mm/dd/yy }
+   CountryInfo.Currency[0]:='$';
+   CountryInfo.Currency[1]:=#0;
+   CountryInfo.ThousandsSep[0]:=',';   { Virgule pour milliers }
+   CountryInfo.ThousandsSep[1]:=#0;
+   CountryInfo.DecimalSep[0]:='.';     { Point décimal }
+   CountryInfo.DecimalSep[1]:=#0;
+   CountryInfo.DateSep[0]:='/';
+   CountryInfo.DateSep[1]:=#0;
+   CountryInfo.TimeSep[0]:=':';
+   CountryInfo.TimeSep[1]:=#0;
+   CountryInfo.CurrencyFormat:=0;      { $ précède }
+   CountryInfo.DecimalDigits:=2;
+   CountryInfo.TimeFormat:=0;          { Format 12h }
+   CountryInfo.DataListSep[0]:=',';
+   CountryInfo.DataListSep[1]:=#0;
+  End;
+  2: Begin { Canada }
+   CountryInfo.DateFormat:=1;          { Format européen dd/mm/yy }
+   CountryInfo.Currency[0]:='$';
+   CountryInfo.Currency[1]:=#0;
+   CountryInfo.ThousandsSep[0]:=' ';   { Espace pour milliers }
+   CountryInfo.ThousandsSep[1]:=#0;
+   CountryInfo.DecimalSep[0]:=',';     { Virgule décimale (français canadien) }
+   CountryInfo.DecimalSep[1]:=#0;
+   CountryInfo.DateSep[0]:='/';
+   CountryInfo.DateSep[1]:=#0;
+   CountryInfo.TimeSep[0]:=':';
+   CountryInfo.TimeSep[1]:=#0;
+   CountryInfo.CurrencyFormat:=0;      { $ précède }
+   CountryInfo.DecimalDigits:=2;
+   CountryInfo.TimeFormat:=1;          { Format 24h }
+   CountryInfo.DataListSep[0]:=';';
+   CountryInfo.DataListSep[1]:=#0;
+  End;
+  33: Begin { France }
+   CountryInfo.DateFormat:=1;          { Format européen dd/mm/yy }
+   CountryInfo.Currency[0]:='F';
+   CountryInfo.Currency[1]:='R';
+   CountryInfo.Currency[2]:=#0;
+   CountryInfo.ThousandsSep[0]:=' ';   { Espace pour milliers }
+   CountryInfo.ThousandsSep[1]:=#0;
+   CountryInfo.DecimalSep[0]:=',';     { Virgule décimale }
+   CountryInfo.DecimalSep[1]:=#0;
+   CountryInfo.DateSep[0]:='/';
+   CountryInfo.DateSep[1]:=#0;
+   CountryInfo.TimeSep[0]:=':';
+   CountryInfo.TimeSep[1]:=#0;
+   CountryInfo.CurrencyFormat:=0;      { FR précède }
+   CountryInfo.DecimalDigits:=2;
+   CountryInfo.TimeFormat:=1;          { Format 24h }
+   CountryInfo.DataListSep[0]:=';';
+   CountryInfo.DataListSep[1]:=#0;
+  End;
+  34: Begin { Espagne }
+   CountryInfo.DateFormat:=1;          { Format européen dd/mm/yy }
+   CountryInfo.Currency[0]:='P';
+   CountryInfo.Currency[1]:='t';
+   CountryInfo.Currency[2]:='s';
+   CountryInfo.Currency[3]:=#0;
+   CountryInfo.ThousandsSep[0]:='.';   { Point pour milliers }
+   CountryInfo.ThousandsSep[1]:=#0;
+   CountryInfo.DecimalSep[0]:=',';     { Virgule décimale }
+   CountryInfo.DecimalSep[1]:=#0;
+   CountryInfo.DateSep[0]:='/';
+   CountryInfo.DateSep[1]:=#0;
+   CountryInfo.TimeSep[0]:=':';
+   CountryInfo.TimeSep[1]:=#0;
+   CountryInfo.CurrencyFormat:=0;      { Pts précède }
+   CountryInfo.DecimalDigits:=2;
+   CountryInfo.TimeFormat:=1;          { Format 24h }
+   CountryInfo.DataListSep[0]:=';';
+   CountryInfo.DataListSep[1]:=#0;
+  End;
+  Else Begin { Pays par défaut (France) }
+   DataCountry(33,CountryInfo);
+  End;
+ End;
+End;
 
 Procedure SetIntVec(AL:Byte;DS,DX:Word);
 Var
