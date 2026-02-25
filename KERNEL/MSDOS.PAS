@@ -86,6 +86,9 @@
   - 45h : Duplicate Handle (duplication de handle)
   - 46h : Force Duplicate Handle (duplication forcée de handle)
   - 47h : Get Current Directory (obtenir le répertoire courant)
+  - 48h : Allocate Memory Block (allouer bloc mémoire)
+  - 49h : Free Memory Block (libérer bloc mémoire)
+  - 4Ah : Modify Memory Block (modifier taille bloc mémoire)
 
   @target: Turbo Pascal 7 (syntaxe assembleur Intel)
 }
@@ -227,6 +230,23 @@ Type
   ClusterOffset: Word;   { Offset dans le cluster courant }
  End;
 
+ { Bloc de contrôle mémoire (MCB - Memory Control Block) }
+ MemoryControlBlock = Record
+  BlockType: Char;       { 'M' = bloc normal, 'Z' = dernier bloc }
+  Owner: Word;           { Segment propriétaire (0 = libre) }
+  BlockSize: Word;       { Taille en paragraphes (16 bytes) }
+  Reserved: Array[0..2] of Byte; { Réservé }
+  ProgramName: Array[0..7] of Char; { Nom du programme propriétaire }
+ End;
+
+ { Structure pour la gestion de la mémoire }
+ MemoryManager = Record
+  FirstMCB: Word;        { Segment du premier MCB }
+  LastMCB: Word;         { Segment du dernier MCB }
+  TotalMemory: Word;     { Mémoire totale en KB }
+  FreeMemory: Word;      { Mémoire libre en KB }
+ End;
+
 { Variables globales supprimées - maintenant dans Code Segment }
 {$IFNDEF FPC}
 { Aucune variable globale nécessaire en mode Turbo Pascal }
@@ -354,6 +374,16 @@ Function DOS44h_IOCTL(Handle:Word;SubFunction:Byte;Buffer:Pointer;ByteCount:Word
 Function DOS45h_DuplicateHandle(SourceHandle:Word):Word;Near;Forward;
 Function DOS46h_ForceDuplicateHandle(SourceHandle:Word;TargetHandle:Word):Word;Near;Forward;
 Function DOS47h_GetCurrentDirectory(Drive:Byte;BufferSeg:Word;BufferOfs:Word):Word;Near;Forward;
+Function DOS48h_AllocateMemory(BlockSize:Word):Word;Near;Forward;
+Function DOS49h_FreeMemory(BlockSegment:Word):Word;Near;Forward;
+Function DOS4Ah_ModifyMemory(BlockSegment:Word;NewSize:Word):Word;Near;Forward;
+
+{ Fonctions utilitaires pour la gestion mémoire }
+Function InitializeMemoryManager:Boolean;Near;Forward;
+Function FindFreeMCB(Size:Word;Var Segment:Word):Boolean;Near;Forward;
+Function CreateMCB(Segment:Word;Size:Word;Owner:Word;IsLast:Boolean):Boolean;Near;Forward;
+Function GetMCB(Segment:Word;Var MCB:MemoryControlBlock):Boolean;Near;Forward;
+Function SetMCB(Segment:Word;MCB:MemoryControlBlock):Boolean;Near;Forward;
 
 { Fonctions d'accès aux données dans Code Segment }
 Function GetCurrentDrive: Byte;Near;Forward;
@@ -703,6 +733,9 @@ Procedure Intr21h;Assembler;ASM
  DW @45h { Fonction 45h - Duplicate Handle }
  DW @46h { Fonction 46h - Force Duplicate Handle }
  DW @47h { Fonction 47h - Get Current Directory }
+ DW @48h { Fonction 48h - Allocate Memory Block }
+ DW @49h { Fonction 49h - Free Memory Block }
+ DW @4Ah { Fonction 4Ah - Modify Memory Block }
 
  {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
  { Interruption 21h - Fonction 00h: Terminer le programme                      }
@@ -2699,6 +2732,104 @@ Procedure Intr21h;Assembler;ASM
  POP SI
  POP CX
  POP BX
+ JMP @Xit
+
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+ { Interruption 21h - Fonction 48h: Allocate Memory Block                     }
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+@48h:
+ PUSH CX                    { Sauvegarder les registres }
+ PUSH SI
+ PUSH DI
+
+ { Paramètres: BX = taille en paragraphes }
+ PUSH BX                    { Taille requise }
+
+ CALL DOS48h_AllocateMemory { Appeler fonction Pascal }
+ ADD SP,2                   { Nettoyer pile (1 mot = 2 octets) }
+
+ { AX contient le segment alloué ou 0 si erreur, BX contient la taille disponible }
+ CMP AX,0                   { Vérifier si succès }
+ JNE @48hSuccess            { Si succès }
+
+ { Erreur - pas assez de mémoire }
+ MOV AX,8                   { Code d'erreur "Insufficient memory" }
+ STC                        { Set Carry Flag }
+ JMP @48hEnd
+
+@48hSuccess:
+ { Succès - AX contient le segment alloué }
+ CLC                        { Clear Carry Flag }
+
+@48hEnd:
+ POP DI
+ POP SI
+ POP CX
+ JMP @Xit
+
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+ { Interruption 21h - Fonction 49h: Free Memory Block                         }
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+@49h:
+ PUSH CX                    { Sauvegarder les registres }
+ PUSH SI
+ PUSH DI
+
+ { Paramètres: ES = segment du bloc à libérer }
+ PUSH ES                    { Segment du bloc }
+
+ CALL DOS49h_FreeMemory     { Appeler fonction Pascal }
+ ADD SP,2                   { Nettoyer pile (1 mot = 2 octets) }
+
+ { AX contient le résultat (0 si succès, code d'erreur sinon) }
+ CMP AX,0                   { Vérifier si succès }
+ JE @49hSuccess             { Si succès }
+
+ { Erreur }
+ STC                        { Set Carry Flag }
+ JMP @49hEnd
+
+@49hSuccess:
+ { Succès }
+ CLC                        { Clear Carry Flag }
+
+@49hEnd:
+ POP DI
+ POP SI
+ POP CX
+ JMP @Xit
+
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+ { Interruption 21h - Fonction 4Ah: Modify Memory Block                       }
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+@4Ah:
+ PUSH CX                    { Sauvegarder les registres }
+ PUSH SI
+ PUSH DI
+
+ { Paramètres: ES = segment du bloc, BX = nouvelle taille en paragraphes }
+ PUSH BX                    { Nouvelle taille }
+ PUSH ES                    { Segment du bloc }
+
+ CALL DOS4Ah_ModifyMemory   { Appeler fonction Pascal }
+ ADD SP,4                   { Nettoyer pile (2 mots = 4 octets) }
+
+ { AX contient le résultat (0 si succès, code d'erreur sinon) }
+ CMP AX,0                   { Vérifier si succès }
+ JE @4AhSuccess             { Si succès }
+
+ { Erreur }
+ STC                        { Set Carry Flag }
+ JMP @4AhEnd
+
+@4AhSuccess:
+ { Succès }
+ CLC                        { Clear Carry Flag }
+
+@4AhEnd:
+ POP DI
+ POP SI
+ POP CX
  JMP @Xit
 
 @Xit:
@@ -6770,6 +6901,288 @@ Begin
  END;
  
  DOS47h_GetCurrentDirectory:=0; { Succès }
+End;
+
+{ Fonctions de gestion de la mémoire }
+
+{ Initialise le gestionnaire de mémoire }
+Function InitializeMemoryManager:Boolean;
+Var
+ MCB: MemoryControlBlock;
+ FirstMCB: Word;
+Begin
+ InitializeMemoryManager:=False;
+ 
+ { Le premier MCB commence généralement à 0x0060 (après les vecteurs d'interruption) }
+ FirstMCB:=$0060;
+ 
+ { Créer le premier MCB couvrant toute la mémoire conventionnelle }
+ MCB.BlockType:='Z';      { Dernier bloc }
+ MCB.Owner:=0;            { Bloc libre }
+ MCB.BlockSize:=$9F00;    { ~640KB - adresse de départ }
+ FillChar(MCB.Reserved, 3, 0);
+ FillChar(MCB.ProgramName, 8, 0);
+ 
+ If SetMCB(FirstMCB, MCB) Then
+  InitializeMemoryManager:=True;
+End;
+
+{ Obtient un MCB à partir de son segment }
+Function GetMCB(Segment:Word;Var MCB:MemoryControlBlock):Boolean;
+Begin
+ GetMCB:=False;
+ { Lire le MCB depuis la mémoire }
+ ASM
+  PUSH DS
+  PUSH ES
+  MOV AX,Segment
+  MOV DS,AX
+  XOR SI,SI
+  
+  { Pointer vers la structure MCB (paramètre Var) }
+  LES DI,MCB
+  MOV CX,16           { Taille d'un MCB }
+  CLD
+  REP MOVSB
+  
+  POP ES
+  POP DS
+ END;
+ GetMCB:=True;
+End;
+
+{ Définit un MCB à son segment }
+Function SetMCB(Segment:Word;MCB:MemoryControlBlock):Boolean;
+Begin
+ SetMCB:=False;
+ { Écrire le MCB en mémoire }
+ ASM
+  PUSH ES
+  PUSH DS
+  MOV AX,Segment
+  MOV ES,AX
+  XOR DI,DI
+  
+  { Pointer vers la structure MCB sur la pile }
+  LEA SI,MCB
+  MOV CX,16           { Taille d'un MCB }
+  CLD
+  REP MOVSB
+  
+  POP DS
+  POP ES
+ END;
+ SetMCB:=True;
+End;
+
+{ Trouve un MCB libre de la taille demandée }
+Function FindFreeMCB(Size:Word;Var Segment:Word):Boolean;
+Var
+ CurrentSeg: Word;
+ MCB: MemoryControlBlock;
+ Found: Boolean;
+Begin
+ FindFreeMCB:=False;
+ Found:=False;
+ CurrentSeg:=$0060; { Premier MCB }
+ 
+ While Not Found Do Begin
+  If Not GetMCB(CurrentSeg, MCB) Then Break;
+  
+  { Vérifier si le bloc est libre et assez grand }
+  If (MCB.Owner = 0) And (MCB.BlockSize >= Size) Then Begin
+   Segment:=CurrentSeg + 1; { Le segment utilisable est MCB + 1 }
+   Found:=True;
+   FindFreeMCB:=True;
+  End;
+  
+  { Passer au MCB suivant }
+  If MCB.BlockType = 'Z' Then Break; { Dernier bloc }
+  CurrentSeg:=CurrentSeg + MCB.BlockSize + 1;
+ End;
+End;
+
+{ Crée un nouveau MCB }
+Function CreateMCB(Segment:Word;Size:Word;Owner:Word;IsLast:Boolean):Boolean;
+Var
+ MCB: MemoryControlBlock;
+Begin
+ CreateMCB:=False;
+ 
+ If IsLast Then
+  MCB.BlockType:='Z'
+ Else
+  MCB.BlockType:='M';
+ 
+ MCB.Owner:=Owner;
+ MCB.BlockSize:=Size;
+ FillChar(MCB.Reserved, 3, 0);
+ FillChar(MCB.ProgramName, 8, 0);
+ 
+ { Copier le nom "COMMAND" pour les blocs système }
+ If Owner <> 0 Then Begin
+  MCB.ProgramName[0]:='C';
+  MCB.ProgramName[1]:='O';
+  MCB.ProgramName[2]:='M';
+  MCB.ProgramName[3]:='M';
+  MCB.ProgramName[4]:='A';
+  MCB.ProgramName[5]:='N';
+  MCB.ProgramName[6]:='D';
+  MCB.ProgramName[7]:=#0;
+ End;
+ 
+ CreateMCB:=SetMCB(Segment, MCB);
+End;
+
+{ Fonction 48h - Alloue un bloc mémoire }
+Function DOS48h_AllocateMemory(BlockSize:Word):Word;
+Var
+ Segment: Word;
+ MCB: MemoryControlBlock;
+ MCBSeg: Word;
+Begin
+ DOS48h_AllocateMemory:=0; { Erreur par défaut }
+ 
+ { Vérifier que la taille est raisonnable }
+ If BlockSize = 0 Then Begin
+  DOS48h_AllocateMemory:=0;
+  Exit;
+ End;
+ 
+ { Chercher un bloc libre }
+ If FindFreeMCB(BlockSize, Segment) Then Begin
+  MCBSeg:=Segment - 1; { MCB est juste avant le segment utilisable }
+  
+  { Obtenir le MCB actuel }
+  If GetMCB(MCBSeg, MCB) Then Begin
+   { Si le bloc est plus grand que nécessaire, le diviser }
+   If MCB.BlockSize > BlockSize Then Begin
+    { Créer un nouveau MCB pour la partie non utilisée }
+    CreateMCB(MCBSeg + BlockSize + 1, MCB.BlockSize - BlockSize - 1, 0, MCB.BlockType = 'Z');
+    
+    { Modifier le MCB actuel }
+    MCB.BlockSize:=BlockSize;
+    MCB.BlockType:='M'; { Ce n'est plus le dernier }
+   End;
+   
+   { Marquer le bloc comme utilisé }
+   MCB.Owner:=$FFFE; { Propriétaire fictif }
+   SetMCB(MCBSeg, MCB);
+   
+   DOS48h_AllocateMemory:=Segment;
+  End;
+ End;
+End;
+
+{ Fonction 49h - Libère un bloc mémoire }
+Function DOS49h_FreeMemory(BlockSegment:Word):Word;
+Var
+ MCBSeg: Word;
+ MCB: MemoryControlBlock;
+Begin
+ DOS49h_FreeMemory:=9; { Invalid memory block par défaut }
+ 
+ { Vérifier la validité du segment }
+ If BlockSegment < $0061 Then Exit; { Trop bas }
+ 
+ MCBSeg:=BlockSegment - 1; { MCB est juste avant }
+ 
+ { Obtenir le MCB }
+ If GetMCB(MCBSeg, MCB) Then Begin
+  { Vérifier que le bloc est alloué }
+  If MCB.Owner = 0 Then Begin
+   DOS49h_FreeMemory:=9; { Bloc déjà libre }
+   Exit;
+  End;
+  
+  { Marquer le bloc comme libre }
+  MCB.Owner:=0;
+  FillChar(MCB.ProgramName, 8, 0);
+  SetMCB(MCBSeg, MCB);
+  
+  { Fusionner avec les blocs libres adjacents si possible }
+  { (implémentation simplifiée - pas de fusion pour l'instant) }
+  
+  DOS49h_FreeMemory:=0; { Succès }
+ End;
+End;
+
+{ Fonction 4Ah - Modifie la taille d'un bloc mémoire }
+Function DOS4Ah_ModifyMemory(BlockSegment:Word;NewSize:Word):Word;
+Var
+ MCBSeg: Word;
+ MCB: MemoryControlBlock;
+ NextMCBSeg: Word;
+ NextMCB: MemoryControlBlock;
+Begin
+ DOS4Ah_ModifyMemory:=9; { Invalid memory block par défaut }
+ 
+ { Vérifier la validité du segment }
+ If BlockSegment < $0061 Then Exit;
+ 
+ MCBSeg:=BlockSegment - 1;
+ 
+ { Obtenir le MCB }
+ If GetMCB(MCBSeg, MCB) Then Begin
+  { Vérifier que le bloc est alloué }
+  If MCB.Owner = 0 Then Begin
+   DOS4Ah_ModifyMemory:=9;
+   Exit;
+  End;
+  
+  { Si la nouvelle taille est identique, rien à faire }
+  If MCB.BlockSize = NewSize Then Begin
+   DOS4Ah_ModifyMemory:=0;
+   Exit;
+  End;
+  
+  { Si réduction de taille }
+  If NewSize < MCB.BlockSize Then Begin
+   { Créer un nouveau MCB pour la partie libérée }
+   NextMCBSeg:=MCBSeg + NewSize + 1;
+   CreateMCB(NextMCBSeg, MCB.BlockSize - NewSize - 1, 0, MCB.BlockType = 'Z');
+   
+   { Modifier le MCB actuel }
+   MCB.BlockSize:=NewSize;
+   MCB.BlockType:='M';
+   SetMCB(MCBSeg, MCB);
+   
+   DOS4Ah_ModifyMemory:=0;
+  End
+  Else Begin
+   { Agrandissement - vérifier si possible }
+   NextMCBSeg:=MCBSeg + MCB.BlockSize + 1;
+   
+   { Si ce n'est pas le dernier bloc, vérifier le suivant }
+   If MCB.BlockType = 'M' Then Begin
+    If GetMCB(NextMCBSeg, NextMCB) Then Begin
+     { Si le bloc suivant est libre et assez grand }
+     If (NextMCB.Owner = 0) And 
+        (MCB.BlockSize + NextMCB.BlockSize + 1 >= NewSize) Then Begin
+      
+      { Fusionner les blocs }
+      MCB.BlockSize:=NewSize;
+      MCB.BlockType:=NextMCB.BlockType;
+      
+      { Si il reste de l'espace, créer un nouveau MCB libre }
+      If MCB.BlockSize + NextMCB.BlockSize + 1 > NewSize Then Begin
+       CreateMCB(MCBSeg + NewSize + 1, 
+                MCB.BlockSize + NextMCB.BlockSize + 1 - NewSize - 1,
+                0, NextMCB.BlockType = 'Z');
+       MCB.BlockType:='M';
+      End;
+      
+      SetMCB(MCBSeg, MCB);
+      DOS4Ah_ModifyMemory:=0;
+     End
+     Else
+      DOS4Ah_ModifyMemory:=8; { Insufficient memory }
+    End;
+   End
+   Else
+    DOS4Ah_ModifyMemory:=8; { Pas assez d'espace }
+  End;
+ End;
 End;
 
 Procedure SetIntVec(_AL:Byte;_DS,_DX:Word);Assembler;ASM
