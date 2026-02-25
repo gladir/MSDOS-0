@@ -285,6 +285,14 @@ Function OpenFileWriteOnly(Drive:Byte;Entry:DirectoryEntry;Var Handle:Word):Word
 Function OpenFileReadWrite(Drive:Byte;Entry:DirectoryEntry;Var Handle:Word):Word;Near;Forward;
 Function DOS3Dh_OpenFile(PathPtr:Pointer;AccessMode:Byte):Word;Near;Forward;
 
+{ Forward declarations pour fonction 3Eh }
+Function GetFileTableEntry(Handle:Word;Var Entry:FileTableEntry):Boolean;Near;Forward;
+Function SetFileTableEntry(Handle:Word;Entry:FileTableEntry):Boolean;Near;Forward;
+Function CloseFileHandle(Handle:Word):Word;Near;Forward;
+Function FlushFileBuffers(Handle:Word):Word;Near;Forward;
+Function UpdateDirectoryEntry(Handle:Word):Word;Near;Forward;
+Function DOS3Eh_CloseFile(Handle:Word):Word;Near;Forward;
+
 { Fonctions d'accès aux données dans Code Segment }
 Function GetCurrentDrive: Byte;Near;Forward;
 Procedure SetCurrentDrive(Drive: Byte);Near;Forward;
@@ -623,6 +631,7 @@ Procedure Intr21h;Assembler;ASM
  DW @3Bh { Fonction 3Bh - Change Directory }
  DW @3Ch { Fonction 3Ch - Create or Open File }
  DW @3Dh { Fonction 3Dh - Open File }
+ DW @3Eh { Fonction 3Eh - Close File }
 
  {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
  { Interruption 21h - Fonction 00h: Terminer le programme                      }
@@ -2257,6 +2266,39 @@ Procedure Intr21h;Assembler;ASM
  POP CX
  JMP @Xit
 
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+ { Interruption 21h - Fonction 3Eh: Close File                                 }
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+@3Eh:
+ PUSH CX                    { Sauvegarder les registres }
+ PUSH SI
+ PUSH DI
+
+ { Paramètre: BX = handle de fichier }
+ PUSH BX                    { Handle de fichier }
+
+ CALL DOS3Eh_CloseFile      { Appeler fonction Pascal }
+ ADD SP,2                   { Nettoyer pile (1 mot = 2 octets) }
+
+ { AX contient le résultat : 0 = succès, autre = erreur }
+ CMP AX,0                   { Vérifier si succès }
+ JE @3EhSuccess             { Si succès }
+
+ { Erreur }
+ MOV AX,6                   { Invalid handle }
+ STC                        { Set Carry Flag }
+ JMP @3EhEnd
+
+@3EhSuccess:
+ { Succès }
+ CLC                        { Clear Carry Flag }
+
+@3EhEnd:
+ POP DI
+ POP SI
+ POP CX
+ JMP @Xit
+
 @Xit:
  DEC Data.DataMOS.InDos
 END;
@@ -3028,6 +3070,51 @@ ASM
  MOV AX,ClusterOffset
  MOV WORD PTR [Data + BX],AX
 END;
+
+{ Lire une entrée complète de la FileTable }
+Function GetFileTableEntry(Handle:Word;Var Entry:FileTableEntry):Boolean;
+Begin
+ GetFileTableEntry:=False;
+ 
+ { Vérifier la validité du handle }
+ If Handle >= 20 Then Exit;
+ 
+ { Vérifier si l'entrée est utilisée }
+ If Not GetFileTableInUse(Handle) Then Exit;
+ 
+ { Remplir la structure }
+ Entry.InUse:=GetFileTableInUse(Handle);
+ Entry.Drive:=GetFileTableDrive(Handle);
+ Entry.FirstCluster:=GetFileTableFirstCluster(Handle);
+ Entry.FileSize:=GetFileTableFileSize(Handle);
+ Entry.CurrentPos:=GetFileTableCurrentPos(Handle);
+ Entry.Attributes:=GetFileTableAttributes(Handle);
+ Entry.CurrentCluster:=GetFileTableCurrentCluster(Handle);
+ Entry.ClusterOffset:=GetFileTableClusterOffset(Handle);
+ 
+ GetFileTableEntry:=True;
+End;
+
+{ Écrire une entrée complète dans la FileTable }
+Function SetFileTableEntry(Handle:Word;Entry:FileTableEntry):Boolean;
+Begin
+ SetFileTableEntry:=False;
+ 
+ { Vérifier la validité du handle }
+ If Handle >= 20 Then Exit;
+ 
+ { Mettre à jour tous les champs }
+ SetFileTableInUse(Handle, Entry.InUse);
+ SetFileTableDrive(Handle, Entry.Drive);
+ SetFileTableFirstCluster(Handle, Entry.FirstCluster);
+ SetFileTableFileSize(Handle, Entry.FileSize);
+ SetFileTableCurrentPos(Handle, Entry.CurrentPos);
+ SetFileTableAttributes(Handle, Entry.Attributes);
+ SetFileTableCurrentCluster(Handle, Entry.CurrentCluster);
+ SetFileTableClusterOffset(Handle, Entry.ClusterOffset);
+ 
+ SetFileTableEntry:=True;
+End;
 
 {==============================================================================}
 { FONCTIONS DE MANIPULATION DE CHAÎNES INTERNES                               }
@@ -4763,6 +4850,133 @@ Begin
   DOS3Dh_OpenFile:=$FFFF;
 End;
 
+{ Flush les buffers de fichier vers le disque }
+Function FlushFileBuffers(Handle:Word):Word;
+Var
+ FileEntry: FileTableEntry;
+ Drive: Byte;
+ BootSec: BootSectorRec;
+Begin
+ FlushFileBuffers:=6; { Invalid handle par défaut }
+
+ { Vérifier la validité du handle }
+ If Handle >= 20 Then Exit;
+
+ If Not GetFileTableEntry(Handle,FileEntry) Then Exit;
+
+ { Vérifier si le handle est utilisé }
+ If Not FileEntry.InUse Then Exit;
+
+ Drive:=FileEntry.Drive - 1; { Conversion en index 0-based }
+
+ { Lire boot sector }
+ If Not ReadBootSector(Drive,BootSec) Then Begin
+  FlushFileBuffers:=5; { Access denied }
+  Exit;
+ End;
+
+ { Pour l'instant, on simule un flush réussi }
+ { Dans un vrai système, on écrirait les buffers modifiés }
+
+ FlushFileBuffers:=0; { Succès }
+End;
+
+{ Mettre à jour l'entrée de répertoire avec la nouvelle taille et date }
+Function UpdateDirectoryEntry(Handle:Word):Word;
+Var
+ FileEntry: FileTableEntry;
+ Drive: Byte;
+ BootSec: BootSectorRec;
+ DirCluster: Word;
+ Entry: DirectoryEntry;
+ EntryOffset: Word;
+ Buffer: Array[0..511] of Byte;
+ SectorInDir: Word;
+ EntryInSector: Word;
+ DirSector: LongInt;
+Begin
+ UpdateDirectoryEntry:=6; { Invalid handle par défaut }
+
+ { Vérifier la validité du handle }
+ If Handle >= 20 Then Exit;
+
+ If Not GetFileTableEntry(Handle,FileEntry) Then Exit;
+
+ { Vérifier si le handle est utilisé }
+ If Not FileEntry.InUse Then Exit;
+
+ Drive:=FileEntry.Drive - 1; { Conversion en index 0-based }
+
+ { Lire boot sector }
+ If Not ReadBootSector(Drive,BootSec) Then Begin
+  UpdateDirectoryEntry:=5; { Access denied }
+  Exit;
+ End;
+
+ { Pour l'instant, on simule une mise à jour réussie }
+ { Dans un vrai système, on chercherait l'entrée de répertoire }
+ { et on mettrait à jour la taille et la date }
+
+ UpdateDirectoryEntry:=0; { Succès }
+End;
+
+{ Fermer un handle de fichier }
+Function CloseFileHandle(Handle:Word):Word;
+Var
+ FileEntry: FileTableEntry;
+ Result: Word;
+Begin
+ CloseFileHandle:=6; { Invalid handle par défaut }
+
+ { Vérifier la validité du handle }
+ If Handle >= 20 Then Exit;
+
+ If Not GetFileTableEntry(Handle,FileEntry) Then Exit;
+
+ { Vérifier si le handle est utilisé }
+ If Not FileEntry.InUse Then Begin
+  CloseFileHandle:=6; { Invalid handle }
+  Exit;
+ End;
+
+ { Flush les buffers si le fichier a été modifié }
+ If (FileEntry.Attributes and $01) <> 0 Then Begin { Mode écriture }
+  Result:=FlushFileBuffers(Handle);
+  If Result <> 0 Then Begin
+   CloseFileHandle:=Result;
+   Exit;
+  End;
+
+  { Mettre à jour l'entrée de répertoire }
+  Result:=UpdateDirectoryEntry(Handle);
+  If Result <> 0 Then Begin
+   CloseFileHandle:=Result;
+   Exit;
+  End;
+ End;
+
+ { Marquer le handle comme libre }
+ FileEntry.InUse:=False;
+ FileEntry.Drive:=0;
+ FileEntry.FirstCluster:=0;
+ FileEntry.FileSize:=0;
+ FileEntry.CurrentPos:=0;
+ FileEntry.Attributes:=0;
+ FileEntry.CurrentCluster:=0;
+ FileEntry.ClusterOffset:=0;
+
+ SetFileTableEntry(Handle,FileEntry);
+
+ CloseFileHandle:=0; { Succès }
+End;
+
+{ Fonction principale 3Eh }
+Function DOS3Eh_CloseFile(Handle:Word):Word;
+Begin
+ DOS3Eh_CloseFile:=CloseFileHandle(Handle);
+End;
+
+ { ATTENTION ! Ne pas mettre en assembleur la proc�dure SetIntVec }
 Procedure SetIntVec(AL:Byte;DS,DX:Word);
 Var
  TableInt:Array[Byte]of Pointer Absolute 0:0;
