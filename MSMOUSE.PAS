@@ -94,7 +94,7 @@ Var
  I: Byte;
  Param: String;
 
-{ Convertir une cha√Æne en majuscules }
+ { Convertir une chaåne en majuscules }
 Function StrToUpper(S: String): String;
 Var
  I: Byte;
@@ -105,7 +105,7 @@ Begin
  StrToUpper := S;
 End;
 
-{ Lire un byte d'un port }
+ { Lire un byte d'un port }
 Function PortReadByte(Port: Word): Byte;
 {$IFDEF FPC}
 Begin
@@ -121,11 +121,11 @@ Begin
 End;
 {$ENDIF}
 
-{ √âcrire un byte dans un port }
+{ êcrire un byte dans un port }
 Procedure PortWriteByte(Port: Word; Value: Byte);
 {$IFDEF FPC}
 Begin
- { Simulation pour Free Pascal - pas d'acc√®s direct aux ports }
+ { Simulation pour Free Pascal - pas d'accäs direct aux ports }
 End;
 {$ELSE}
 Begin
@@ -137,7 +137,7 @@ Begin
 End;
 {$ENDIF}
 
-{ D√©tecter une souris s√©rie sur un port COM }
+ { DÇtecter une souris sÇrie sur un port COM }
 Function DetectSerialMouse(ComPort: Word): Boolean;
 {$IFDEF FPC}
 Begin
@@ -148,34 +148,30 @@ Var
  OldValue, TestValue: Byte;
 Begin
  DetectSerialMouse := False;
-
- { Test de pr√©sence du port s√©rie }
- OldValue := PortReadByte(ComPort + 4); { Registre de contr√¥le modem }
+  { Test de prÇsence du port sÇrie }
+ OldValue := PortReadByte(ComPort + 4); { Registre de contrìle modem }
  PortWriteByte(ComPort + 4, $10);       { RTS on, DTR off }
- TestValue := PortReadByte(ComPort + 6); { Registre d'√©tat modem }
+ TestValue := PortReadByte(ComPort + 6); { Registre d'Çtat modem }
 
- If (TestValue And $10) = 0 Then Begin { CTS devrait √™tre off }
+ If (TestValue And $10) = 0 Then Begin { CTS devrait àtre off }
   PortWriteByte(ComPort + 4, $11);     { RTS on, DTR on }
   TestValue := PortReadByte(ComPort + 6);
-
-  If (TestValue And $20) <> 0 Then Begin { DSR devrait √™tre on }
-   { Initialisation basique de la souris s√©rie }
+  If (TestValue And $20) <> 0 Then Begin { DSR devrait àtre on }
+   { Initialisation basique de la souris sÇrie }
    PortWriteByte(ComPort + 3, $80);    { DLAB = 1 }
    PortWriteByte(ComPort + 0, $60);    { 1200 baud }
    PortWriteByte(ComPort + 1, $00);
    PortWriteByte(ComPort + 3, $02);    { 7 bits, no parity, 1 stop }
    PortWriteByte(ComPort + 4, $03);    { DTR et RTS on }
    PortWriteByte(ComPort + 1, $00);    { Pas d'interruptions }
-
    DetectSerialMouse := True;
   End;
  End;
-
- PortWriteByte(ComPort + 4, OldValue); { Restaurer l'ancien √©tat }
+ PortWriteByte(ComPort + 4, OldValue); { Restaurer l'ancien Çtat }
 End;
 {$ENDIF}
 
-{ D√©tecter une souris PS/2 }
+{ DÇtecter une souris PS/2 }
 Function DetectPS2Mouse: Boolean;
 {$IFDEF FPC}
 Begin
@@ -186,46 +182,39 @@ Var
  Status: Byte;
 Begin
  DetectPS2Mouse := False;
-
- { V√©rifier si le contr√¥leur PS/2 existe }
+  { VÇrifier si le contrìleur PS/2 existe }
  Status := PortReadByte(PS2_STATUS_PORT);
- If (Status And $02) = 0 Then Begin { Buffer d'entr√©e vide }
+ If (Status And $02) = 0 Then Begin { Tampon d'entrÇe vide }
   { Envoyer commande de test du port souris }
   PortWriteByte(PS2_COMMAND_PORT, $A9);
-
-  { Attendre la r√©ponse }
+   { Attendre la rÇponse }
   Repeat
    Status := PortReadByte(PS2_STATUS_PORT);
   Until (Status And $01) <> 0;
-
-  { Lire le r√©sultat }
+   { Lire le rÇsultat }
   Status := PortReadByte(PS2_DATA_PORT);
-  If Status = $00 Then Begin { Test r√©ussi }
+  If Status = $00 Then Begin { Test rÇussi }
    DetectPS2Mouse := True;
   End;
  End;
 End;
 {$ENDIF}
 
-{ D√©tecter le type de souris pr√©sent }
-Function DetectMouseType: Byte;
-Begin
+{ DÇtecter le type de souris prÇsent }
+Function DetectMouseType: Byte;Begin
  DetectMouseType := MOUSE_TYPE_NONE;
-
- { Essayer de d√©tecter une souris PS/2 en premier }
+  { Essayer de dÇtecter une souris PS/2 en premier }
  If DetectPS2Mouse Then Begin
   DetectMouseType := MOUSE_TYPE_PS2;
   Exit;
  End;
-
- { Essayer les ports s√©rie }
+  { Essayer les ports sÇrie }
  If DetectSerialMouse(COM1_BASE) Then Begin
   DetectMouseType := MOUSE_TYPE_SERIAL;
   MouseDriver.SerialPort := COM1_BASE;
   MouseDriver.SerialIRQ := COM1_IRQ;
   Exit;
  End;
-
  If DetectSerialMouse(COM2_BASE) Then Begin
   DetectMouseType := MOUSE_TYPE_SERIAL;
   MouseDriver.SerialPort := COM2_BASE;
@@ -234,9 +223,8 @@ Begin
  End;
 End;
 
-{ Initialiser l'√©tat de la souris }
-Procedure InitMouseState;
-Begin
+{ Initialiser l'Çtat de la souris }
+Procedure InitMouseState;Begin
  With MouseDriver.State Do Begin
   X := (DEFAULT_MAX_X + DEFAULT_MIN_X) Div 2;
   Y := (DEFAULT_MAX_Y + DEFAULT_MIN_Y) Div 2;
@@ -254,7 +242,7 @@ Begin
  End;
 End;
 
-{ Gestionnaire d'interruption pour souris s√©rie }
+{ Gestionnaire d'interruption pour souris sÇrie }
 {$F+}
 Procedure SerialMouseHandler;
 {$F-}
@@ -269,19 +257,15 @@ Begin
   Push DI
   Push DS
   Push ES
-
-  { Code de traitement de l'interruption s√©rie }
-  { Lecture des donn√©es de la souris s√©rie }
+   { Code de traitement de l'interruption sÇrie }
+   { Lecture des donn√©es de la souris sÇrie }
   Mov DX, MouseDriver.SerialPort
   In AL, DX
-
-  { Traitement simplifi√© des donn√©es souris }
-  { (Dans une vraie impl√©mentation, il faudrait d√©coder le protocole) }
-
-  { Envoyer EOI au contr√¥leur d'interruption }
+   { Traitement simplifiÇ des donnÇes souris }
+   { (Dans une vraie implÇmentation, il faudrait dÇcoder le protocole) }
+   { Envoyer EOI au contrìleur d'interruption }
   Mov AL, $20
   Out $20, AL
-
   Pop ES
   Pop DS
   Pop DI
@@ -295,7 +279,7 @@ Begin
 End;
 {$ELSE}
 Begin
- { Version simplifi√©e pour Free Pascal }
+ { Version simplifiÇe pour Free Pascal }
 End;
 {$ENDIF}
 
@@ -314,18 +298,14 @@ Begin
   Push DI
   Push DS
   Push ES
-
   { Lire les donn√©es de la souris PS/2 }
   In AL, PS2_DATA_PORT
-
-  { Traitement simplifi√© des donn√©es souris PS/2 }
-  { (Dans une vraie impl√©mentation, il faudrait d√©coder le protocole) }
-
-  { Envoyer EOI au contr√¥leur d'interruption }
+  { Traitement simplifiÇ des donnÇes souris PS/2 }
+  { (Dans une vraie implÇmentation, il faudrait dÇcoder le protocole) }
+  { Envoyer EOI au contrìleur d'interruption }
   Mov AL, $20
   Out $A0, AL    { PIC esclave }
-  Out $20, AL    { PIC ma√Ætre }
-
+  Out $20, AL    { PIC maåtre }
   Pop ES
   Pop DS
   Pop DI
@@ -339,7 +319,7 @@ Begin
 End;
 {$ELSE}
 Begin
- { Version simplifi√©e pour Free Pascal }
+ { Version simplifiÇe pour Free Pascal }
 End;
 {$ENDIF}
 
@@ -358,8 +338,7 @@ Begin
   Push DI
   Push DS
   Push ES
-
-  { V√©rifier la fonction demand√©e dans AX }
+  { VÇrifier la fonction demandÇe dans AX }
   Cmp AX, 0
   Je @ResetMouse
   Cmp AX, 1
@@ -382,70 +361,57 @@ Begin
   Je @GetDriverVersion
   Cmp AX, 109
   Je @MicrosoftDetection
-
   Jmp @ExitHandler
-
 @ResetMouse:
-  Mov AX, $FFFF          { Souris pr√©sente }
+  Mov AX, $FFFF          { Souris prÇsente }
   Mov BX, 2              { 2 boutons }
   Jmp @ExitHandler
-
 @ShowCursor:
   Mov MouseDriver.State.Visible, 1
   Jmp @ExitHandler
-
 @HideCursor:
   Mov MouseDriver.State.Visible, 0
   Jmp @ExitHandler
-
 @GetMouseStatus:
   MOV AL, MouseDriver.State.Buttons
   MOV AH, 0
   Mov CX, MouseDriver.State.X
   Mov DX, MouseDriver.State.Y
   Jmp @ExitHandler
-
 @SetMousePosition:
   Mov MouseDriver.State.X, CX
   Mov MouseDriver.State.Y, DX
   Jmp @ExitHandler
-
 @SetHorizontalLimits:
   Mov MouseDriver.State.MinX, CX
   Mov MouseDriver.State.MaxX, DX
   Jmp @ExitHandler
-
 @SetVerticalLimits:
   Mov MouseDriver.State.MinY, CX
   Mov MouseDriver.State.MaxY, DX
   Jmp @ExitHandler
-
 @ReadMouseMotion:
   Mov CX, MouseDriver.State.DeltaX
   Mov DX, MouseDriver.State.DeltaY
   Mov MouseDriver.State.DeltaX, 0
   Mov MouseDriver.State.DeltaY, 0
   Jmp @ExitHandler
-
 @SetMickeyRatio:
   Mov MouseDriver.State.MickeyX, CX
   Mov MouseDriver.State.MickeyY, DX
   Jmp @ExitHandler
-
 @GetDriverVersion:
   Mov AX, MOUSE_DRIVER_VERSION
   Mov BX, 0              { Pas de gestionnaire utilisateur }
   Jmp @ExitHandler
-
 @MicrosoftDetection:
-  { Fonction 6Dh (109) - D√©tection pilote Microsoft }
+  { Fonction 6Dh (109) - DÇtection pilote Microsoft }
   { Retourne la signature Microsoft dans les registres }
-  Mov AX, $006D          { Code de fonction confirm√© }
+  Mov AX, $006D          { Code de fonction confirmÇ }
   Mov BX, $4D53          { Signature "MS" }
   Mov CX, $002E          { Version majeure.mineure }
-  Mov DX, $0000          { R√©serv√© }
+  Mov DX, $0000          { RÇservÇ }
   Jmp @ExitHandler
-
 @ExitHandler:
   Pop ES
   Pop DS
@@ -459,7 +425,7 @@ Begin
 End;
 {$ELSE}
 Begin
- { Version simplifi√©e pour Free Pascal }
+ { Version simplifiÇe pour Free Pascal }
 End;
 {$ENDIF}
 

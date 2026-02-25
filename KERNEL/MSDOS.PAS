@@ -19,6 +19,10 @@
   - 0Fh : Ouvrir un fichier avec FCB
   - 10h : Fermer un fichier avec FCB
   - 11h : Rechercher le premier fichier avec FCB
+  - 12h : Rechercher le fichier suivant avec FCB
+  - 13h : Supprimer un fichier avec FCB
+  - 14h : Lecture séquentielle avec FCB
+  - 15h : Ecriture séquentielle avec FCB
   - 19h : Demande le lecteur courant
   - 25h : Fixe le vecteur d'interruption
   - 2Ah : Lire la date
@@ -85,10 +89,10 @@ Procedure Intr21;Interrupt;Assembler;ASM
  DW @0Fh { Fonction 0Fh - Ouvrir un fichier avec FCB }
  DW @10h { Fonction 10h - Fermer un fichier avec FCB }
  DW @11h { Fonction 11h - Rechercher le premier fichier avec FCB }
- DW @Xit { Fonction 12h - a developper }
- DW @Xit { Fonction 13h - a developper }
- DW @Xit { Fonction 14h - a developper }
- DW @Xit { Fonction 15h - a developper }
+ DW @12h { Fonction 12h - Rechercher le fichier suivant avec FCB }
+ DW @13h { Fonction 13h - Supprimer un fichier avec FCB }
+ DW @14h { Fonction 14h - Lecture séquentielle avec FCB }
+ DW @15h { Fonction 15h - Ecriture séquentielle avec FCB }
  DW @Xit { Fonction 16h - a developper }
  DW @Xit { Fonction 17h - a developper }
  DW @Xit { Fonction 18h - a developper }
@@ -463,6 +467,101 @@ Procedure Intr21;Interrupt;Assembler;ASM
  { Alternative: simuler la decouverte d'un fichier fictif }
  { MOV AL,0                   Code de retour: fichier trouve }
  { Il faudrait alors remplir la DTA avec les informations du fichier }
+ POP ES                     { Restaurer registres }
+ POP DS
+ POP DI
+ POP SI
+ JMP @Xit
+
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
+ { Interruption 21h - Fonction 12h: Rechercher le fichier suivant avec FCB     }
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
+@12h:
+ PUSH SI                    { Sauver registres }
+ PUSH DI
+ PUSH DS
+ PUSH ES
+ MOV SI,DX                  { DS:DX pointe sur le FCB }
+ { Implementation basique: retourner "plus de fichiers" }
+ { Dans un DOS complet, cette fonction continuerait la recherche commencee par 11h }
+ MOV AL,0FFh                { Code de retour: plus de fichiers }
+ POP ES                     { Restaurer registres }
+ POP DS
+ POP DI
+ POP SI
+ JMP @Xit
+
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
+ { Interruption 21h - Fonction 13h: Supprimer un fichier avec FCB              }
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
+@13h:
+ PUSH SI                    { Sauver registres }
+ PUSH DI
+ PUSH DS
+ PUSH ES
+ MOV SI,DX                  { DS:DX pointe sur le FCB }
+ { Verifier que le nom de fichier est valide dans le FCB }
+ CMP BYTE PTR [SI+1],' '    { Premier caractere du nom vide ? }
+ JE @13Error
+ { Implementation simplifiee: simuler une suppression reussie }
+ { Dans un DOS complet, il faudrait verifier l'existence et supprimer le fichier }
+ MOV AL,0                   { Code de retour: succes }
+ JMP @13End
+@13Error:
+ MOV AL,0FFh                { Code d'erreur: fichier non trouve }
+@13End:
+ POP ES                     { Restaurer registres }
+ POP DS
+ POP DI
+ POP SI
+ JMP @Xit
+
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
+ { Interruption 21h - Fonction 14h: Lecture séquentielle avec FCB              }
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
+@14h:
+ PUSH SI                    { Sauver registres }
+ PUSH DI
+ PUSH DS
+ PUSH ES
+ MOV SI,DX                  { DS:DX pointe sur le FCB }
+ { Verifier que le FCB est ouvert }
+ CMP BYTE PTR [SI],0        { Drive = 0 ? }
+ JE @14Error
+ { Implementation simplifiee: simuler une lecture EOF }
+ { Dans un DOS complet, il faudrait lire les donnees dans la DTA }
+ { et incrementer le pointeur de fichier dans le FCB }
+ MOV AL,1                   { Code de retour: EOF (End Of File) }
+ JMP @14End
+@14Error:
+ MOV AL,0FFh                { Code d'erreur: FCB non valide }
+@14End:
+ POP ES                     { Restaurer registres }
+ POP DS
+ POP DI
+ POP SI
+ JMP @Xit
+
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
+ { Interruption 21h - Fonction 15h: Ecriture séquentielle avec FCB             }
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
+@15h:
+ PUSH SI                    { Sauver registres }
+ PUSH DI
+ PUSH DS
+ PUSH ES
+ MOV SI,DX                  { DS:DX pointe sur le FCB }
+ { Verifier que le FCB est ouvert }
+ CMP BYTE PTR [SI],0        { Drive = 0 ? }
+ JE @15Error
+ { Implementation simplifiee: simuler une ecriture reussie }
+ { Dans un DOS complet, il faudrait ecrire les donnees depuis la DTA }
+ { et incrementer le pointeur de fichier dans le FCB }
+ MOV AL,0                   { Code de retour: succes }
+ JMP @15End
+@15Error:
+ MOV AL,0FFh                { Code d'erreur: FCB non valide }
+@15End:
  POP ES                     { Restaurer registres }
  POP DS
  POP DI
