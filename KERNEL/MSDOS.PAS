@@ -1,7 +1,10 @@
-{ @description: Le MS Operating System est un systeme d'exploitation remplacant le DOS traditionnel.
+{ @author: Sylvain Maltais
+  @created: 2026
+  @website(https://www.gladir.com/msdos0)
+  @description: Le MS Operating System est un systeme d'exploitation remplacant le DOS traditionnel.
 
   Fonctions DOS implementees :
-  - 00h : Terminer le programme  
+  - 00h : Terminer le programme
   - 01h : Entree de caractere avec echo
   - 02h : Sortie de caractere
   - 03h : Entree de caractere depuis AUX (port serie)
@@ -12,7 +15,7 @@
   - 08h : Entree de caractere sans sortie (avec Ctrl+C)
   - 09h : Affichage de chaine terminee par $
   - 0Ah : Lecture de chaine avec buffer
-  - 0Bh : Lire l'etat d'entree
+  - 0Bh : l'etat d'entree
   - 0Ch : Vider le tampon et appeler la fonction d'entree
   - 0Dh : Reinitialisation du disque
   - 0Eh : Selectionne le lecteur courant
@@ -27,6 +30,11 @@
   - 17h : Renommer un fichier avec FCB
   - 18h : Fonction réservée
   - 19h : Demande le lecteur courant
+  - 20h : Terminer le programme (obsolète)
+  - 21h : Lecture aléatoire avec FCB
+  - 22h : Ecriture aléatoire avec FCB
+  - 23h : Obtenir la taille de fichier avec FCB
+  - 24h : Définir l'adresse aléatoire avec FCB
   - 25h : Fixe le vecteur d'interruption
   - 2Ah : Lire la date
   - 2Bh : Fixe la date
@@ -34,7 +42,6 @@
   - 34h : Demande l'adresse du drapeau InDos
   - 35h : Demande le vecteur d'interruption
 
-  @author: Developpe selon les specifications MS-DOS
   @target: Turbo Pascal 7 (syntaxe assembleur Intel)
 }
 
@@ -44,6 +51,8 @@ INTERFACE
 
 Procedure BEGIN_KERNEL;
 Procedure END_KERNEL;
+
+Procedure Intr21h;Interrupt;
 
 IMPLEMENTATION
 
@@ -57,8 +66,18 @@ Type DataMOS=Record
  CurrDisk:Byte;
 End;
 
-Procedure BEGIN_KERNEL;Assembler;ASM
-END;
+Procedure Intr25h;Interrupt;Forward;
+
+Procedure SetIntVec(AL:Byte;DS,DX:Word);Near;Forward;
+
+Procedure BEGIN_KERNEL;Begin
+ SetIntVec($21,CSeg,Ofs(Intr21h));
+ SetIntVec($25,CSeg,Ofs(Intr25h));
+  { TODO : Charger un programme COMMAND.EXE, faire un JMP sur le point d'entr�e du programme charg� en m�moire }
+ ASM
+  DB 'DEBUT DU NOYAU MSDOS-0';
+ END;
+End;
 
 Procedure Data;Assembler;ASM
  DB 0          { Key:   Touche }
@@ -66,7 +85,7 @@ Procedure Data;Assembler;ASM
  DB 0          { CurrDisk: Disque courant }
 END;
 
-Procedure Intr21;Interrupt;Assembler;ASM
+Procedure Intr21h;Assembler;ASM
  INC Data.DataMOS.InDos
  MOV BL,AH
 @CallFunc:
@@ -106,11 +125,11 @@ Procedure Intr21;Interrupt;Assembler;ASM
  DW @Xit { Fonction 1Dh - a developper }
  DW @Xit { Fonction 1Eh - a developper }
  DW @Xit { Fonction 1Fh - a developper }
- DW @Xit { Fonction 20h - a developper }
- DW @Xit { Fonction 21h - a developper }
- DW @Xit { Fonction 22h - a developper }
- DW @Xit { Fonction 23h - a developper }
- DW @Xit { Fonction 24h - a developper }
+ DW @20h { Fonction 20h - Terminer le programme (obsolète) }
+ DW @21h { Fonction 21h - Lecture aléatoire avec FCB }
+ DW @22h { Fonction 22h - Ecriture aléatoire avec FCB }
+ DW @23h { Fonction 23h - Obtenir la taille de fichier avec FCB }
+ DW @24h { Fonction 24h - Définir l'adresse aléatoire avec FCB }
  DW @25h { Fonction 25h - Fixe le vecteur d'Interruption}
  DW @Xit { Fonction 26h - a developper }
  DW @Xit { Fonction 27h - a developper }
@@ -461,7 +480,7 @@ Procedure Intr21;Interrupt;Assembler;ASM
 @11h:
  PUSH SI                    { Sauver registres }
  PUSH DI
- PUSH DS  
+ PUSH DS
  PUSH ES
  MOV SI,DX                  { DS:DX pointe sur le FCB }
  { Pour cette implementation basique, nous retournons "aucun fichier trouve" }
@@ -651,6 +670,147 @@ Procedure Intr21;Interrupt;Assembler;ASM
  MOV AL,Data.DataMOS.CurrDisk
  JMP @Xit
 
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
+ { Interruption 21h - Fonction 20h: Terminer le programme (obsolète)           }
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
+@20h:
+ { Fonction de terminaison obsolète, équivalente à la fonction 00h }
+ MOV AH,4Ch                 { Fonction 4Ch - Terminaison avec code de retour }
+ XOR AL,AL                  { Code de retour = 0 }
+ INT 21h                    { Appel récursif pour terminer proprement }
+ JMP @Xit
+
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
+ { Interruption 21h - Fonction 21h: Lecture aléatoire avec FCB                 }
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
+@21h:
+ PUSH SI                    { Sauver registres }
+ PUSH DI
+ PUSH DS
+ PUSH ES
+ MOV SI,DX                  { DS:DX pointe sur le FCB }
+ { Vérifier que le FCB est ouvert }
+ CMP BYTE PTR [SI],0        { Drive = 0 ? }
+ JE @21Error
+ { Lecture aléatoire : utilise le champ "random record number" du FCB }
+ { Offset 21h (33) dans le FCB contient le numéro d'enregistrement }
+ { Implementation simplifiée: simuler une lecture réussie }
+ { Dans un DOS complet, il faudrait :
+   1. Lire le numéro d'enregistrement depuis FCB+21h (4 octets)
+   2. Calculer la position dans le fichier
+   3. Lire les données dans la DTA
+   4. Mettre à jour les champs FCB si nécessaire }
+ MOV AL,0                   { Code de retour: succès }
+ JMP @21End
+@21Error:
+ MOV AL,1                   { Code d'erreur: EOF ou FCB invalide }
+@21End:
+ POP ES                     { Restaurer registres }
+ POP DS
+ POP DI
+ POP SI
+ JMP @Xit
+
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
+ { Interruption 21h - Fonction 22h: Ecriture aléatoire avec FCB                }
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
+@22h:
+ PUSH SI                    { Sauver registres }
+ PUSH DI
+ PUSH DS
+ PUSH ES
+ MOV SI,DX                  { DS:DX pointe sur le FCB }
+ { Vérifier que le FCB est ouvert }
+ CMP BYTE PTR [SI],0        { Drive = 0 ? }
+ JE @22Error
+ { Ecriture aléatoire : utilise le champ "random record number" du FCB }
+ { Implementation simplifiée: simuler une écriture réussie }
+ { Dans un DOS complet, il faudrait :
+   1. Lire le numéro d'enregistrement depuis FCB+21h (4 octets)
+   2. Calculer la position dans le fichier
+   3. Ecrire les données depuis la DTA
+   4. Mettre à jour la taille du fichier dans le FCB si nécessaire }
+ MOV AL,0                   { Code de retour: succès }
+ JMP @22End
+@22Error:
+ MOV AL,1                   { Code d'erreur: disque plein ou FCB invalide }
+@22End:
+ POP ES                     { Restaurer registres }
+ POP DS
+ POP DI
+ POP SI
+ JMP @Xit
+
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
+ { Interruption 21h - Fonction 23h: Obtenir la taille de fichier avec FCB      }
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
+@23h:
+ PUSH SI                    { Sauver registres }
+ PUSH DI
+ PUSH DS
+ PUSH ES
+ MOV SI,DX                  { DS:DX pointe sur le FCB }
+ { Vérifier que le nom de fichier est valide dans le FCB }
+ CMP BYTE PTR [SI+1],' '    { Premier caractère du nom vide ? }
+ JE @23Error
+ { Obtenir la taille du fichier et la convertir en numéro d'enregistrement }
+ { Dans un DOS complet, il faudrait :
+   1. Localiser le fichier sur le disque
+   2. Lire sa taille depuis l'entrée de répertoire
+   3. Calculer le numéro du dernier enregistrement
+   4. Stocker ce numéro dans FCB+21h (random record number) }
+ { Implementation simplifiée: simuler une taille fictive }
+ MOV WORD PTR [SI+33],100   { Nombre d'enregistrements fictif (partie basse) }
+ MOV WORD PTR [SI+35],0     { Partie haute = 0 }
+ MOV AL,0                   { Code de retour: succès }
+ JMP @23End
+@23Error:
+ MOV AL,0FFh                { Code d'erreur: fichier non trouvé }
+@23End:
+ POP ES                     { Restaurer registres }
+ POP DS
+ POP DI
+ POP SI
+ JMP @Xit
+
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
+ { Interruption 21h - Fonction 24h: Définir l'adresse aléatoire avec FCB       }
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
+@24h:
+ PUSH SI                    { Sauver registres }
+ PUSH DI
+ PUSH DS
+ PUSH ES
+ MOV SI,DX                  { DS:DX pointe sur le FCB }
+ { Vérifier que le FCB est valide }
+ CMP BYTE PTR [SI],0        { Drive = 0 ? }
+ JE @24Error
+ { Définir l'adresse aléatoire dans le FCB }
+ { Cette fonction copie le champ "current block" et "current record"
+   vers le champ "random record number" pour permettre l'accès aléatoire }
+ { FCB+0Ch = current block (2 octets)
+   FCB+20h = current record (1 octet)
+   FCB+21h = random record number (4 octets) }
+ MOV AX,[SI+12]             { Lire current block }
+ MOV BL,[SI+32]             { Lire current record }
+ XOR BH,BH                  { Étendre à 16-bit }
+ { Calculer l'adresse aléatoire: block * 128 + record }
+ MOV CX,128                 { Taille de bloc standard }
+ MUL CX                     { AX = block * 128 }
+ ADD AX,BX                  { AX = block * 128 + record }
+ MOV [SI+33],AX             { Stocker dans random record (partie basse) }
+ MOV WORD PTR [SI+35],0     { Partie haute = 0 }
+ MOV AL,0                   { Code de retour: succès }
+ JMP @24End
+@24Error:
+ MOV AL,0FFh                { Code d'erreur: FCB invalide }
+@24End:
+ POP ES                     { Restaurer registres }
+ POP DS
+ POP DI
+ POP SI
+ JMP @Xit
+
  {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
  { Interruption 21h - Fonction 25h: Fixe le vecteur d'Interruption }
  {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
@@ -722,7 +882,7 @@ Procedure Intr21;Interrupt;Assembler;ASM
  DEC Data.DataMOS.InDos
 END;
 
-Procedure Intr25h;Interrupt;Assembler;ASM
+Procedure Intr25h;Assembler;ASM
  XCHG AX,DX
  MOV AX,0201h
  PUSH DS
@@ -747,7 +907,17 @@ Procedure Intr2Fh;Interrupt;Assembler;ASM
  XOR AX,AX
 END;
 
+Procedure SetIntVec(AL:Byte;DS,DX:Word);
+Var
+ TableInt:Array[Byte]of Pointer Absolute 0:0;
+Begin
+ TableInt[AL]:=Ptr(DS,DX);
+End;
+
 Procedure END_KERNEL;Begin
+ ASM
+  DB 'FIN DU NOYAU MSDOS-0';
+ END;
 End;
 
 END.
