@@ -543,6 +543,20 @@ Function DOS54h_GetVerifyFlag:Byte;Near;Forward;
 { Fonction 55h - Create Child PSP }
 Function DOS55h_CreateChildPSP(NewPSPSegment:Word):Word;Near;Forward;
 
+{ Fonction 56h - Rename/Move File }
+Function DOS56h_RenameFile(OldPathPtr:Pointer;NewPathPtr:Pointer):Word;Near;Forward;
+
+{ Fonctions utilitaires pour opérations FAT réelles }
+Function ReadFATSector(Drive:Byte;Sector:Word;Var Buffer):Boolean;Near;Forward;
+Function WriteFATSector(Drive:Byte;Sector:Word;Var Buffer):Boolean;Near;Forward;
+Function ReadDirectorySector(Drive:Byte;Sector:Word;Var Buffer):Boolean;Near;Forward;
+Function WriteDirectorySector(Drive:Byte;Sector:Word;Var Buffer):Boolean;Near;Forward;
+Function FindDirectoryEntryByName(Drive:Byte;DirCluster:Word;
+                                  FileName:String;Var Entry:DirectoryEntryFAT;
+                                  Var EntryOffset:Word):Boolean;Near;Forward;
+Function ParseFullPath(Path:String;Var Drive:Byte;Var DirPath,FileName:String):Boolean;Near;Forward;
+Function UpdateDirectoryEntryName(Drive:Byte;DirCluster:Word;EntryOffset:Word;NewName:String):Boolean;Near;Forward;
+
 { Fonctions utilitaires pour la vérification }
 Function VerifyWrite(Drive:Byte;Sector:LongInt;Buffer:Pointer;Size:Word):Boolean;Near;Forward;
 Function WriteSectorWithVerify(Drive:Byte;Sector:LongInt;Buffer:Pointer):Boolean;Near;Forward;
@@ -968,6 +982,7 @@ Procedure Intr21h;Assembler;ASM
  DW @53h { Fonction 53h - Translate BPB to DPB }
  DW @54h { Fonction 54h - Get Verify Flag }
  DW @55h { Fonction 55h - Create Child PSP }
+ DW @56h { Fonction 56h - Rename/Move File }
 
  {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
  { Interruption 21h - Fonction 00h: Terminer le programme                      }
@@ -3359,6 +3374,41 @@ Procedure Intr21h;Assembler;ASM
  
 @55h_Done:
  POP DX
+ POP CX
+ POP BX
+ JMP @Xit
+
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+ { Interruption 21h - Fonction 56h: Rename/Move File                         }
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+@56h:
+ PUSH BX                    { Sauvegarder les registres }
+ PUSH CX
+ PUSH SI
+ PUSH DI
+ 
+ { DS:DX pointe vers l'ancien nom, ES:DI vers le nouveau nom }
+ PUSH ES                    { Passer ES:DI comme paramètre (nouveau nom) }
+ PUSH DI
+ PUSH DS                    { Passer DS:DX comme paramètre (ancien nom) }
+ PUSH DX
+ 
+ CALL DOS56h_RenameFile     { Appeler fonction Pascal }
+ ADD SP,8                   { Nettoyer la pile (4 paramètres * 2 bytes) }
+ 
+ { AX contient le code de retour (0=succès, autre=erreur) }
+ CMP AX,0
+ JNE @56h_Error
+ 
+ CLC                        { Clear Carry Flag - succès }
+ JMP @56h_Done
+ 
+@56h_Error:
+ STC                        { Set Carry Flag - erreur }
+ 
+@56h_Done:
+ POP DI
+ POP SI
  POP CX
  POP BX
  JMP @Xit
@@ -8271,9 +8321,9 @@ Var
  DriveNum: Byte;
  Head, Track, SectorNum: Byte;
  WriteSuccess: Byte;
- Result: Boolean;
+ WriteResult: Boolean;
 Begin
- Result := False;
+ WriteResult := False;
  WriteSuccess := 0;
  
  { Calculer les paramètres CHS pour le lecteur C: (disque dur) }
@@ -8328,15 +8378,15 @@ Begin
  END;
  
  { Assigner le résultat }
- Result := (WriteSuccess <> 0);
+ WriteResult := (WriteSuccess <> 0);
  
  { Si la vérification est activée, vérifier l'écriture }
- If Result And (GetVerifyFlag <> 0) Then Begin
-  Result := VerifyWrite(DriveNum And $7F, Sector, @Buffer, 512);
+ If WriteResult And (GetVerifyFlag <> 0) Then Begin
+  WriteResult := VerifyWrite(DriveNum And $7F, Sector, @Buffer, 512);
  End;
  
  { Retourner le résultat final }
- WriteSectorSimple := Result;
+ WriteSectorSimple := WriteResult;
 End;
 
 { Fonctions d'accès aux données du kernel dans le Code Segment }
@@ -9058,6 +9108,406 @@ Begin
  { Note: Cette fonction était principalement utilisée dans DOS 1.x et 2.x
    Elle a été largement remplacée par les fonctions 26h et 4Bh dans les
    versions ultérieures, mais reste disponible pour compatibilité }
+End;
+
+{ Fonctions utilitaires pour opérations FAT réelles - Utilisent INT 25h/26h }
+
+{ Lire un secteur de FAT avec INT 25h }
+Function ReadFATSector(Drive:Byte;Sector:Word;Var Buffer):Boolean;
+Var
+ DriveNum: Byte;
+ Result: Boolean;
+Begin
+ Result := False;
+ 
+ { Convertir numéro de lecteur (0=A:, 1=B:, 2=C:) }
+ DriveNum := Drive;
+ 
+ { Utiliser INT 25h pour lire le secteur }
+ ASM
+  PUSH AX
+  PUSH BX
+  PUSH CX
+  PUSH DX
+  PUSH DS
+  
+  MOV AL, DriveNum       { Lecteur }
+  MOV DX, Sector         { Secteur à lire }
+  MOV CX, 1              { Nombre de secteurs }
+  LDS BX, Buffer         { DS:BX pointe vers le buffer }
+  
+  INT 25h                { Lecture absolue de secteur }
+  JC @ReadFATError
+  
+  MOV Result, 1          { Succès }
+  JMP @ReadFATDone
+  
+@ReadFATError:
+  MOV Result, 0          { Erreur }
+  
+@ReadFATDone:
+  POPF                   { INT 25h laisse des flags sur la pile }
+  POP DS
+  POP DX
+  POP CX
+  POP BX
+  POP AX
+ END;
+ 
+ ReadFATSector := Result;
+End;
+
+{ Écrire un secteur de FAT avec INT 26h }
+Function WriteFATSector(Drive:Byte;Sector:Word;Var Buffer):Boolean;
+Var
+ DriveNum: Byte;
+ Result: Boolean;
+Begin
+ Result := False;
+ 
+ DriveNum := Drive;
+ 
+ { Utiliser INT 26h pour écrire le secteur }
+ ASM
+  PUSH AX
+  PUSH BX
+  PUSH CX
+  PUSH DX
+  PUSH DS
+  
+  MOV AL, DriveNum       { Lecteur }
+  MOV DX, Sector         { Secteur à écrire }
+  MOV CX, 1              { Nombre de secteurs }
+  LDS BX, Buffer         { DS:BX pointe vers le buffer }
+  
+  INT 26h                { Écriture absolue de secteur }
+  JC @WriteFATError
+  
+  MOV Result, 1          { Succès }
+  JMP @WriteFATDone
+  
+@WriteFATError:
+  MOV Result, 0          { Erreur }
+  
+@WriteFATDone:
+  POPF                   { INT 26h laisse des flags sur la pile }
+  POP DS
+  POP DX
+  POP CX
+  POP BX
+  POP AX
+ END;
+ 
+ WriteFATSector := Result;
+End;
+
+{ Lire un secteur de répertoire avec INT 25h }
+Function ReadDirectorySector(Drive:Byte;Sector:Word;Var Buffer):Boolean;
+Begin
+ { Même implémentation que ReadFATSector - la différence est conceptuelle }
+ ReadDirectorySector := ReadFATSector(Drive, Sector, Buffer);
+End;
+
+{ Écrire un secteur de répertoire avec INT 26h }
+Function WriteDirectorySector(Drive:Byte;Sector:Word;Var Buffer):Boolean;
+Var
+ WriteResult: Boolean;
+Begin
+ { Même implémentation que WriteFATSector - avec vérification si activée }
+ WriteResult := WriteFATSector(Drive, Sector, Buffer);
+ 
+ { Si la vérification est activée, vérifier l'écriture }
+ If WriteResult And (GetVerifyFlag <> 0) Then Begin
+  WriteResult := VerifyWrite(Drive, Sector, @Buffer, 512);
+ End;
+ 
+ WriteDirectorySector := WriteResult;
+End;
+
+{ Analyser un chemin complet en drive, répertoire et nom de fichier }
+Function ParseFullPath(Path:String;Var Drive:Byte;Var DirPath,FileName:String):Boolean;
+Var
+ ColonPos, LastSlashPos: Byte;
+ I: Byte;
+ FoundSlash: Boolean;
+Begin
+ ParseFullPath := False;
+ Drive := 2; { C: par défaut }
+ DirPath := '';
+ FileName := '';
+ 
+ If Length(Path) = 0 Then Exit;
+ 
+ { Chercher le drive (X:) }
+ ColonPos := Pos(':', Path);
+ If ColonPos = 2 Then Begin
+  Case UpCase(Path[1]) Of
+   'A': Drive := 0;
+   'B': Drive := 1;
+   'C': Drive := 2;
+   'D': Drive := 3;
+   'E': Drive := 4;
+   'F': Drive := 5;
+   'G': Drive := 6;
+   'H': Drive := 7;
+   'I': Drive := 8;
+   'J': Drive := 9;
+   'K': Drive := 10;
+   'L': Drive := 11;
+   'M': Drive := 12;
+   'N': Drive := 13;
+   'O': Drive := 14;
+   'P': Drive := 15;
+   'Q': Drive := 16;
+   'R': Drive := 17;
+   'S': Drive := 18;
+   'T': Drive := 19;
+   'U': Drive := 20;
+   'V': Drive := 21;
+   'W': Drive := 22;
+   'X': Drive := 23;
+   'Y': Drive := 24;
+   'Z': Drive := 25;
+  End;
+  Delete(Path, 1, 2); { Enlever "X:" }
+ End;
+ 
+ { Chercher le dernier backslash pour séparer répertoire et fichier }
+ LastSlashPos := 0;
+ FoundSlash := False;
+ For I := Length(Path) DownTo 1 Do Begin
+  If Path[I] = '\' Then Begin
+   LastSlashPos := I;
+   FoundSlash := True;
+   Break;
+  End;
+ End;
+ 
+ If FoundSlash Then Begin
+  DirPath := Copy(Path, 1, LastSlashPos - 1);
+  FileName := Copy(Path, LastSlashPos + 1, 255);
+ End Else Begin
+  DirPath := '';
+  FileName := Path;
+ End;
+ 
+ { Valider le nom de fichier (pas vide) }
+ If Length(FileName) = 0 Then Exit;
+ 
+ ParseFullPath := True;
+End;
+
+{ Chercher une entrée de répertoire par nom }
+Function FindDirectoryEntryByName(Drive:Byte;DirCluster:Word;
+                                  FileName:String;
+                                  Var Entry:DirectoryEntryFAT;
+                                  Var EntryOffset:Word):Boolean;
+Var
+ Buffer: Array[0..511] of Byte;
+ RootSector, Sector: Word;
+ I: Byte;
+ DirEntry: ^DirectoryEntryFAT;
+ EntryName: String;
+Begin
+ FindDirectoryEntryByName := False;
+ EntryOffset := 0;
+ 
+ { Pour cette implémentation, on cherche dans le répertoire racine }
+ { Dans un système complet, on suivrait la chaîne de clusters }
+ 
+ { Calculer le secteur de début du répertoire racine }
+ If Drive <= 1 Then
+  RootSector := 19  { Disquettes }
+ Else
+  RootSector := 33; { Disques durs }
+ 
+ { Parcourir les secteurs du répertoire racine }
+ For Sector := RootSector To RootSector + 31 Do Begin { Max 32 secteurs }
+  If Not ReadDirectorySector(Drive, Sector, Buffer) Then Continue;
+  
+  { Examiner chaque entrée de 32 bytes dans le secteur }
+  For I := 0 To 15 Do Begin { 16 entrées par secteur }
+   DirEntry := @Buffer[I * 32];
+   
+   { Entrée libre ? }
+   If DirEntry^.FileName[0] = #0 Then Break;
+   { Entrée supprimée ? }
+   If DirEntry^.FileName[0] = #$E5 Then Continue;
+   
+   { Convertir le nom 8.3 en chaîne }
+   EntryName := DOS83ToString(DirEntry^.FileName);
+   
+   { Comparaison insensible à la casse }
+   If UpperCase(EntryName) = UpperCase(FileName) Then Begin
+    { Trouvé ! Copier l'entrée }
+    Move(DirEntry^, Entry, SizeOf(DirectoryEntryFAT));
+    EntryOffset := (Sector - RootSector) * 16 + I;
+    FindDirectoryEntryByName := True;
+    Exit;
+   End;
+  End;
+ End;
+End;
+
+{ Mettre à jour le nom dans une entrée de répertoire }
+Function UpdateDirectoryEntryName(Drive:Byte;DirCluster:Word;EntryOffset:Word;NewName:String):Boolean;
+Var
+ Buffer: Array[0..511] of Byte;
+ RootSector, TargetSector: Word;
+ EntryIndex: Byte;
+ DirEntry: ^DirectoryEntryFAT;
+ DOS83Name: Array[0..10] of Char;
+ I: Byte;
+ DotPos: Byte;
+Begin
+ UpdateDirectoryEntryName := False;
+ 
+ { Calculer le secteur et l'index de l'entrée }
+ If Drive <= 1 Then
+  RootSector := 19
+ Else
+  RootSector := 33;
+ 
+ TargetSector := RootSector + (EntryOffset DIV 16);
+ EntryIndex := EntryOffset MOD 16;
+ 
+ { Lire le secteur contenant l'entrée }
+ If Not ReadDirectorySector(Drive, TargetSector, Buffer) Then Exit;
+ 
+ { Pointer vers l'entrée }
+ DirEntry := @Buffer[EntryIndex * 32];
+ 
+ { Convertir le nouveau nom en format 8.3 }
+ FillChar(DOS83Name, 11, Byte(' ')); { Remplir avec des espaces }
+ 
+ DotPos := Pos('.', NewName);
+ If DotPos > 0 Then Begin
+  { Nom avec extension }
+  For I := 1 To DotPos - 1 Do Begin
+   If I > 8 Then Break;
+   DOS83Name[I - 1] := UpCase(NewName[I]);
+  End;
+  For I := DotPos + 1 To Length(NewName) Do Begin
+   If (I - DotPos) > 3 Then Break;
+   DOS83Name[8 + (I - DotPos) - 1] := UpCase(NewName[I]);
+  End;
+ End Else Begin
+  { Nom sans extension }
+  For I := 1 To Length(NewName) Do Begin
+   If I > 8 Then Break;
+   DOS83Name[I - 1] := UpCase(NewName[I]);
+  End;
+ End;
+ 
+ { Mettre à jour l'entrée }
+ Move(DOS83Name, DirEntry^.FileName, 11);
+ 
+ { Réécrire le secteur }
+ UpdateDirectoryEntryName := WriteDirectorySector(Drive, TargetSector, Buffer);
+End;
+
+{ Fonction principale 56h - Rename/Move File }
+{ Entrée: DS:DX pointe vers l'ancien nom, ES:DI vers le nouveau nom }
+{ Sortie: AX = 0 (succès) ou code d'erreur DOS }
+Function DOS56h_RenameFile(OldPathPtr:Pointer;NewPathPtr:Pointer):Word;
+Var
+ OldPath, NewPath: String;
+ OldDrive, NewDrive: Byte;
+ OldDirPath, OldFileName: String;
+ NewDirPath, NewFileName: String;
+ OldEntry: DirectoryEntryFAT;
+ EntryOffset: Word;
+ P: PChar;
+ I: Byte;
+Begin
+ DOS56h_RenameFile := 2; { File not found par défaut }
+ 
+ { Convertir les pointeurs ASCIIZ en chaînes Pascal }
+ P := PChar(OldPathPtr);
+ OldPath := '';
+ I := 0;
+ While (P^ <> #0) And (I < 255) Do Begin
+  OldPath := OldPath + P^;
+  Inc(P);
+  Inc(I);
+ End;
+ 
+ P := PChar(NewPathPtr);
+ NewPath := '';
+ I := 0;
+ While (P^ <> #0) And (I < 255) Do Begin
+  NewPath := NewPath + P^;
+  Inc(P);
+  Inc(I);
+ End;
+ 
+ { Analyser les chemins }
+ If Not ParseFullPath(OldPath, OldDrive, OldDirPath, OldFileName) Then Begin
+  DOS56h_RenameFile := 2; { File not found }
+  Exit;
+ End;
+ 
+ If Not ParseFullPath(NewPath, NewDrive, NewDirPath, NewFileName) Then Begin
+  DOS56h_RenameFile := 3; { Path not found }
+  Exit;
+ End;
+ 
+ { Vérifier que c'est sur le même lecteur (DOS ne permet pas le déplacement entre lecteurs) }
+ If OldDrive <> NewDrive Then Begin
+  DOS56h_RenameFile := 17; { Not same device }
+  Exit;
+ End;
+ 
+ { Pour cette implémentation, on ne supporte que le renommage dans le même répertoire }
+ { Un système complet supporterait le déplacement entre répertoires }
+ If UpperCase(OldDirPath) <> UpperCase(NewDirPath) Then Begin
+  DOS56h_RenameFile := 3; { Path not found }
+  Exit;
+ End;
+ 
+ { Chercher le fichier source }
+ If Not FindDirectoryEntryByName(OldDrive, 0, OldFileName, OldEntry, EntryOffset) Then Begin
+  DOS56h_RenameFile := 2; { File not found }
+  Exit;
+ End;
+ 
+ { Vérifier que ce n'est pas un répertoire (pour cette implémentation simplifiée) }
+ If (OldEntry.Attributes And $10) <> 0 Then Begin
+  DOS56h_RenameFile := 5; { Access denied }
+  Exit;
+ End;
+ 
+ { Vérifier que le nouveau nom n'existe pas déjà }
+ If FindDirectoryEntryByName(NewDrive, 0, NewFileName, OldEntry, EntryOffset) Then Begin
+  DOS56h_RenameFile := 80; { File already exists }
+  Exit;
+ End;
+ 
+ { Restaurer l'entrée originale (elle a été écrasée par la recherche du nouveau nom) }
+ If Not FindDirectoryEntryByName(OldDrive, 0, OldFileName, OldEntry, EntryOffset) Then Begin
+  DOS56h_RenameFile := 2; { File not found }
+  Exit;
+ End;
+ 
+ { Mettre à jour le nom dans l'entrée de répertoire }
+ If Not UpdateDirectoryEntryName(OldDrive, 0, EntryOffset, NewFileName) Then Begin
+  DOS56h_RenameFile := 5; { Access denied }
+  Exit;
+ End;
+ 
+ DOS56h_RenameFile := 0; { Succès }
+ 
+ { Note: Cette implémentation gère le renommage basique dans le répertoire racine.
+   Un système DOS complet supporterait :
+   - Le déplacement entre sous-répertoires
+   - La gestion des noms longs (VFAT)
+   - Les attributs étendus
+   - La gestion des liens et raccourcis
+   - La validation complète des noms de fichiers
+   - La gestion des fichiers ouverts (verrouillage)
+   
+   Les interruptions 25h/26h sont utilisées pour l'accès direct aux secteurs
+   permettant une manipulation FAT12/FAT16 authentique. }
 End;
 
 Procedure SetIntVec(_AL:Byte;_DS,_DX:Word);Assembler;ASM
