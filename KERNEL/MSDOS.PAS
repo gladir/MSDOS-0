@@ -540,6 +540,9 @@ Function DOS53h_TranslateBPBtoDPB(BPBPtr:Pointer;DPBPtr:Pointer):Word;Near;Forwa
 Function DOS2Eh_SetVerifyFlag(VerifyState:Byte):Word;Near;Forward;
 Function DOS54h_GetVerifyFlag:Byte;Near;Forward;
 
+{ Fonction 55h - Create Child PSP }
+Function DOS55h_CreateChildPSP(NewPSPSegment:Word):Word;Near;Forward;
+
 { Fonctions utilitaires pour la vérification }
 Function VerifyWrite(Drive:Byte;Sector:LongInt;Buffer:Pointer;Size:Word):Boolean;Near;Forward;
 Function WriteSectorWithVerify(Drive:Byte;Sector:LongInt;Buffer:Pointer):Boolean;Near;Forward;
@@ -964,6 +967,7 @@ Procedure Intr21h;Assembler;ASM
  DW @52h { Fonction 52h - Get List of Lists }
  DW @53h { Fonction 53h - Translate BPB to DPB }
  DW @54h { Fonction 54h - Get Verify Flag }
+ DW @55h { Fonction 55h - Create Child PSP }
 
  {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
  { Interruption 21h - Fonction 00h: Terminer le programme                      }
@@ -3327,6 +3331,36 @@ Procedure Intr21h;Assembler;ASM
  CLC                        { Clear Carry Flag - toujours succès }
  
  POP CX
+ JMP @Xit
+
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+ { Interruption 21h - Fonction 55h: Create Child PSP                         }
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+@55h:
+ PUSH BX                    { Sauvegarder les registres }
+ PUSH CX
+ PUSH DX
+ 
+ MOV BX,DX                  { DX contient le segment du nouveau PSP }
+ PUSH BX                    { Paramètre pour la fonction Pascal }
+ 
+ CALL DOS55h_CreateChildPSP { Appeler fonction Pascal }
+ ADD SP,2                   { Nettoyer la pile }
+ 
+ { AX contient le code de retour (0=succès, autre=erreur) }
+ CMP AX,0
+ JNE @55h_Error
+ 
+ CLC                        { Clear Carry Flag - succès }
+ JMP @55h_Done
+ 
+@55h_Error:
+ STC                        { Set Carry Flag - erreur }
+ 
+@55h_Done:
+ POP DX
+ POP CX
+ POP BX
  JMP @Xit
 
 @Xit:
@@ -8903,6 +8937,127 @@ Begin
    - Les utilitaires système pour vérifier l'état de vérification
    - Les programmes qui veulent adapter leur comportement selon l'état
    - Les shells pour afficher l'état du système }
+End;
+
+{ Fonction 55h - Create Child PSP }
+{ Entrée: DX = segment où créer le nouveau PSP }
+{ Sortie: AX = 0 (succès) ou code d'erreur }
+Function DOS55h_CreateChildPSP(NewPSPSegment:Word):Word;
+Var
+ CurrentPSP: Word;
+ NewPSP: ProgramSegmentPrefix;
+ I: Integer;
+Begin
+ DOS55h_CreateChildPSP := 8; { Insufficient memory par défaut }
+ 
+ { Vérifier que le segment est valide }
+ If NewPSPSegment < $0060 Then Begin { En-dessous de la zone conventionnelle }
+  DOS55h_CreateChildPSP := 7; { Memory control blocks destroyed }
+  Exit;
+ End;
+ 
+ If NewPSPSegment > $9FFF Then Begin { Au-dessus de 640KB }
+  DOS55h_CreateChildPSP := 7; { Memory control blocks destroyed }
+  Exit;
+ End;
+ 
+ { Obtenir le PSP courant comme parent }
+ CurrentPSP := GetCurrentPSP;
+ If CurrentPSP = 0 Then CurrentPSP := $1000; { PSP par défaut }
+ 
+ { Initialiser le nouveau PSP }
+ FillChar(NewPSP, SizeOf(NewPSP), 0);
+ 
+ { INT 20h instruction (CD 20) au début du PSP }
+ NewPSP.Int20h := $20CD;
+ 
+ { Segment du haut de la mémoire (calculé à partir du segment + 256 bytes) }
+ NewPSP.TopOfMemory := NewPSPSegment + $10; { +256 bytes en paragraphes }
+ 
+ { Call to DOS dispatcher (9A 00 00 00 F0) }
+ NewPSP.CallToDispatcher[0] := $9A;
+ NewPSP.CallToDispatcher[1] := $00;
+ NewPSP.CallToDispatcher[2] := $00;
+ NewPSP.CallToDispatcher[3] := $00;
+ NewPSP.CallToDispatcher[4] := $F0;
+ 
+ { PSP parent }
+ NewPSP.ParentPSP := CurrentPSP;
+ 
+ { Copier la table des handles du parent }
+ ASM
+  PUSH DS
+  PUSH ES
+  PUSH SI
+  PUSH DI
+  
+  { Lire les handles du PSP parent }
+  MOV AX, CurrentPSP
+  MOV DS, AX
+  MOV SI, 18h        { Offset de la table des handles dans le PSP }
+  
+  { Copier vers le nouveau PSP }
+  LEA DI, NewPSP.HandleTable
+  MOV CX, 20         { 20 handles à copier }
+  CLD
+  REP MOVSB
+  
+  POP DI
+  POP SI
+  POP ES
+  POP DS
+ END;
+ 
+ { Taille table handles }
+ NewPSP.HandleTableSize := 20;
+ NewPSP.HandleTablePtr := Ptr(NewPSPSegment, $18); { Pointe vers la table }
+ 
+ { DOS call (CD 21 CB) }
+ NewPSP.DOSCall[0] := $CD;
+ NewPSP.DOSCall[1] := $21;
+ NewPSP.DOSCall[2] := $CB; { RETF }
+ 
+ { Copier l'environnement du parent }
+ ASM
+  PUSH DS
+  MOV AX, CurrentPSP
+  MOV DS, AX
+  MOV AX, [2Ch]      { Offset de l'environnement dans le PSP }
+  MOV NewPSP.Environment, AX
+  POP DS
+ END;
+ 
+ { Copier le PSP complet en mémoire au segment spécifié }
+ ASM
+  PUSH DS
+  PUSH ES
+  PUSH SI
+  PUSH DI
+  
+  { Source: notre structure NewPSP }
+  LEA SI, NewPSP
+  
+  { Destination: segment spécifié }
+  MOV AX, NewPSPSegment
+  MOV ES, AX
+  MOV DI, 0
+  
+  { Copier 256 bytes (taille d'un PSP) }
+  MOV CX, 256
+  CLD
+  REP MOVSB
+  
+  POP DI
+  POP SI
+  POP ES
+  POP DS
+ END;
+ 
+ DOS55h_CreateChildPSP := 0; { Succès }
+ 
+ { Note: Cette fonction était principalement utilisée dans DOS 1.x et 2.x
+   Elle a été largement remplacée par les fonctions 26h et 4Bh dans les
+   versions ultérieures, mais reste disponible pour compatibilité }
 End;
 
 Procedure SetIntVec(_AL:Byte;_DS,_DX:Word);Assembler;ASM
