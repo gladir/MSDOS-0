@@ -590,6 +590,8 @@ Function SetMCB(Segment:Word;MCB:MemoryControlBlock):Boolean;Near;Forward;
 Function GetMemoryStrategy:Word;Near;Forward;
 Procedure SetMemoryStrategy(NewStrategy:Word);Near;Forward;
 Function AllocateMemoryWithStrategy(Size:Word;Strategy:Word):Word;Near;Forward;
+Function GetUMBLinkState:Word;Near;Forward;
+Procedure SetUMBLinkState(NewState:Word);Near;Forward;
 
 { Fonctions d'accès aux données dans Code Segment }
 Function GetCurrentDrive: Byte;Near;Forward;
@@ -7642,6 +7644,10 @@ Begin
  If SetMCB(FirstMCB, MCB) Then Begin
   { Initialiser la stratégie d'allocation par défaut (First Fit) }
   SetMemoryStrategy(0);
+  
+  { Initialiser l'état UMB par défaut (non liés) }
+  SetUMBLinkState(0);
+  
   InitializeMemoryManager:=True;
  End;
 End;
@@ -9824,6 +9830,86 @@ Begin
  END;
 End;
 
+{ Obtient l'état de liaison UMB depuis le Code Segment }
+Function GetUMBLinkState:Word;
+Var
+ LinkState: Word;
+Begin
+ { Lire l'état de liaison UMB depuis la structure Data dans le Code Segment }
+ ASM
+  PUSH DS
+  
+  { Pointer vers la structure Data.DataMOS }
+  MOV AX,CS
+  MOV DS,AX
+  MOV SI,OFFSET Data.DataMOS
+  
+  { Lire le champ d'état UMB (supposons qu'il soit à un offset fixe) }
+  MOV AX,[SI+22]  { Offset approximatif pour l'état UMB }
+  MOV LinkState,AX
+  
+  POP DS
+ END;
+ 
+ GetUMBLinkState := LinkState;
+End;
+
+{ Définit l'état de liaison UMB dans le Code Segment }
+Procedure SetUMBLinkState(NewState:Word);
+Begin
+ { Sauvegarder l'état UMB dans la structure Data dans le Code Segment }
+ ASM
+  PUSH DS
+  PUSH AX
+  
+  { Pointer vers la structure Data.DataMOS }
+  MOV AX,CS
+  MOV DS,AX
+  MOV SI,OFFSET Data.DataMOS
+  
+  { Écrire le nouveau champ d'état UMB }
+  MOV AX,NewState
+  MOV [SI+22],AX  { Offset approximatif pour l'état UMB }
+  
+  POP AX
+  POP DS
+ END;
+End;
+
+{ Vérifie si les UMB sont disponibles dans le système }
+Function AreUMBsAvailable:Boolean;
+Begin
+ { Pour cette implémentation basique, simuler la disponibilité des UMB }
+ { Dans un vrai DOS, cela vérifierait la présence d'un gestionnaire UMB comme EMM386 }
+ AreUMBsAvailable := True; { Supposer que les UMB sont disponibles }
+End;
+
+{ Recherche et lie les blocs de mémoire haute (UMB) }
+Function LinkUMBs:Boolean;
+Var
+ UMBSegment: Word;
+ UMBSize: Word;
+Begin
+ LinkUMBs := False;
+ 
+ { Pour cette implémentation, simuler la liaison des UMB }
+ { Dans un vrai DOS, cela rechercherait les vrais blocs UMB }
+ UMBSegment := $D000; { Segment UMB typique }
+ UMBSize := $2000;    { Taille typique 128KB }
+ 
+ { Créer un MCB factice pour l'UMB }
+ If CreateMCB(UMBSegment - 1, UMBSize, 0, True) Then
+  LinkUMBs := True;
+End;
+
+{ Délie les blocs de mémoire haute (UMB) }
+Function UnlinkUMBs:Boolean;
+Begin
+ { Pour cette implémentation, simuler la déliaison des UMB }
+ { Dans un vrai DOS, cela retirerait les UMB de la chaîne MCB }
+ UnlinkUMBs := True;
+End;
+
 { Recherche de bloc mémoire avec stratégie First Fit }
 Function FindMemoryFirstFit(Size:Word;Var Segment:Word):Boolean;
 Var
@@ -9941,6 +10027,7 @@ End;
 Function DOS58h_GetSetMemoryStrategy(Action:Byte;NewStrategy:Word):Word;
 Var
  CurrentStrategy: Word;
+ CurrentUMBState: Word;
 Begin
  DOS58h_GetSetMemoryStrategy := $FFFF; { Erreur par défaut }
  
@@ -9961,12 +10048,56 @@ Begin
       DOS58h_GetSetMemoryStrategy := 0; { Succès }
      End;
      
+  2: Begin { GET UMB Link State - Obtenir l'état de liaison UMB }
+      { Vérifier si les UMB sont disponibles }
+      If Not AreUMBsAvailable Then Begin
+       DOS58h_GetSetMemoryStrategy := 1; { Invalid function }
+       Exit;
+      End;
+      
+      CurrentUMBState := GetUMBLinkState;
+      DOS58h_GetSetMemoryStrategy := CurrentUMBState;
+     End;
+     
+  3: Begin { SET UMB Link State - Définir l'état de liaison UMB }
+      { Vérifier si les UMB sont disponibles }
+      If Not AreUMBsAvailable Then Begin
+       DOS58h_GetSetMemoryStrategy := 1; { Invalid function }
+       Exit;
+      End;
+      
+      { Valider l'état (0=Unlinked, 1=Linked) }
+      If NewStrategy > 1 Then Begin
+       DOS58h_GetSetMemoryStrategy := 1; { Invalid function }
+       Exit;
+      End;
+      
+      { Effectuer la liaison/déliaison selon l'état demandé }
+      If NewStrategy = 1 Then Begin
+       { Lier les UMB }
+       If LinkUMBs Then Begin
+        SetUMBLinkState(1);
+        DOS58h_GetSetMemoryStrategy := 0; { Succès }
+       End Else Begin
+        DOS58h_GetSetMemoryStrategy := 8; { Insufficient memory }
+       End;
+      End Else Begin
+       { Délier les UMB }
+       If UnlinkUMBs Then Begin
+        SetUMBLinkState(0);
+        DOS58h_GetSetMemoryStrategy := 0; { Succès }
+       End Else Begin
+        DOS58h_GetSetMemoryStrategy := 1; { Invalid function }
+       End;
+      End;
+     End;
+     
   Else Begin
    DOS58h_GetSetMemoryStrategy := 1; { Invalid function }
   End;
  End;
  
- { Note: Cette implémentation gère les stratégies d'allocation mémoire basiques.
+ { Note: Cette implémentation gère les stratégies d'allocation mémoire et UMB basiques.
    Un système DOS complet supporterait :
    - La gestion de la mémoire étendue (XMS)
    - La gestion de la mémoire expansée (EMS)
@@ -9974,11 +10105,16 @@ Begin
    - La défragmentation automatique
    - Les statistiques détaillées d'allocation
    - La protection contre la fragmentation
+   - La détection automatique des gestionnaires UMB (EMM386, QEMM, etc.)
    
-   Les stratégies implémentées :
-   0 = First Fit : Premier bloc libre suffisamment grand
-   1 = Best Fit  : Plus petit bloc libre suffisamment grand
-   2 = Last Fit  : Dernier bloc libre suffisamment grand }
+   Les sous-fonctions implémentées :
+   00h = Get Memory Allocation Strategy
+   01h = Set Memory Allocation Strategy (0=First Fit, 1=Best Fit, 2=Last Fit)
+   02h = Get UMB Link State (0=Unlinked, 1=Linked)
+   03h = Set UMB Link State (0=Unlink, 1=Link)
+   
+   Les UMB (Upper Memory Blocks) permettent d'utiliser la mémoire haute
+   entre 640KB et 1MB pour charger des programmes et pilotes. }
 End;
 
 Procedure SetIntVec(_AL:Byte;_DS,_DX:Word);Assembler;ASM
