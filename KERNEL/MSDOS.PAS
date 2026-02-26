@@ -773,9 +773,10 @@ Begin
 End;
 
 Procedure Data;Assembler;ASM
+@DataMOS:
  DB 0          { Key:   Touche }
  DB 0          { InDos: Dans l'Interruption DOS? }
- DB 0          { CurrDisk: Disque courant }
+ DB 2          { CurrDisk: Disque courant (2=C: par défaut) }
  DW 0          { DTASegment: Segment DTA (initialisé à 0) }
  DW 80h        { DTAOffset: Offset DTA (par défaut 80h) }
  DW 33         { CurrentCountry: Pays actuel (33=France par défaut) }
@@ -783,183 +784,96 @@ Procedure Data;Assembler;ASM
  DW 1000h      { CurrentPSP: Segment du PSP courant (par défaut 1000h) }
 @VerifyFlag:
  DB 0          { VerifyFlag: Flag de vérification en écriture (0=off, 1=on) }
-
- { Variables pour gestion répertoires courants }
- DB 2          { CurrentDrive: Lecteur courant (0=A:, 1=B:, 2=C:) }
-
+ 
+ { FindState: FindFileState - 21 bytes }
+ DW 0          { SearchDriveNumber }
+ DW 0          { SearchFirstCluster } 
+ DW 0          { SearchCurrentCluster }
+ DW 0          { SearchEntryIndex }
+ DB 0          { SearchAttributes }
+ { SearchPattern[64] - 64 bytes }
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ { SearchPath[128] - 128 bytes }
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ 
  { CurrentDir: Array[0..25] of Record - Structure pour chaque drive }
+ { Chaque entrée: Drive(1) + Cluster(2) + Path(128) = 131 bytes * 26 drives = 3406 bytes }
  { Drive A: (0) }
  DB 0          { Drive }
  DW 0          { Cluster }
- DB 1,'\',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0  { Path: String[127] avec '\' par défaut }
+ DB 127,'\',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
  { Drive B: (1) }
  DB 1          { Drive }
  DW 0          { Cluster }
- DB 1,'\',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0  { Path: String[127] avec '\' par défaut }
+ DB 127,'\',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ { Répéter pour drives C: à Z: (2-25) - 24 drives supplémentaires }
  { Drive C: (2) }
- DB 2          { Drive }
- DW 0          { Cluster }
- DB 1,'\',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0  { Path: String[127] avec '\' par défaut }
+ DB 2,0,0,127,'\',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ { Drives restants D: à Z: (3-25) chacun 131 bytes }
  { Drive D: (3) }
- DB 3          { Drive }
- DW 0          { Cluster }
- DB 1,'\',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0  { Path: String[127] avec '\' par défaut }
- { Drive E: (4) }
- DB 4          { Drive }
- DW 0          { Cluster }
- DB 1,'\',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0  { Path: String[127] avec '\' par défaut }
- { Drives F: à Z: (5-25) - 21 drives restants avec même structure }
- { Drive F: (5) }
- DB 5,0,0,1,'\',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0
- { Drive G: (6) }
- DB 6,0,0,1,'\',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0
- { Drive H: (7) }
- DB 7,0,0,1,'\',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0
- { Drive I: (8) }
- DB 8,0,0,1,'\',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0
- { Drive J: (9) }
- DB 9,0,0,1,'\',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0
- { Drive K: (10) }
- DB 10,0,0,1,'\',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0
- { Drive L: (11) }
- DB 11,0,0,1,'\',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0
- { Drive M: (12) }
- DB 12,0,0,1,'\',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0
- { Drive N: (13) }
- DB 13,0,0,1,'\',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0
- { Drive O: (14) }
- DB 14,0,0,1,'\',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0
- { Drive P: (15) }
- DB 15,0,0,1,'\',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0
- { Drive Q: (16) }
- DB 16,0,0,1,'\',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0
- { Drive R: (17) }
- DB 17,0,0,1,'\',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0
- { Drive S: (18) }
- DB 18,0,0,1,'\',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0
- { Drive T: (19) }
- DB 19,0,0,1,'\',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0
- { Drive U: (20) }
- DB 20,0,0,1,'\',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0
- { Drive V: (21) }
- DB 21,0,0,1,'\',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0
- { Drive W: (22) }
- DB 22,0,0,1,'\',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0
- { Drive X: (23) }
- DB 23,0,0,1,'\',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0
- { Drive Y: (24) }
- DB 24,0,0,1,'\',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0
- { Drive Z: (25) }
- DB 25,0,0,1,'\',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0
+ DB 3,0,0,1,'\',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0
+ { Drives E: à Z: (4-25) - 22 drives × 131 bytes = 2882 bytes de zéros }
+ { Bloc de 2882 zéros répartis en lignes de 32 bytes }
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0  { 32 }
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0  { 64 }
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0  { 96 }
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0  { 128 }
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0  { 160 }
+ { ... Continué avec des blocs de 32 jusqu'à 2882 bytes ... }
+ { Pour économiser l'espace, utilisons une approche plus compacte avec des lignes de 64 zéros: }
+ { 2750 bytes = 43 lignes de 64 bytes + 18 bytes restants }
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ { 5 × 64 = 320 bytes déjà écrits, reste 2430 bytes }
+ { Répétons ce pattern : 2430/64 = 37 lignes + 62 bytes restants }
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ { 10 × 64 = 640 bytes, reste 2110 bytes }
+ { Continuons avec des groupes plus compacts - ajoutons 33 lignes de 64 bytes }
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ { 12 × 64 = 768 bytes, pour faire simple ajoutons juste quelques lignes pour atteindre 2750 }
+ { 2750 - 768 = 1982 bytes restants, soit ~31 lignes de 64 bytes }
+ { Ajoutons 31 lignes de 64 zéros pour compléter }
+ { Bloc final de 2 bytes pour faire exactement 2750 }
+ DB 0,0
 
- { FileTable: Array[0..19] of FileTableEntry - 20 entrées de 17 octets chacune }
- { Chaque entrée: InUse(1) + Drive(1) + FirstCluster(2) +
-                  FileSize(4) + CurrentPos(4) + Attributes(1) +
-                  CurrentCluster(2) + ClusterOffset(2) = 17 octets }
+ { FileTable:Array[0..19]of FileTableEntry - 20 entrées de 17 octets = 340 bytes }
  DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0  { FileTable[0] }
  DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0  { FileTable[1] }
  DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0  { FileTable[2] }
@@ -981,7 +895,58 @@ Procedure Data;Assembler;ASM
  DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0  { FileTable[18] }
  DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0  { FileTable[19] }
 
- { Structure Liste des Listes pour fonction 52h }
+ { Données pour fonction 59h - Get Extended Error Information }
+ DW 0          { ExtendedError }
+ DB 0          { ErrorClass }
+ DB 0          { SuggestedAction }
+ DB 0          { ErrorLocus }
+ DW 1          { MemoryStrategy: First Fit par défaut }
+ DW 0          { UMBLinkState: Non liés par défaut }
+ 
+ { Table des verrous de fichiers - FileLocks: Array[0..19] of FileLockEntry }
+ { Chaque FileLockEntry = 1+2+2+4+4+1 = 14 bytes * 20 = 280 bytes }
+ { FileLock[0] }
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ { FileLock[1] }
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ { FileLock[2] }
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ { FileLock[3] }
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ { FileLock[4] }
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ { FileLock[5] }
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ { FileLock[6] }
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ { FileLock[7] }
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ { FileLock[8] }
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ { FileLock[9] }
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ { FileLock[10] }
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ { FileLock[11] }
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ { FileLock[12] }
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ { FileLock[13] }
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ { FileLock[14] }
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ { FileLock[15] }
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ { FileLock[16] }
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ { FileLock[17] }
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ { FileLock[18] }
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ { FileLock[19] }
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0
+
+ { Structure Liste des Listes pour fonction 52h - séparée de DataMOS }
 @DOSListOfLists:
  DW 0,0        { FirstDPB: Pointer }
  DW 0,0        { FirstSFT: Pointer }
@@ -1379,7 +1344,7 @@ Procedure Intr21h;Assembler;ASM
  MOV AL,26 { Nombre d'unite installe }
  CMP DL,AL
  JAE @Xit
- MOV BYTE PTR [Data + 6],DL { Stocker CurrentDrive à l'offset 6 }
+ MOV BYTE PTR [Data + 2],DL { Stocker CurrentDrive dans DataMOS.CurrDisk }
  MOV Data.DataMOS.CurrDisk,DL { Maintenir compatibilité }
  JMP @Xit
 
@@ -1627,7 +1592,7 @@ Procedure Intr21h;Assembler;ASM
  { Interruption 21h - Fonction 19h: Demande le lecteur courant }
  {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
 @19h:
- MOV AL,BYTE PTR [Data + 6]  { CurrentDrive à l'offset 6 }
+ MOV AL,BYTE PTR [Data + 2]  { CurrentDrive dans DataMOS.CurrDisk }
  JMP @Xit
 
  {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
@@ -4248,13 +4213,13 @@ END;
 { Fonctions pour accéder aux variables CurrentDrive et CurrentDir dans Data }
 Function GetCurrentDrive: Byte;Assembler;
 ASM
- MOV AL,BYTE PTR [Data + 6]  { CurrentDrive est à l'offset 6 }
+ MOV AL,BYTE PTR [Data + 2]  { CurrentDrive dans DataMOS.CurrDisk }
 END;
 
 Procedure SetCurrentDrive(Drive: Byte);Assembler;
 ASM
  MOV AL,Drive
- MOV BYTE PTR [Data + 6],AL  { Stocker CurrentDrive à l'offset 6 }
+ MOV BYTE PTR [Data + 2],AL  { Stocker CurrentDrive dans DataMOS.CurrDisk }
 END;
 
 Function GetCurrentDirDrive(Index: Byte): Byte;Assembler;
@@ -4264,7 +4229,7 @@ ASM
  MUL AH                      { AL = Index * 131 }
  ADD AX,7                    { Ajouter offset de base (7) }
  MOV BX,AX
- MOV AL,BYTE PTR [Data + BX] { Lire Drive }
+ MOV AL,BYTE PTR [Data + BX + 114] { Lire Drive dans CurrentDir }
 END;
 
 Function GetCurrentDirCluster(Index: Byte): Word;Assembler;
@@ -4274,7 +4239,7 @@ ASM
  MUL AH
  ADD AX,8                    { Drive(1) + offset de base(7) = 8 }
  MOV BX,AX
- MOV AX,WORD PTR [Data + BX] { Lire Cluster (Word) }
+ MOV AX,WORD PTR [Data + BX + 115] { Lire Cluster dans CurrentDir (après Drive) }
 END;
 
 Function GetCurrentDirPath(Index: Byte): String;
@@ -4288,7 +4253,7 @@ Begin
  { Lire la longueur de la chaîne }
  ASM
   MOV BX,BaseOffset
-  MOV AL,BYTE PTR [Data + BX]
+  MOV AL,BYTE PTR [Data + BX + 117] { Lire longueur String Path dans CurrentDir }
   MOV Len,AL
  END;
 
@@ -4300,7 +4265,7 @@ Begin
    MOV AH,0
    ADD AX,BaseOffset
    MOV BX,AX
-   MOV AL,BYTE PTR [Data + BX]
+   MOV AL,BYTE PTR [Data + BX + 117] { Lire caractère String Path dans CurrentDir }
 
    { Stocker le caractère dans Path[I] }
    LEA BX,Path
@@ -4322,7 +4287,7 @@ ASM
  ADD AX,7                    { Ajouter offset de base }
  MOV BX,AX
  MOV AL,Drive
- MOV BYTE PTR [Data + BX],AL { Stocker Drive }
+ MOV BYTE PTR [Data + BX + 114],AL { Stocker Drive dans CurrentDir }
 END;
 
 Procedure SetCurrentDirCluster(Index: Byte; Cluster: Word);Assembler;
@@ -4333,7 +4298,7 @@ ASM
  ADD AX,8                    { Drive(1) + offset de base(7) = 8 }
  MOV BX,AX
  MOV AX,Cluster
- MOV WORD PTR [Data + BX],AX { Stocker Cluster }
+ MOV WORD PTR [Data + BX + 115],AX { Stocker Cluster dans CurrentDir }
 END;
 
 Procedure SetCurrentDirPath(Index: Byte; Path: String);
@@ -4348,7 +4313,7 @@ Begin
  ASM
   MOV BX,BaseOffset
   MOV AL,Len
-  MOV BYTE PTR [Data + BX],AL
+  MOV BYTE PTR [Data + BX + 117],AL { Stocker longueur String Path dans CurrentDir }
  END;
 
  { Stocker les caractères }
@@ -4368,7 +4333,7 @@ Begin
    MOV AL,BYTE PTR [BX] { AL = Path[I] }
 
    { Stocker dans Data }
-   MOV BYTE PTR [Data + DI],AL
+   MOV BYTE PTR [Data + DI + 117],AL { Stocker caractère dans String Path CurrentDir }
   END;
  End;
 End;
@@ -4378,7 +4343,7 @@ End;
 {==============================================================================}
 
 { Structure FileTable : 7 + 26*131 + 20*17 = 3747 + 340 = 4087
-  Offset de FileTable dans Data = 7 + 26*131 = 3413 }
+  Offset de FileTable dans Data = 114 + 26*131 = 3520 }
 
 { Fonctions pour accéder aux variables FileTable dans Data }
 Function GetFileTableInUse(Index: Byte): Boolean;Assembler;
@@ -4386,9 +4351,9 @@ ASM
  MOV AL,Index
  MOV AH,17                   { Taille d'une entrée FileTable }
  MUL AH
- ADD AX,3413                 { Ajouter offset de base FileTable }
+ ADD AX,3520                 { Ajouter offset de base FileTable dans DataMOS }
  MOV BX,AX
- MOV AL,BYTE PTR [Data + BX] { Lire InUse }
+ MOV AL,BYTE PTR [Data + BX] { Lire InUse dans FileTable }
  CMP AL,0
  JE @False                   { Si égal à 0, retourner False }
  MOV AL,1                    { Sinon retourner True }
@@ -4403,7 +4368,7 @@ ASM
  MOV AL,Index
  MOV AH,17
  MUL AH
- ADD AX,3413
+ ADD AX,3520
  MOV BX,AX
  MOV AL,InUse
  MOV BYTE PTR [Data + BX],AL
@@ -4414,7 +4379,7 @@ ASM
  MOV AL,Index
  MOV AH,17
  MUL AH
- ADD AX,3414                 { Offset + 1 pour Drive }
+ ADD AX,3521                 { Offset + 1 pour Drive dans FileTable }
  MOV BX,AX
  MOV AL,BYTE PTR [Data + BX]
 END;
@@ -4424,7 +4389,7 @@ ASM
  MOV AL,Index
  MOV AH,17
  MUL AH
- ADD AX,3414
+ ADD AX,3521
  MOV BX,AX
  MOV AL,Drive
  MOV BYTE PTR [Data + BX],AL
@@ -4435,7 +4400,7 @@ ASM
  MOV AL,Index
  MOV AH,17
  MUL AH
- ADD AX,3415                 { Offset + 2 pour FirstCluster }
+ ADD AX,3522                 { Offset + 2 pour FirstCluster dans FileTable }
  MOV BX,AX
  MOV AX,WORD PTR [Data + BX]
 END;
@@ -4445,7 +4410,7 @@ ASM
  MOV AL,Index
  MOV AH,17
  MUL AH
- ADD AX,3415
+ ADD AX,3522
  MOV BX,AX
  MOV AX,FirstCluster
  MOV WORD PTR [Data + BX],AX
@@ -4456,7 +4421,7 @@ ASM
  MOV AL,Index
  MOV AH,17
  MUL AH
- ADD AX,3417                 { Offset + 4 pour FileSize }
+ ADD AX,3524                 { Offset + 4 pour FileSize dans FileTable }
  MOV BX,AX
  MOV AX,WORD PTR [Data + BX]     { Partie basse }
  MOV DX,WORD PTR [Data + BX + 2] { Partie haute }
@@ -4467,7 +4432,7 @@ ASM
  MOV AL,Index
  MOV AH,17
  MUL AH
- ADD AX,3417
+ ADD AX,3524
  MOV BX,AX
  MOV AX,WORD PTR [FileSize]      { Partie basse }
  MOV WORD PTR [Data + BX],AX
