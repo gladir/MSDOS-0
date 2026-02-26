@@ -100,6 +100,52 @@ Unit MSDOS;
 
 INTERFACE
 
+{ Constantes pour les codes d'erreur étendus DOS }
+Const
+ { Codes d'erreur étendus }
+ ERROR_INVALID_FUNCTION      = 1;   { Fonction invalide }
+ ERROR_FILE_NOT_FOUND        = 2;   { Fichier non trouvé }
+ ERROR_PATH_NOT_FOUND        = 3;   { Chemin non trouvé }
+ ERROR_TOO_MANY_OPEN_FILES   = 4;   { Trop de fichiers ouverts }
+ ERROR_ACCESS_DENIED         = 5;   { Accès refusé }
+ ERROR_INVALID_HANDLE        = 6;   { Handle invalide }
+ ERROR_ARENA_TRASHED         = 7;   { Zone de contrôle mémoire détruite }
+ ERROR_NOT_ENOUGH_MEMORY     = 8;   { Pas assez de mémoire }
+ ERROR_INVALID_BLOCK         = 9;   { Bloc de mémoire invalide }
+ ERROR_BAD_ENVIRONMENT       = 10;  { Environnement incorrect }
+ ERROR_BAD_FORMAT            = 11;  { Format incorrect }
+ 
+ { Classes d'erreur }
+ ERRCLASS_OUTOFRESOURCE     = 1;    { Ressources épuisées }
+ ERRCLASS_TEMPSIT           = 2;    { Situation temporaire }
+ ERRCLASS_AUTH              = 3;    { Autorisation }
+ ERRCLASS_INTRN             = 4;    { Erreur interne }
+ ERRCLASS_HRDFAIL           = 5;    { Défaillance matérielle }
+ ERRCLASS_SYSFAIL           = 6;    { Défaillance système }
+ ERRCLASS_APPERR            = 7;    { Erreur d'application }
+ ERRCLASS_NOTFND            = 8;    { Non trouvé }
+ ERRCLASS_BADFMT            = 9;    { Format incorrect }
+ ERRCLASS_LOCKED            = 10;   { Verrouillé }
+ ERRCLASS_MEDIA             = 11;   { Erreur média }
+ ERRCLASS_EXISTS            = 12;   { Existe déjà }
+ ERRCLASS_UNK               = 13;   { Inconnu }
+ 
+ { Actions suggérées }
+ ERRACT_RETRY               = 1;    { Réessayer }
+ ERRACT_DLYRET              = 2;    { Attendre puis réessayer }
+ ERRACT_USER                = 3;    { Demander à l'utilisateur }
+ ERRACT_ABORT               = 4;    { Abandonner }
+ ERRACT_PANIC               = 5;    { Arrêt immédiat }
+ ERRACT_IGNORE              = 6;    { Ignorer }
+ ERRACT_INTRET              = 7;    { Réessayer après correction }
+ 
+ { Localisation de l'erreur }
+ ERRLOC_UNK                 = 1;    { Inconnue }
+ ERRLOC_DISK                = 2;    { Disque }
+ ERRLOC_NET                 = 3;    { Réseau }
+ ERRLOC_SERDEV              = 4;    { Périphérique série }
+ ERRLOC_MEM                 = 5;    { Mémoire }
+
 Type
   { Paramètres de lecteur de disque }
   DriveParameterTable=Record
@@ -231,6 +277,13 @@ Type
   CurrentPSP:Word;     { Segment du PSP courant }
   VerifyFlag:Byte;     { Flag de vérification en écriture (0=off, 1=on) }
   FindState: FindFileState; { État de la recherche de fichiers }
+  { Données pour fonction 59h - Get Extended Error Information }
+  ExtendedError:Word;       { Code d'erreur étendu }
+  ErrorClass:Byte;          { Classe d'erreur }
+  SuggestedAction:Byte;     { Action suggérée }
+  ErrorLocus:Byte;          { Localisation de l'erreur }
+  MemoryStrategy:Word;      { Stratégie d'allocation mémoire }
+  UMBLinkState:Word;        { État de liaison des UMB }
  End;
 
  { Structure pour les informations pays }
@@ -552,6 +605,9 @@ Function DOS57h_GetSetFileDateTime(Handle:Word;Action:Byte;NewDate,NewTime:Word)
 { Fonction 58h - Get/Set Memory Allocation Strategy }
 Function DOS58h_GetSetMemoryStrategy(Action:Byte;NewStrategy:Word):Word;Near;Forward;
 
+{ Fonction 59h - Get Extended Error Information }
+Function DOS59h_GetExtendedError:LongInt;Near;Forward;
+
 { Fonctions utilitaires pour opérations FAT réelles }
 Function ReadFATSector(Drive:Byte;Sector:Word;Var Buffer):Boolean;Near;Forward;
 Function WriteFATSector(Drive:Byte;Sector:Word;Var Buffer):Boolean;Near;Forward;
@@ -592,6 +648,15 @@ Procedure SetMemoryStrategy(NewStrategy:Word);Near;Forward;
 Function AllocateMemoryWithStrategy(Size:Word;Strategy:Word):Word;Near;Forward;
 Function GetUMBLinkState:Word;Near;Forward;
 Procedure SetUMBLinkState(NewState:Word);Near;Forward;
+
+{ Fonctions pour gestion des erreurs étendues }
+Procedure SetExtendedError(ErrorCode:Word;ErrorClass,SuggestedAction,ErrorLocus:Byte);Near;Forward;
+Function GetExtendedErrorCode:Word;Near;Forward;
+Function GetExtendedErrorClass:Byte;Near;Forward;
+Function GetExtendedSuggestedAction:Byte;Near;Forward;
+Function GetExtendedErrorLocus:Byte;Near;Forward;
+Procedure ClearExtendedError;Near;Forward;
+Procedure SetStandardError(ErrorCode:Word);Near;Forward;
 
 { Fonctions d'accès aux données dans Code Segment }
 Function GetCurrentDrive: Byte;Near;Forward;
@@ -996,6 +1061,7 @@ Procedure Intr21h;Assembler;ASM
  DW @56h { Fonction 56h - Rename/Move File }
  DW @57h { Fonction 57h - Get/Set File Date and Time }
  DW @58h { Fonction 58h - Get/Set Memory Allocation Strategy }
+ DW @59h { Fonction 59h - Get Extended Error Information }
 
  {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
  { Interruption 21h - Fonction 00h: Terminer le programme                      }
@@ -3507,6 +3573,54 @@ Procedure Intr21h;Assembler;ASM
  STC                        { Set Carry Flag - erreur }
  
 @58h_Done:
+ POP DX
+ POP CX
+ POP BX
+ JMP @Xit
+
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+ { Interruption 21h - Fonction 59h: Get Extended Error Information           }
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+@59h:
+ PUSH BX
+ PUSH CX
+ PUSH DX
+ 
+ { Appeler la fonction Pascal }
+ CALL DOS59h_GetExtendedError
+ 
+ { Le résultat est dans DX:AX (LongInt) }
+ { AX = Extended Error Code }
+ { BH = Error Class }
+ { BL = Suggested Action }
+ { CH = Locus }
+ { CL = non utilisé (0) }
+ 
+ { Décomposer le résultat LongInt }
+ { DX contient: High byte = Error Class, Low byte = Suggested Action }
+ { AX contient: Extended Error Code }
+ MOV BX,DX                  { BX = Error Class:Suggested Action }
+ MOV CX,DX                  { CX = Error Class:Suggested Action }
+ 
+ { Réorganiser les registres selon le format DOS 59h }
+ MOV BH,DH                  { BH = Error Class }
+ MOV BL,DL                  { BL = Suggested Action }
+ MOV CH,DH                  { CH = Locus (sera ajusté) }
+ MOV CL,0                   { CL = réservé }
+ 
+ { Pour obtenir le Locus directement depuis DataMOS }
+ PUSH AX
+ PUSH BX
+ PUSH SI
+ MOV SI,OFFSET DataMOS
+ MOV AL,[SI].DataMOS.ErrorLocus
+ MOV CH,AL                  { CH = Locus }
+ POP SI
+ POP BX
+ POP AX
+ 
+ CLC                        { Clear Carry Flag - toujours succès pour 59h }
+ 
  POP DX
  POP CX
  POP BX
@@ -6039,6 +6153,7 @@ Begin
 
  { Valider le mode d'accès }
  If Not ValidateAccessMode(AccessMode) Then Begin
+  SetStandardError(ERROR_INVALID_FUNCTION);
   DOS3Dh_OpenFile:=$FFFF; { Invalid access mode }
   Exit;
  End;
@@ -6055,12 +6170,14 @@ Begin
 
  { Analyser le chemin }
  If Not ParseFilePath(Path,Drive,DirPath,FileName) Then Begin
+  SetStandardError(ERROR_PATH_NOT_FOUND);
   DOS3Dh_OpenFile:=$FFFF; { Invalid path }
   Exit;
  End;
 
  { Lire boot sector }
  If Not ReadBootSector(Drive,BootSec) Then Begin
+  SetStandardError(ERROR_PATH_NOT_FOUND);
   DOS3Dh_OpenFile:=$FFFF; { Invalid drive }
   Exit;
  End;
@@ -6070,6 +6187,7 @@ Begin
   DirCluster:=0 { Répertoire racine }
  Else Begin
   If Not FindDirectoryByPath(Drive,BootSec,DirPath,DirCluster) Then Begin
+   SetStandardError(ERROR_PATH_NOT_FOUND);
    DOS3Dh_OpenFile:=$FFFF; { Path not found }
    Exit;
   End;
@@ -6077,12 +6195,14 @@ Begin
 
  { Chercher le fichier }
  If Not FindDirectoryEntry(Drive,BootSec,DirCluster,FileName + '        ',Entry,EntryOffset) Then Begin
+  SetStandardError(ERROR_FILE_NOT_FOUND);
   DOS3Dh_OpenFile:=$FFFF; { File not found }
   Exit;
  End;
 
  { Vérifier que c'est bien un fichier (pas un répertoire) }
  If (Entry.Attributes and $10) <> 0 Then Begin
+  SetStandardError(ERROR_ACCESS_DENIED);
   DOS3Dh_OpenFile:=$FFFF; { Access denied - c'est un répertoire }
   Exit;
  End;
@@ -6095,10 +6215,13 @@ Begin
  End;
 
  { Si succès, retourner le handle }
- If Result = 0 Then
-  DOS3Dh_OpenFile:=FileHandle
- Else
+ If Result = 0 Then Begin
+  ClearExtendedError; { Effacer les erreurs en cas de succès }
+  DOS3Dh_OpenFile:=FileHandle;
+ End Else Begin
+  SetStandardError(ERROR_ACCESS_DENIED); { Erreur générique si échec ouverture }
   DOS3Dh_OpenFile:=$FFFF;
+ End;
 End;
 
 { Flush les buffers de fichier vers le disque }
@@ -7647,6 +7770,9 @@ Begin
   
   { Initialiser l'état UMB par défaut (non liés) }
   SetUMBLinkState(0);
+  
+  { Initialiser les informations d'erreur étendue }
+  ClearExtendedError;
   
   InitializeMemoryManager:=True;
  End;
@@ -9798,8 +9924,8 @@ Begin
   MOV DS,AX
   MOV SI,OFFSET Data.DataMOS
   
-  { Lire le champ de stratégie (supposons qu'il soit à un offset fixe) }
-  MOV AX,[SI+20]  { Offset approximatif pour la stratégie }
+  { Lire le champ MemoryStrategy }
+  MOV AX,[SI].DataMOS.MemoryStrategy
   MOV Strategy,AX
   
   POP DS
@@ -9821,9 +9947,9 @@ Begin
   MOV DS,AX
   MOV SI,OFFSET Data.DataMOS
   
-  { Écrire le nouveau champ de stratégie }
+  { Écrire le nouveau champ MemoryStrategy }
   MOV AX,NewStrategy
-  MOV [SI+20],AX  { Offset approximatif pour la stratégie }
+  MOV [SI].DataMOS.MemoryStrategy,AX
   
   POP AX
   POP DS
@@ -9844,8 +9970,8 @@ Begin
   MOV DS,AX
   MOV SI,OFFSET Data.DataMOS
   
-  { Lire le champ d'état UMB (supposons qu'il soit à un offset fixe) }
-  MOV AX,[SI+22]  { Offset approximatif pour l'état UMB }
+  { Lire le champ UMBLinkState }
+  MOV AX,[SI].DataMOS.UMBLinkState
   MOV LinkState,AX
   
   POP DS
@@ -9867,9 +9993,9 @@ Begin
   MOV DS,AX
   MOV SI,OFFSET Data.DataMOS
   
-  { Écrire le nouveau champ d'état UMB }
+  { Écrire le nouveau champ UMBLinkState }
   MOV AX,NewState
-  MOV [SI+22],AX  { Offset approximatif pour l'état UMB }
+  MOV [SI].DataMOS.UMBLinkState,AX
   
   POP AX
   POP DS
@@ -10115,6 +10241,286 @@ Begin
    
    Les UMB (Upper Memory Blocks) permettent d'utiliser la mémoire haute
    entre 640KB et 1MB pour charger des programmes et pilotes. }
+End;
+
+{ Fonctions de gestion des erreurs étendues pour DOS 59h }
+
+{ Définit une erreur étendue complète dans le Code Segment }
+Procedure SetExtendedError(ErrorCode:Word;ErrorClass,SuggestedAction,ErrorLocus:Byte);
+Begin
+ { Sauvegarder toutes les informations d'erreur dans la structure Data }
+ ASM
+  PUSH DS
+  PUSH AX
+  
+  { Pointer vers la structure Data.DataMOS }
+  MOV AX,CS
+  MOV DS,AX
+  MOV SI,OFFSET Data.DataMOS
+  
+  { Écrire les champs d'erreur étendue }
+  MOV AX,ErrorCode
+  MOV [SI].DataMOS.ExtendedError,AX
+  
+  MOV AL,ErrorClass
+  MOV [SI].DataMOS.ErrorClass,AL
+  
+  MOV AL,SuggestedAction  
+  MOV [SI].DataMOS.SuggestedAction,AL
+  
+  MOV AL,ErrorLocus
+  MOV [SI].DataMOS.ErrorLocus,AL
+  
+  POP AX
+  POP DS
+ END;
+End;
+
+{ Obtient le code d'erreur étendu }
+Function GetExtendedErrorCode:Word;
+Var
+ ErrorCode: Word;
+Begin
+ ASM
+  PUSH DS
+  
+  { Pointer vers la structure Data.DataMOS }
+  MOV AX,CS
+  MOV DS,AX
+  MOV SI,OFFSET Data.DataMOS
+  
+  { Lire le champ ExtendedError }
+  MOV AX,[SI].DataMOS.ExtendedError
+  MOV ErrorCode,AX
+  
+  POP DS
+ END;
+ 
+ GetExtendedErrorCode := ErrorCode;
+End;
+
+{ Obtient la classe d'erreur }
+Function GetExtendedErrorClass:Byte;
+Var
+ ErrorClass: Byte;
+Begin
+ ASM
+  PUSH DS
+  
+  { Pointer vers la structure Data.DataMOS }
+  MOV AX,CS
+  MOV DS,AX
+  MOV SI,OFFSET Data.DataMOS
+  
+  { Lire le champ ErrorClass }
+  MOV AL,[SI].DataMOS.ErrorClass
+  MOV ErrorClass,AL
+  
+  POP DS
+ END;
+ 
+ GetExtendedErrorClass := ErrorClass;
+End;
+
+{ Obtient l'action suggérée }
+Function GetExtendedSuggestedAction:Byte;
+Var
+ SuggestedAction: Byte;
+Begin
+ ASM
+  PUSH DS
+  
+  { Pointer vers la structure Data.DataMOS }
+  MOV AX,CS
+  MOV DS,AX
+  MOV SI,OFFSET Data.DataMOS
+  
+  { Lire le champ SuggestedAction }
+  MOV AL,[SI].DataMOS.SuggestedAction
+  MOV SuggestedAction,AL
+  
+  POP DS
+ END;
+ 
+ GetExtendedSuggestedAction := SuggestedAction;
+End;
+
+{ Obtient la localisation de l'erreur }
+Function GetExtendedErrorLocus:Byte;
+Var
+ ErrorLocus: Byte;
+Begin
+ ASM
+  PUSH DS
+  
+  { Pointer vers la structure Data.DataMOS }
+  MOV AX,CS
+  MOV DS,AX
+  MOV SI,OFFSET Data.DataMOS
+  
+  { Lire le champ ErrorLocus }
+  MOV AL,[SI].DataMOS.ErrorLocus
+  MOV ErrorLocus,AL
+  
+  POP DS
+ END;
+ 
+ GetExtendedErrorLocus := ErrorLocus;
+End;
+
+{ Efface les informations d'erreur étendue }
+Procedure ClearExtendedError;
+Begin
+ { Remettre à zéro toutes les informations d'erreur }
+ ASM
+  PUSH DS
+  PUSH AX
+  
+  { Pointer vers la structure Data.DataMOS }
+  MOV AX,CS
+  MOV DS,AX
+  MOV SI,OFFSET Data.DataMOS
+  
+  { Effacer tous les champs d'erreur }
+  MOV AX,0
+  MOV [SI].DataMOS.ExtendedError,AX
+  MOV [SI].DataMOS.ErrorClass,AL
+  MOV [SI].DataMOS.SuggestedAction,AL
+  MOV [SI].DataMOS.ErrorLocus,AL
+  
+  POP AX
+  POP DS
+ END;
+End;
+
+{ Définit une erreur standard avec des paramètres prédéfinis }
+Procedure SetStandardError(ErrorCode:Word);
+Var
+ ErrorClass, SuggestedAction, ErrorLocus: Byte;
+Begin
+ { Définir les paramètres selon le code d'erreur }
+ Case ErrorCode Of
+  ERROR_INVALID_FUNCTION: Begin
+   ErrorClass := ERRCLASS_APPERR;
+   SuggestedAction := ERRACT_ABORT;
+   ErrorLocus := ERRLOC_UNK;
+  End;
+  
+  ERROR_FILE_NOT_FOUND: Begin
+   ErrorClass := ERRCLASS_NOTFND;
+   SuggestedAction := ERRACT_USER;
+   ErrorLocus := ERRLOC_DISK;
+  End;
+  
+  ERROR_PATH_NOT_FOUND: Begin
+   ErrorClass := ERRCLASS_NOTFND;
+   SuggestedAction := ERRACT_USER;
+   ErrorLocus := ERRLOC_DISK;
+  End;
+  
+  ERROR_TOO_MANY_OPEN_FILES: Begin
+   ErrorClass := ERRCLASS_OUTOFRESOURCE;
+   SuggestedAction := ERRACT_RETRY;
+   ErrorLocus := ERRLOC_UNK;
+  End;
+  
+  ERROR_ACCESS_DENIED: Begin
+   ErrorClass := ERRCLASS_AUTH;
+   SuggestedAction := ERRACT_USER;
+   ErrorLocus := ERRLOC_DISK;
+  End;
+  
+  ERROR_INVALID_HANDLE: Begin
+   ErrorClass := ERRCLASS_APPERR;
+   SuggestedAction := ERRACT_ABORT;
+   ErrorLocus := ERRLOC_UNK;
+  End;
+  
+  ERROR_NOT_ENOUGH_MEMORY: Begin
+   ErrorClass := ERRCLASS_OUTOFRESOURCE;
+   SuggestedAction := ERRACT_ABORT;
+   ErrorLocus := ERRLOC_MEM;
+  End;
+  
+  ERROR_INVALID_BLOCK: Begin
+   ErrorClass := ERRCLASS_APPERR;
+   SuggestedAction := ERRACT_ABORT;
+   ErrorLocus := ERRLOC_MEM;
+  End;
+  
+  Else Begin { Erreur inconnue }
+   ErrorClass := ERRCLASS_UNK;
+   SuggestedAction := ERRACT_IGNORE;
+   ErrorLocus := ERRLOC_UNK;
+  End;
+ End;
+ 
+ { Appeler la fonction complète }
+ SetExtendedError(ErrorCode, ErrorClass, SuggestedAction, ErrorLocus);
+End;
+
+{ Fonction auxiliaire pour le handler assembleur }
+Function GetExtendedErrorComponent(ComponentIndex:Byte):Byte;Assembler;
+ASM
+ PUSH DS
+ PUSH SI
+ 
+ { Pointer vers la structure Data.DataMOS }
+ MOV AX,CS
+ MOV DS,AX
+ MOV SI,OFFSET Data.DataMOS
+ 
+ { Sélectionner le composant selon l'index }
+ MOV AL,ComponentIndex
+ CMP AL,1
+ JE @GetClass
+ CMP AL,2  
+ JE @GetAction
+ CMP AL,3
+ JE @GetLocus
+ 
+ { Par défaut, retourner 0 }
+ MOV AL,0
+ JMP @Done
+ 
+@GetClass:
+ MOV AL,[SI].DataMOS.ErrorClass
+ JMP @Done
+ 
+@GetAction:
+ MOV AL,[SI].DataMOS.SuggestedAction
+ JMP @Done
+ 
+@GetLocus:
+ MOV AL,[SI].DataMOS.ErrorLocus
+ 
+@Done:
+ POP SI
+ POP DS
+END;
+
+{ Fonction principale 59h - Get Extended Error Information }
+Function DOS59h_GetExtendedError:LongInt;
+Var
+ ErrorCode: Word;
+ ErrorClass: Byte;
+ SuggestedAction: Byte;
+ ErrorLocus: Byte;
+ Result: LongInt;
+Begin
+ { Obtenir toutes les informations d'erreur étendue }
+ ErrorCode := GetExtendedErrorCode;
+ ErrorClass := GetExtendedErrorClass;
+ SuggestedAction := GetExtendedSuggestedAction;
+ ErrorLocus := GetExtendedErrorLocus;
+ 
+ { Empaqueter le résultat dans un LongInt }
+ { High Word: ErrorClass dans le byte haut, SuggestedAction dans le byte bas }
+ { Low Word: ErrorCode }
+ Result := (LongInt(ErrorClass) SHL 24) OR (LongInt(SuggestedAction) SHL 16) OR ErrorCode;
+ 
+ { Note: Dans le handler assembleur, le Locus sera récupéré séparément }
+ DOS59h_GetExtendedError := Result;
 End;
 
 Procedure SetIntVec(_AL:Byte;_DS,_DX:Word);Assembler;ASM
