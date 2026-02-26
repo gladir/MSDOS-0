@@ -476,6 +476,8 @@ Procedure Intr2Ah;Interrupt;Forward;
 Procedure Intr2Fh;Interrupt;Forward;
 Procedure Intr33h;Interrupt;Forward;
 
+
+
 { Déclarations des fonctions DOS }
 Function DOS4Eh_FindFirstFile(Path:String;Attr:Byte;var DTA:DTAStruct):Word;Forward;
 Function DOS4Fh_FindNextFile(var DTA:DTAStruct):Word;Forward;
@@ -1053,9 +1055,93 @@ Procedure Data;Assembler;ASM
 
 END;
 
-Procedure Intr20h;Assembler;ASM
- { TODO : Mettre le code n�cessaire }
-END;
+Procedure Intr20h;
+Begin
+ { INT 20h - Program Terminate }
+ { Cette interruption termine le programme courant et retourne au DOS }
+ 
+ ASM
+  PUSH AX
+  PUSH BX
+  PUSH CX
+  PUSH DX
+  PUSH SI
+  PUSH DI
+  PUSH DS
+  PUSH ES
+  
+  { Fermer tous les fichiers ouverts par le PSP courant }
+  { Parcourir la FileTable et marquer les fichiers comme fermés }
+  MOV CX,20                    { 20 entrées dans FileTable }
+  MOV SI,0                     { Index = 0 }
+@CloseLoop:
+  MOV AX,SI
+  MOV DX,17                    { Taille d'une entrée FileTable }
+  MUL DX
+  ADD AX,3520                  { Offset de FileTable }
+  MOV BX,AX
+  MOV BYTE PTR [Data + BX],0   { Marquer InUse = False }
+  INC SI
+  LOOP @CloseLoop
+  
+  { Obtenir le PSP parent depuis le PSP courant }
+  MOV DS,Data.DataMOS.CurrentPSP
+  MOV AX,WORD PTR DS:[16h]     { Offset 16h = Parent PSP }
+  MOV Data.DataMOS.CurrentPSP,AX
+  
+  { Restaurer les vecteurs d'interruption sauvegardés }
+  { INT 22h - Program Terminate Address }
+  MOV AX,WORD PTR DS:[0Ah]     { Offset }
+  MOV DX,WORD PTR DS:[0Ch]     { Segment }
+  PUSH DX                      { _DS: Segment }
+  PUSH AX                      { _DX: Offset }  
+  MOV AL,22h
+  PUSH AX                      { _AL: Numéro d'interruption }
+  CALL SetIntVec
+  
+  { INT 23h - Ctrl-Break Exit Address }
+  MOV AX,WORD PTR DS:[0Eh]     { Offset }
+  MOV DX,WORD PTR DS:[10h]     { Segment }
+  PUSH DX                      { _DS: Segment }
+  PUSH AX                      { _DX: Offset }
+  MOV AL,23h
+  PUSH AX                      { _AL: Numéro d'interruption }
+  CALL SetIntVec
+  
+  { INT 24h - Critical Error Handler }
+  MOV AX,WORD PTR DS:[12h]     { Offset }
+  MOV DX,WORD PTR DS:[14h]     { Segment }
+  PUSH DX                      { _DS: Segment }
+  PUSH AX                      { _DX: Offset }
+  MOV AL,24h
+  PUSH AX                      { _AL: Numéro d'interruption }
+  CALL SetIntVec
+  
+  { Mettre le code de retour à 0 (terminaison normale) }
+  MOV Data.DataMOS.LastReturnCode,0
+  
+  { Obtenir l'adresse de terminaison }
+  MOV DS,Data.DataMOS.CurrentPSP
+  MOV SI,WORD PTR DS:[0Ah]     { Program Terminate Address (Offset) }
+  MOV DI,WORD PTR DS:[0Ch]     { Program Terminate Address (Segment) }
+  
+  { Restaurer les registres }
+  POP ES
+  POP DS
+  POP DI
+  POP SI
+  POP DX
+  POP CX
+  POP BX
+  POP AX
+  
+  { Effectuer un saut FAR vers l'adresse de terminaison }
+  PUSH DI      { Segment }
+  PUSH SI      { Offset }
+  XOR AX,AX    { Code de retour = 0 }
+  RETF         { Retour FAR - saute vers l'adresse de terminaison }
+ END;
+End;
 
 Procedure Intr21h;Assembler;ASM
  INC Data.DataMOS.InDos
