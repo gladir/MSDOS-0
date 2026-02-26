@@ -467,15 +467,15 @@ End;
 {$ENDIF}
 
 { DÃ©clarations Forward }
-Procedure Intr1Ah;Interrupt;Forward;
-Procedure Intr20h;Interrupt;Forward;
-Procedure Intr21h;Interrupt;Forward;
-Procedure Intr25h;Interrupt;Forward;
-Procedure Intr26h;Interrupt;Forward;
-Procedure Intr28h;Interrupt;Forward;
-Procedure Intr2Ah;Interrupt;Forward;
-Procedure Intr2Fh;Interrupt;Forward;
-Procedure Intr33h;Interrupt;Forward;
+Procedure Intr1Ah;Forward;
+Procedure Intr20h;Forward;
+Procedure Intr21h;Forward;
+Procedure Intr25h;Forward;
+Procedure Intr26h;Forward;
+Procedure Intr28h;Forward;
+Procedure Intr2Ah;Forward;
+Procedure Intr2Fh;Forward;
+Procedure Intr33h;Forward;
 
 { DÃ©clarations des fonctions DOS }
 Function DOS4Eh_FindFirstFile(Path:String;Attr:Byte;var DTA:DTAStruct):Word;Forward;
@@ -492,6 +492,7 @@ Function ReadSectorSimple(Sector:Word;Var Buffer):Boolean;Near;Forward;
 Function WriteSectorSimple(Sector:Word;Var Buffer):Boolean;Near;Forward;
 
 Procedure SetIntVec(_AL:Byte;_DS,_DX:Word);Near;Forward;
+Procedure GetIntVec(_AL:Byte;Var _DS,_DX:Word);Near;Forward;
 Procedure DataCountry(CountryCode:Word;Var CountryInfo:DataCountryRec);Near;Forward;
 Procedure FillChar(Var Dest;Size:Word;Value:Byte);Near;Forward;
 Procedure Move(Var Source,Dest;Size:Word);Near;Forward;
@@ -738,7 +739,9 @@ Function GetVerifyFlag: Byte;Near;Forward;
 Procedure SetVerifyFlag(Flag: Byte);Near;Forward;
 
 Procedure BEGIN_KERNEL;
-Var I:Byte;
+Var 
+ I:Byte;
+ IntSeg, IntOfs: Word;
 Begin
  { Initialiser rÃ©pertoires courants via les fonctions d'accÃ¨s Code Segment }
  SetCurrentDrive(2); { C: par dÃ©faut }
@@ -755,6 +758,13 @@ Begin
 
  { Initialiser table des verrous de fichiers }
  InitializeFileLocks;
+
+ { VÃ©rifier si l'interruption 1Ah existe et l'installer si nÃ©cessaire }
+ GetIntVec($1A, IntSeg, IntOfs);
+ If (IntSeg = 0) And (IntOfs = 0) Then Begin
+  { L'interruption 1Ah n'existe pas, installer notre gestionnaire }
+  SetIntVec($1A, CSeg, Ofs(Intr1Ah));
+ End;
 
  SetIntVec($20,CSeg,Ofs(Intr21h));
  SetIntVec($21,CSeg,Ofs(Intr21h));
@@ -1055,6 +1065,84 @@ Procedure Data;Assembler;ASM
 END;
 
 Procedure Intr1Ah;Assembler;ASM
+ { INT 1Ah - Time of Day Services (Services d'horloge temps rÃ©el) }
+ { 
+   AH = 00h : Read System Time (lire l'heure systÃ¨me)
+         Retour : CX:DX = nombre de ticks depuis minuit
+                 AL = 1 si passage Ã  minuit depuis dernier appel
+   AH = 01h : Set System Time (fixer l'heure systÃ¨me)
+         EntrÃ©e : CX:DX = nombre de ticks depuis minuit
+   
+   1 tick = 1/18.2 seconde (environ 55ms)
+   1440 minutes * 60 secondes * 18.2 ticks = 1573040 ticks par jour
+ }
+ 
+ PUSH BP
+ MOV BP,SP
+ PUSH DS
+ PUSH ES
+ 
+ { Sauvegarder les registres modifiÃ©s }
+ PUSH BX
+ PUSH SI
+ PUSH DI
+ 
+ MOV AX,CS
+ MOV DS,AX
+ 
+ CMP AH,00h
+ JE @ReadTime
+ CMP AH,01h 
+ JE @SetTime
+ JMP @Exit
+ 
+@ReadTime:
+ { Lire l'heure systÃ¨me - simulation basÃ©e sur un compteur }
+ { Pour simplicitÃ©, on retourne une valeur incrÃ©mentÃ©e }
+ MOV CX,WORD PTR CS:[@TimeHigh]
+ MOV DX,WORD PTR CS:[@TimeLow]
+ 
+ { IncrÃ©menter le compteur pour simulation }
+ ADD DX,1
+ ADC CX,0
+ 
+ { VÃ©rifier si on dÃ©passe 24h (1573040 ticks) }
+ CMP CX,18h      { 1573040 = 0x180070 }
+ JB @NoMidnight
+ CMP DX,0070h
+ JB @NoMidnight
+ 
+ { Passage Ã  minuit - reset Ã  0 }
+ MOV CX,0
+ MOV DX,0
+ MOV AL,1        { Indiquer passage Ã  minuit }
+ JMP @SaveAndExit
+ 
+@NoMidnight:
+ MOV AL,0        { Pas de passage Ã  minuit }
+ 
+@SaveAndExit:
+ MOV WORD PTR CS:[@TimeHigh],CX
+ MOV WORD PTR CS:[@TimeLow],DX
+ JMP @Exit
+ 
+@SetTime:
+ { Fixer l'heure systÃ¨me }
+ MOV WORD PTR CS:[@TimeHigh],CX
+ MOV WORD PTR CS:[@TimeLow],DX
+ JMP @Exit
+ 
+@Exit:
+ POP DI
+ POP SI
+ POP BX
+ POP ES
+ POP DS
+ POP BP
+ IRET
+ 
+@TimeHigh DW 0    { Partie haute du compteur de ticks }
+@TimeLow  DW 0    { Partie basse du compteur de ticks }
 END;
 
 Procedure Intr20h;
@@ -1246,169 +1334,169 @@ Procedure Intr21h;Assembler;ASM
  DW @5Ah { Fonction 5Ah - Create Temporary File }
  DW @5Bh { Fonction 5Bh - Create New File }
  DW @5Ch { Fonction 5Ch - Lock/Unlock File Region }
- DW @Xit { Fonction 5Dh - a d‚velopper }
- DW @Xit { Fonction 5Eh - a d‚velopper }
- DW @Xit { Fonction 5Fh - a d‚velopper }
- DW @Xit { Fonction 60h - a d‚velopper }
- DW @Xit { Fonction 61h - a d‚velopper }
- DW @Xit { Fonction 62h - a d‚velopper }
- DW @Xit { Fonction 63h - a d‚velopper }
- DW @Xit { Fonction 64h - a d‚velopper }
- DW @Xit { Fonction 65h - a d‚velopper }
- DW @Xit { Fonction 66h - a d‚velopper }
- DW @Xit { Fonction 67h - a d‚velopper }
- DW @Xit { Fonction 68h - a d‚velopper }
- DW @Xit { Fonction 69h - a d‚velopper }
- DW @Xit { Fonction 6Ah - a d‚velopper }
- DW @Xit { Fonction 6Bh - a d‚velopper }
- DW @Xit { Fonction 6Ch - a d‚velopper }
- DW @Xit { Fonction 6Dh - a d‚velopper }
- DW @Xit { Fonction 6Eh - a d‚velopper }
- DW @Xit { Fonction 6Fh - a d‚velopper }
- DW @Xit { Fonction 70h - a d‚velopper }
- DW @Xit { Fonction 71h - a d‚velopper }
- DW @Xit { Fonction 72h - a d‚velopper }
- DW @Xit { Fonction 73h - a d‚velopper }
- DW @Xit { Fonction 74h - a d‚velopper }
- DW @Xit { Fonction 75h - a d‚velopper }
- DW @Xit { Fonction 76h - a d‚velopper }
- DW @Xit { Fonction 77h - a d‚velopper }
- DW @Xit { Fonction 78h - a d‚velopper }
- DW @Xit { Fonction 79h - a d‚velopper }
- DW @Xit { Fonction 7Ah - a d‚velopper }
- DW @Xit { Fonction 7Bh - a d‚velopper }
- DW @Xit { Fonction 7Ch - a d‚velopper }
- DW @Xit { Fonction 7Dh - a d‚velopper }
- DW @Xit { Fonction 7Eh - a d‚velopper }
- DW @Xit { Fonction 7Fh - a d‚velopper }
- DW @Xit { Fonction 80h - a d‚velopper }
- DW @Xit { Fonction 81h - a d‚velopper }
- DW @Xit { Fonction 82h - a d‚velopper }
- DW @Xit { Fonction 83h - a d‚velopper }
- DW @Xit { Fonction 84h - a d‚velopper }
- DW @Xit { Fonction 85h - a d‚velopper }
- DW @Xit { Fonction 86h - a d‚velopper }
- DW @Xit { Fonction 87h - a d‚velopper }
- DW @Xit { Fonction 88h - a d‚velopper }
- DW @Xit { Fonction 89h - a d‚velopper }
- DW @Xit { Fonction 8Ah - a d‚velopper }
- DW @Xit { Fonction 8Bh - a d‚velopper }
- DW @Xit { Fonction 8Ch - a d‚velopper }
- DW @Xit { Fonction 8Dh - a d‚velopper }
- DW @Xit { Fonction 8Eh - a d‚velopper }
- DW @Xit { Fonction 8Fh - a d‚velopper }
- DW @Xit { Fonction 90h - a d‚velopper }
- DW @Xit { Fonction 91h - a d‚velopper }
- DW @Xit { Fonction 92h - a d‚velopper }
- DW @Xit { Fonction 93h - a d‚velopper }
- DW @Xit { Fonction 94h - a d‚velopper }
- DW @Xit { Fonction 95h - a d‚velopper }
- DW @Xit { Fonction 96h - a d‚velopper }
- DW @Xit { Fonction 97h - a d‚velopper }
- DW @Xit { Fonction 98h - a d‚velopper }
- DW @Xit { Fonction 99h - a d‚velopper }
- DW @Xit { Fonction 9Ah - a d‚velopper }
- DW @Xit { Fonction 9Bh - a d‚velopper }
- DW @Xit { Fonction 9Ch - a d‚velopper }
- DW @Xit { Fonction 9Dh - a d‚velopper }
- DW @Xit { Fonction 9Eh - a d‚velopper }
- DW @Xit { Fonction 9Fh - a d‚velopper }
- DW @Xit { Fonction A0h - a d‚velopper }
- DW @Xit { Fonction A1h - a d‚velopper }
- DW @Xit { Fonction A2h - a d‚velopper }
- DW @Xit { Fonction A3h - a d‚velopper }
- DW @Xit { Fonction A4h - a d‚velopper }
- DW @Xit { Fonction A5h - a d‚velopper }
- DW @Xit { Fonction A6h - a d‚velopper }
- DW @Xit { Fonction A7h - a d‚velopper }
- DW @Xit { Fonction A8h - a d‚velopper }
- DW @Xit { Fonction A9h - a d‚velopper }
- DW @Xit { Fonction AAh - a d‚velopper }
- DW @Xit { Fonction ABh - a d‚velopper }
- DW @Xit { Fonction ACh - a d‚velopper }
- DW @Xit { Fonction ADh - a d‚velopper }
- DW @Xit { Fonction AEh - a d‚velopper }
- DW @Xit { Fonction AFh - a d‚velopper }
- DW @Xit { Fonction B0h - a d‚velopper }
- DW @Xit { Fonction B1h - a d‚velopper }
- DW @Xit { Fonction B2h - a d‚velopper }
- DW @Xit { Fonction B3h - a d‚velopper }
- DW @Xit { Fonction B4h - a d‚velopper }
- DW @Xit { Fonction B5h - a d‚velopper }
- DW @Xit { Fonction B6h - a d‚velopper }
- DW @Xit { Fonction B7h - a d‚velopper }
- DW @Xit { Fonction B8h - a d‚velopper }
- DW @Xit { Fonction B9h - a d‚velopper }
- DW @Xit { Fonction BAh - a d‚velopper }
- DW @Xit { Fonction BBh - a d‚velopper }
- DW @Xit { Fonction BCh - a d‚velopper }
- DW @Xit { Fonction BDh - a d‚velopper }
- DW @Xit { Fonction BEh - a d‚velopper }
- DW @Xit { Fonction BFh - a d‚velopper }
- DW @Xit { Fonction C0h - a d‚velopper }
- DW @Xit { Fonction C1h - a d‚velopper }
- DW @Xit { Fonction C2h - a d‚velopper }
- DW @Xit { Fonction C3h - a d‚velopper }
- DW @Xit { Fonction C4h - a d‚velopper }
- DW @Xit { Fonction C5h - a d‚velopper }
- DW @Xit { Fonction C6h - a d‚velopper }
- DW @Xit { Fonction C7h - a d‚velopper }
- DW @Xit { Fonction C8h - a d‚velopper }
- DW @Xit { Fonction C9h - a d‚velopper }
- DW @Xit { Fonction CAh - a d‚velopper }
- DW @Xit { Fonction CBh - a d‚velopper }
- DW @Xit { Fonction CCh - a d‚velopper }
- DW @Xit { Fonction CDh - a d‚velopper }
- DW @Xit { Fonction CEh - a d‚velopper }
- DW @Xit { Fonction CFh - a d‚velopper }
- DW @Xit { Fonction D0h - a d‚velopper }
- DW @Xit { Fonction D1h - a d‚velopper }
- DW @Xit { Fonction D2h - a d‚velopper }
- DW @Xit { Fonction D3h - a d‚velopper }
- DW @Xit { Fonction D4h - a d‚velopper }
- DW @Xit { Fonction D5h - a d‚velopper }
- DW @Xit { Fonction D6h - a d‚velopper }
- DW @Xit { Fonction D7h - a d‚velopper }
- DW @Xit { Fonction D8h - a d‚velopper }
- DW @Xit { Fonction D9h - a d‚velopper }
- DW @Xit { Fonction DAh - a d‚velopper }
- DW @Xit { Fonction DBh - a d‚velopper }
- DW @Xit { Fonction DCh - a d‚velopper }
- DW @Xit { Fonction DDh - a d‚velopper }
- DW @Xit { Fonction DEh - a d‚velopper }
- DW @Xit { Fonction DFh - a d‚velopper }
- DW @Xit { Fonction E0h - a d‚velopper }
- DW @Xit { Fonction E1h - a d‚velopper }
- DW @Xit { Fonction E2h - a d‚velopper }
- DW @Xit { Fonction E3h - a d‚velopper }
- DW @Xit { Fonction E4h - a d‚velopper }
- DW @Xit { Fonction E5h - a d‚velopper }
- DW @Xit { Fonction E6h - a d‚velopper }
- DW @Xit { Fonction E7h - a d‚velopper }
- DW @Xit { Fonction E8h - a d‚velopper }
- DW @Xit { Fonction E9h - a d‚velopper }
- DW @Xit { Fonction EAh - a d‚velopper }
- DW @Xit { Fonction EBh - a d‚velopper }
- DW @Xit { Fonction ECh - a d‚velopper }
- DW @Xit { Fonction EDh - a d‚velopper }
- DW @Xit { Fonction EEh - a d‚velopper }
- DW @Xit { Fonction EFh - a d‚velopper }
- DW @Xit { Fonction F0h - a d‚velopper }
- DW @Xit { Fonction F1h - a d‚velopper }
- DW @Xit { Fonction F2h - a d‚velopper }
- DW @Xit { Fonction F3h - a d‚velopper }
- DW @Xit { Fonction F4h - a d‚velopper }
- DW @Xit { Fonction F5h - a d‚velopper }
- DW @Xit { Fonction F6h - a d‚velopper }
- DW @Xit { Fonction F7h - a d‚velopper }
- DW @Xit { Fonction F8h - a d‚velopper }
- DW @Xit { Fonction F9h - a d‚velopper }
- DW @Xit { Fonction FAh - a d‚velopper }
- DW @Xit { Fonction FBh - a d‚velopper }
- DW @Xit { Fonction FCh - a d‚velopper }
- DW @Xit { Fonction FDh - a d‚velopper }
- DW @Xit { Fonction FEh - a d‚velopper }
- DW @Xit { Fonction FFh - a d‚velopper }
+ DW @Xit { Fonction 5Dh - a dï¿½velopper }
+ DW @Xit { Fonction 5Eh - a dï¿½velopper }
+ DW @Xit { Fonction 5Fh - a dï¿½velopper }
+ DW @Xit { Fonction 60h - a dï¿½velopper }
+ DW @Xit { Fonction 61h - a dï¿½velopper }
+ DW @Xit { Fonction 62h - a dï¿½velopper }
+ DW @Xit { Fonction 63h - a dï¿½velopper }
+ DW @Xit { Fonction 64h - a dï¿½velopper }
+ DW @Xit { Fonction 65h - a dï¿½velopper }
+ DW @Xit { Fonction 66h - a dï¿½velopper }
+ DW @Xit { Fonction 67h - a dï¿½velopper }
+ DW @Xit { Fonction 68h - a dï¿½velopper }
+ DW @Xit { Fonction 69h - a dï¿½velopper }
+ DW @Xit { Fonction 6Ah - a dï¿½velopper }
+ DW @Xit { Fonction 6Bh - a dï¿½velopper }
+ DW @Xit { Fonction 6Ch - a dï¿½velopper }
+ DW @Xit { Fonction 6Dh - a dï¿½velopper }
+ DW @Xit { Fonction 6Eh - a dï¿½velopper }
+ DW @Xit { Fonction 6Fh - a dï¿½velopper }
+ DW @Xit { Fonction 70h - a dï¿½velopper }
+ DW @Xit { Fonction 71h - a dï¿½velopper }
+ DW @Xit { Fonction 72h - a dï¿½velopper }
+ DW @Xit { Fonction 73h - a dï¿½velopper }
+ DW @Xit { Fonction 74h - a dï¿½velopper }
+ DW @Xit { Fonction 75h - a dï¿½velopper }
+ DW @Xit { Fonction 76h - a dï¿½velopper }
+ DW @Xit { Fonction 77h - a dï¿½velopper }
+ DW @Xit { Fonction 78h - a dï¿½velopper }
+ DW @Xit { Fonction 79h - a dï¿½velopper }
+ DW @Xit { Fonction 7Ah - a dï¿½velopper }
+ DW @Xit { Fonction 7Bh - a dï¿½velopper }
+ DW @Xit { Fonction 7Ch - a dï¿½velopper }
+ DW @Xit { Fonction 7Dh - a dï¿½velopper }
+ DW @Xit { Fonction 7Eh - a dï¿½velopper }
+ DW @Xit { Fonction 7Fh - a dï¿½velopper }
+ DW @Xit { Fonction 80h - a dï¿½velopper }
+ DW @Xit { Fonction 81h - a dï¿½velopper }
+ DW @Xit { Fonction 82h - a dï¿½velopper }
+ DW @Xit { Fonction 83h - a dï¿½velopper }
+ DW @Xit { Fonction 84h - a dï¿½velopper }
+ DW @Xit { Fonction 85h - a dï¿½velopper }
+ DW @Xit { Fonction 86h - a dï¿½velopper }
+ DW @Xit { Fonction 87h - a dï¿½velopper }
+ DW @Xit { Fonction 88h - a dï¿½velopper }
+ DW @Xit { Fonction 89h - a dï¿½velopper }
+ DW @Xit { Fonction 8Ah - a dï¿½velopper }
+ DW @Xit { Fonction 8Bh - a dï¿½velopper }
+ DW @Xit { Fonction 8Ch - a dï¿½velopper }
+ DW @Xit { Fonction 8Dh - a dï¿½velopper }
+ DW @Xit { Fonction 8Eh - a dï¿½velopper }
+ DW @Xit { Fonction 8Fh - a dï¿½velopper }
+ DW @Xit { Fonction 90h - a dï¿½velopper }
+ DW @Xit { Fonction 91h - a dï¿½velopper }
+ DW @Xit { Fonction 92h - a dï¿½velopper }
+ DW @Xit { Fonction 93h - a dï¿½velopper }
+ DW @Xit { Fonction 94h - a dï¿½velopper }
+ DW @Xit { Fonction 95h - a dï¿½velopper }
+ DW @Xit { Fonction 96h - a dï¿½velopper }
+ DW @Xit { Fonction 97h - a dï¿½velopper }
+ DW @Xit { Fonction 98h - a dï¿½velopper }
+ DW @Xit { Fonction 99h - a dï¿½velopper }
+ DW @Xit { Fonction 9Ah - a dï¿½velopper }
+ DW @Xit { Fonction 9Bh - a dï¿½velopper }
+ DW @Xit { Fonction 9Ch - a dï¿½velopper }
+ DW @Xit { Fonction 9Dh - a dï¿½velopper }
+ DW @Xit { Fonction 9Eh - a dï¿½velopper }
+ DW @Xit { Fonction 9Fh - a dï¿½velopper }
+ DW @Xit { Fonction A0h - a dï¿½velopper }
+ DW @Xit { Fonction A1h - a dï¿½velopper }
+ DW @Xit { Fonction A2h - a dï¿½velopper }
+ DW @Xit { Fonction A3h - a dï¿½velopper }
+ DW @Xit { Fonction A4h - a dï¿½velopper }
+ DW @Xit { Fonction A5h - a dï¿½velopper }
+ DW @Xit { Fonction A6h - a dï¿½velopper }
+ DW @Xit { Fonction A7h - a dï¿½velopper }
+ DW @Xit { Fonction A8h - a dï¿½velopper }
+ DW @Xit { Fonction A9h - a dï¿½velopper }
+ DW @Xit { Fonction AAh - a dï¿½velopper }
+ DW @Xit { Fonction ABh - a dï¿½velopper }
+ DW @Xit { Fonction ACh - a dï¿½velopper }
+ DW @Xit { Fonction ADh - a dï¿½velopper }
+ DW @Xit { Fonction AEh - a dï¿½velopper }
+ DW @Xit { Fonction AFh - a dï¿½velopper }
+ DW @Xit { Fonction B0h - a dï¿½velopper }
+ DW @Xit { Fonction B1h - a dï¿½velopper }
+ DW @Xit { Fonction B2h - a dï¿½velopper }
+ DW @Xit { Fonction B3h - a dï¿½velopper }
+ DW @Xit { Fonction B4h - a dï¿½velopper }
+ DW @Xit { Fonction B5h - a dï¿½velopper }
+ DW @Xit { Fonction B6h - a dï¿½velopper }
+ DW @Xit { Fonction B7h - a dï¿½velopper }
+ DW @Xit { Fonction B8h - a dï¿½velopper }
+ DW @Xit { Fonction B9h - a dï¿½velopper }
+ DW @Xit { Fonction BAh - a dï¿½velopper }
+ DW @Xit { Fonction BBh - a dï¿½velopper }
+ DW @Xit { Fonction BCh - a dï¿½velopper }
+ DW @Xit { Fonction BDh - a dï¿½velopper }
+ DW @Xit { Fonction BEh - a dï¿½velopper }
+ DW @Xit { Fonction BFh - a dï¿½velopper }
+ DW @Xit { Fonction C0h - a dï¿½velopper }
+ DW @Xit { Fonction C1h - a dï¿½velopper }
+ DW @Xit { Fonction C2h - a dï¿½velopper }
+ DW @Xit { Fonction C3h - a dï¿½velopper }
+ DW @Xit { Fonction C4h - a dï¿½velopper }
+ DW @Xit { Fonction C5h - a dï¿½velopper }
+ DW @Xit { Fonction C6h - a dï¿½velopper }
+ DW @Xit { Fonction C7h - a dï¿½velopper }
+ DW @Xit { Fonction C8h - a dï¿½velopper }
+ DW @Xit { Fonction C9h - a dï¿½velopper }
+ DW @Xit { Fonction CAh - a dï¿½velopper }
+ DW @Xit { Fonction CBh - a dï¿½velopper }
+ DW @Xit { Fonction CCh - a dï¿½velopper }
+ DW @Xit { Fonction CDh - a dï¿½velopper }
+ DW @Xit { Fonction CEh - a dï¿½velopper }
+ DW @Xit { Fonction CFh - a dï¿½velopper }
+ DW @Xit { Fonction D0h - a dï¿½velopper }
+ DW @Xit { Fonction D1h - a dï¿½velopper }
+ DW @Xit { Fonction D2h - a dï¿½velopper }
+ DW @Xit { Fonction D3h - a dï¿½velopper }
+ DW @Xit { Fonction D4h - a dï¿½velopper }
+ DW @Xit { Fonction D5h - a dï¿½velopper }
+ DW @Xit { Fonction D6h - a dï¿½velopper }
+ DW @Xit { Fonction D7h - a dï¿½velopper }
+ DW @Xit { Fonction D8h - a dï¿½velopper }
+ DW @Xit { Fonction D9h - a dï¿½velopper }
+ DW @Xit { Fonction DAh - a dï¿½velopper }
+ DW @Xit { Fonction DBh - a dï¿½velopper }
+ DW @Xit { Fonction DCh - a dï¿½velopper }
+ DW @Xit { Fonction DDh - a dï¿½velopper }
+ DW @Xit { Fonction DEh - a dï¿½velopper }
+ DW @Xit { Fonction DFh - a dï¿½velopper }
+ DW @Xit { Fonction E0h - a dï¿½velopper }
+ DW @Xit { Fonction E1h - a dï¿½velopper }
+ DW @Xit { Fonction E2h - a dï¿½velopper }
+ DW @Xit { Fonction E3h - a dï¿½velopper }
+ DW @Xit { Fonction E4h - a dï¿½velopper }
+ DW @Xit { Fonction E5h - a dï¿½velopper }
+ DW @Xit { Fonction E6h - a dï¿½velopper }
+ DW @Xit { Fonction E7h - a dï¿½velopper }
+ DW @Xit { Fonction E8h - a dï¿½velopper }
+ DW @Xit { Fonction E9h - a dï¿½velopper }
+ DW @Xit { Fonction EAh - a dï¿½velopper }
+ DW @Xit { Fonction EBh - a dï¿½velopper }
+ DW @Xit { Fonction ECh - a dï¿½velopper }
+ DW @Xit { Fonction EDh - a dï¿½velopper }
+ DW @Xit { Fonction EEh - a dï¿½velopper }
+ DW @Xit { Fonction EFh - a dï¿½velopper }
+ DW @Xit { Fonction F0h - a dï¿½velopper }
+ DW @Xit { Fonction F1h - a dï¿½velopper }
+ DW @Xit { Fonction F2h - a dï¿½velopper }
+ DW @Xit { Fonction F3h - a dï¿½velopper }
+ DW @Xit { Fonction F4h - a dï¿½velopper }
+ DW @Xit { Fonction F5h - a dï¿½velopper }
+ DW @Xit { Fonction F6h - a dï¿½velopper }
+ DW @Xit { Fonction F7h - a dï¿½velopper }
+ DW @Xit { Fonction F8h - a dï¿½velopper }
+ DW @Xit { Fonction F9h - a dï¿½velopper }
+ DW @Xit { Fonction FAh - a dï¿½velopper }
+ DW @Xit { Fonction FBh - a dï¿½velopper }
+ DW @Xit { Fonction FCh - a dï¿½velopper }
+ DW @Xit { Fonction FDh - a dï¿½velopper }
+ DW @Xit { Fonction FEh - a dï¿½velopper }
+ DW @Xit { Fonction FFh - a dï¿½velopper }
 
  {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
  { Interruption 21h - Fonction 00h: Terminer le programme                      }
@@ -11366,6 +11454,24 @@ Procedure SetIntVec(_AL:Byte;_DS,_DX:Word);Assembler;ASM
   MOV ES:[BX],AX           { Offset }
   MOV AX,_DS
   MOV ES:[BX+2],AX         { Segment }
+ POP ES
+END;
+
+Procedure GetIntVec(_AL:Byte;Var _DS,_DX:Word);Assembler;ASM
+ { Lire le vecteur d'interruption Ã  l'adresse AL*4 }
+ PUSH ES
+  MOV AX,0000h
+  MOV ES,AX
+  MOV BL,_AL
+  MOV BH,0
+  SHL BX,1
+  SHL BX,1                  { BX = AL * 4 }
+  MOV AX,ES:[BX]           { Offset }
+  LES DI,_DX               { Adresse de _DX }
+  MOV ES:[DI],AX
+  MOV AX,ES:[BX+2]         { Segment }
+  LES DI,_DS               { Adresse de _DS }
+  MOV ES:[DI],AX
  POP ES
 END;
 
