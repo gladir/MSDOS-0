@@ -100,6 +100,8 @@ Unit MSDOS;
 
 INTERFACE
 
+{$A-}
+
 { Constantes pour les codes d'erreur étendus DOS }
 Const
  { Codes d'erreur étendus }
@@ -785,20 +787,17 @@ Procedure Data;Assembler;ASM
 @VerifyFlag:
  DB 0          { VerifyFlag: Flag de vérification en écriture (0=off, 1=on) }
 
- { FindState: FindFileState - 21 bytes }
- DW 0          { SearchDriveNumber }
- DW 0          { SearchFirstCluster }
- DW 0          { SearchCurrentCluster }
- DW 0          { SearchEntryIndex }
- DB 0          { SearchAttributes }
- { SearchPattern[64] - 64 bytes }
+ { FindState: FindFileState - 100 bytes }
+ { SearchMask: String[12] = 13 bytes }
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0
+ { SearchPath: String[80] = 81 bytes }
  DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
  DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- { SearchPath[128] - 128 bytes }
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0          { SearchAttr: Byte }
+ DW 0          { CurrentDir: Word }
+ DW 0          { CurrentEntry: Word }
+ DB 0          { Active: Boolean }
 
  { CurrentDir: Array[0..25] of Record - Structure pour chaque drive }
  { Chaque entrée: Drive(1) + Cluster(2) + Path(128) = 131 bytes * 26 drives = 3406 bytes }
