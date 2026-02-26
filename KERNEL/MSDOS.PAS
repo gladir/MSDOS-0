@@ -270,6 +270,16 @@ Type
   Size: LongInt;                    { Taille du fichier }
  End;
 
+  { Structure pour verrous de fichiers (File Locking) }
+ FileLockEntry = Record
+  InUse: Boolean;                    { Entrée utilisée }
+  Handle: Word;                      { Handle de fichier }
+  PSPOwner: Word;                    { PSP propriétaire du verrou }
+  StartOffset: LongInt;              { Offset de début }
+  Length: LongInt;                   { Longueur verrouillée }
+  LockType: Byte;                    { Type de verrou (0=read, 1=write) }
+ End;
+
   { Structure pour les données internes DOS }
  DataMOS=Record
   Key:Byte;
@@ -289,6 +299,8 @@ Type
   ErrorLocus:Byte;          { Localisation de l'erreur }
   MemoryStrategy:Word;      { Stratégie d'allocation mémoire }
   UMBLinkState:Word;        { État de liaison des UMB }
+  { Table des verrous de fichiers }
+  FileLocks: Array[0..19] of FileLockEntry; { Max 20 verrous simultanés }
  End;
 
  { Structure pour les informations pays }
@@ -444,7 +456,9 @@ End;
 { Variables globales supprimées - maintenant dans Code Segment }
 {$IFNDEF FPC}
 { Aucune variable globale nécessaire en mode Turbo Pascal }
-{$ENDIF}{ Déclarations Forward }
+{$ENDIF}
+
+{ Déclarations Forward }
 Procedure Intr20h;Interrupt;Forward;
 Procedure Intr21h;Interrupt;Forward;
 Procedure Intr25h;Interrupt;Forward;
@@ -620,6 +634,9 @@ Function DOS5Ah_CreateTempFile(PathPtr:Pointer;Attributes:Word):Word;Near;Forwar
 { Fonction 5Bh - Create New File }
 Function DOS5Bh_CreateNewFile(PathPtr:Pointer;Attributes:Word):Word;Near;Forward;
 
+{ Fonction 5Ch - Lock/Unlock File Region }
+Function DOS5Ch_LockUnlockRegion(Handle:Word;Action:Byte;StartOffset,Length:LongInt):Word;Near;Forward;
+
 { Fonctions utilitaires pour opérations FAT réelles }
 Function ReadFATSector(Drive:Byte;Sector:Word;Var Buffer):Boolean;Near;Forward;
 Function WriteFATSector(Drive:Byte;Sector:Word;Var Buffer):Boolean;Near;Forward;
@@ -690,6 +707,9 @@ Function GetFileTableAttributes(Index: Byte): Byte;Near;Forward;
 Function GetFileTableCurrentCluster(Index: Byte): Word;Near;Forward;
 Function GetFileTableClusterOffset(Index: Byte): Word;Near;Forward;
 Procedure SetFileTableInUse(Index: Byte; InUse: Boolean);Near;Forward;
+
+{ Procédure pour initialiser la table des verrous }
+Procedure InitializeFileLocks;Near;Forward;
 Procedure SetFileTableDrive(Index: Byte; Drive: Byte);Near;Forward;
 Procedure SetFileTableFirstCluster(Index: Byte; FirstCluster: Word);Near;Forward;
 Procedure SetFileTableFileSize(Index: Byte; FileSize: LongInt);Near;Forward;
@@ -723,6 +743,9 @@ Begin
  For I:=0 To 19 Do Begin
   SetFileTableInUse(I, False);
  End;
+
+ { Initialiser table des verrous de fichiers }
+ InitializeFileLocks;
 
  SetIntVec($20,CSeg,Ofs(Intr21h));
  SetIntVec($21,CSeg,Ofs(Intr21h));
@@ -1076,6 +1099,7 @@ Procedure Intr21h;Assembler;ASM
  DW @59h { Fonction 59h - Get Extended Error Information }
  DW @5Ah { Fonction 5Ah - Create Temporary File }
  DW @5Bh { Fonction 5Bh - Create New File }
+ DW @5Ch { Fonction 5Ch - Lock/Unlock File Region }
 
  {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
  { Interruption 21h - Fonction 00h: Terminer le programme                      }
@@ -3714,6 +3738,52 @@ Procedure Intr21h;Assembler;ASM
  POP CX
  JMP @Xit
 
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+ { Interruption 21h - Fonction 5Ch: Lock/Unlock File Region                   }
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+@5Ch:
+ PUSH CX                    { Sauvegarder les registres }
+ PUSH SI
+ PUSH DI
+
+ { BX = handle de fichier }
+ { AL = action (0=unlock, 1=lock) }
+ { CX:DX = offset de départ (LongInt) }
+ { SI:DI = longueur à verrouiller/déverrouiller (LongInt) }
+
+ PUSH BX                    { Handle de fichier }
+ PUSH AX                    { Action (AL seulement) }
+
+ { Construire LongInt pour offset de départ (CX:DX) }
+ PUSH CX                    { High word de l'offset }
+ PUSH DX                    { Low word de l'offset }
+
+ { Construire LongInt pour longueur (SI:DI) }
+ PUSH SI                    { High word de la longueur }
+ PUSH DI                    { Low word de la longueur }
+
+ CALL DOS5Ch_LockUnlockRegion { Appeler fonction Pascal }
+ { AX contient le code d'erreur (0 = succès) }
+
+ ADD SP,12                  { Nettoyer la pile (6 paramètres * 2) }
+
+ CMP AX,0                   { Vérifier si succès }
+ JE @5ChSuccess             { Si succès }
+
+ { Erreur }
+ STC                        { Set Carry Flag }
+ JMP @5ChEnd
+
+@5ChSuccess:
+ { Succès }
+ CLC                        { Clear Carry Flag }
+
+@5ChEnd:
+ POP DI
+ POP SI
+ POP CX
+ JMP @Xit
+
 @Xit:
  DEC Data.DataMOS.InDos
 END;
@@ -4496,6 +4566,20 @@ Procedure SetLastReturnCode(ReturnCode: Word);Assembler;
 ASM
  MOV AX,ReturnCode
  MOV WORD PTR [Data.DataMOS.LastReturnCode],AX
+END;
+
+{ Procédure pour initialiser la table des verrous }
+Procedure InitializeFileLocks;Assembler;
+Const
+ FileLockEntrySize=SizeOf(FileLockEntry);
+ASM
+ { Initialiser tous les verrous comme non utilisés }
+ MOV CX,20                  { 20 entrées }
+ MOV DI,OFFSET DataMOS.FileLocks
+@InitLoop:
+ MOV BYTE PTR [DI].FileLockEntry.InUse,0
+ ADD DI,FileLockEntrySize
+ LOOP @InitLoop
 END;
 
 Function GetCurrentPSP: Word;Assembler;
@@ -10751,6 +10835,213 @@ Begin
 
  ClearExtendedError;
  DOS5Bh_CreateNewFile := Handle;
+End;
+
+{ Fonctions utilitaires pour File Locking }
+
+{ Trouver un slot libre dans la table des verrous }
+Function FindFreeLockSlot:Integer;
+Const
+ FileLockEntrySize=SizeOf(FileLockEntry);
+Var
+ I: Integer;
+ Found: Boolean;
+Begin
+ FindFreeLockSlot := -1;
+ Found := False;
+ For I := 0 To 19 Do Begin
+  If Not Found Then Begin
+   ASM
+    MOV SI,OFFSET DataMOS
+    MOV AX,I
+    MOV BX,FileLockEntrySize
+    MUL BX
+    ADD AX,OFFSET DataMOS.FileLocks
+    MOV BX,AX
+    CMP BYTE PTR [BX].FileLockEntry.InUse,0
+    JNE @NextSlot
+    MOV Found,1
+    MOV AX,I
+    MOV @Result,AX
+@NextSlot:
+   END;
+  End;
+ End;
+End;
+
+{ Vérifier si une région est en conflit avec les verrous existants }
+Function CheckLockConflict(Handle:Word;StartOffset,Length:LongInt;PSPOwner:Word):Boolean;
+Const
+ FileLockEntrySize=SizeOf(FileLockEntry);
+Var
+ I: Integer;
+ LockEnd, RequestEnd: LongInt;
+ LockEntry: FileLockEntry;
+Begin
+ CheckLockConflict := False;
+ RequestEnd := StartOffset + Length - 1;
+
+ For I := 0 To 19 Do Begin
+  { Copier l'entrée depuis le Code Segment }
+  ASM
+   PUSH DS
+   MOV SI,OFFSET DataMOS
+   MOV AX,I
+   MOV BX,FileLockEntrySize
+   MUL BX
+   ADD SI,AX
+   ADD SI,OFFSET DataMOS.FileLocks
+
+   LEA DI,LockEntry
+   PUSH SS
+   POP ES
+   MOV CX,FileLockEntrySize
+   CLD
+   REP MOVSB
+   POP DS
+  END;
+
+  If LockEntry.InUse and (LockEntry.Handle = Handle) and
+     (LockEntry.PSPOwner <> PSPOwner) Then Begin
+   LockEnd := LockEntry.StartOffset + LockEntry.Length - 1;
+   { Vérifier si les régions se chevauchent }
+   If Not ((RequestEnd < LockEntry.StartOffset) or (StartOffset > LockEnd)) Then Begin
+    CheckLockConflict := True;
+    SetExtendedError(ERROR_ACCESS_DENIED, ERRCLASS_AUTH, ERRACT_USER, ERRLOC_UNK);
+    Exit;
+   End;
+  End;
+ End;
+End;
+
+{ Fonction principale 5Ch - Lock/Unlock File Region }
+Function DOS5Ch_LockUnlockRegion(Handle:Word;Action:Byte;StartOffset,Length:LongInt):Word;
+Const
+ FileLockEntrySize=SizeOf(FileLockEntry);
+Var
+ I, FreeSlot: Integer;
+ CurrentPSP: Word;
+ LockEntry: FileLockEntry;
+Begin
+ DOS5Ch_LockUnlockRegion := ERROR_INVALID_FUNCTION;
+
+ { Vérifier la validité du handle }
+ If Handle = 0 Then Begin
+  SetExtendedError(ERROR_INVALID_HANDLE, ERRCLASS_BADCALL, ERRACT_USER, ERRLOC_UNK);
+  DOS5Ch_LockUnlockRegion := ERROR_INVALID_HANDLE;
+  Exit;
+ End;
+
+ { Obtenir le PSP courant }
+ CurrentPSP := GetCurrentPSP;
+
+ If Action = 1 Then Begin
+  { Lock region }
+
+  { Vérifier les conflits avec les verrous existants }
+  If CheckLockConflict(Handle, StartOffset, Length, CurrentPSP) Then Begin
+   DOS5Ch_LockUnlockRegion := ERROR_ACCESS_DENIED;
+   Exit;
+  End;
+
+  { Trouver un slot libre }
+  FreeSlot := FindFreeLockSlot;
+  If FreeSlot = -1 Then Begin
+   SetExtendedError(ERROR_TOO_MANY_OPEN_FILES, ERRCLASS_OUTOFRESOURCE, ERRACT_RETRY, ERRLOC_UNK);
+   DOS5Ch_LockUnlockRegion := ERROR_TOO_MANY_OPEN_FILES;
+   Exit;
+  End;
+
+  { Créer le nouveau verrou }
+  LockEntry.InUse := True;
+  LockEntry.Handle := Handle;
+  LockEntry.PSPOwner := CurrentPSP;
+  LockEntry.StartOffset := StartOffset;
+  LockEntry.Length := Length;
+  LockEntry.LockType := 1; { Write lock }
+
+  { Copier vers le Code Segment }
+  ASM
+   MOV SI,OFFSET DataMOS
+   MOV AX,FreeSlot
+   MOV BX,FileLockEntrySize
+   MUL BX
+   ADD SI,AX
+   ADD SI,OFFSET DataMOS.FileLocks
+
+   LEA DI,LockEntry
+   PUSH SS
+   POP DS
+   PUSH CS
+   POP ES
+   MOV CX,FileLockEntrySize
+   CLD
+   REP MOVSB
+   PUSH CS
+   POP DS
+  END;
+
+ End Else If Action = 0 Then Begin
+  { Unlock region }
+
+  For I := 0 To 19 Do Begin
+   { Copier l'entrée depuis le Code Segment }
+   ASM
+    PUSH DS
+    MOV SI,OFFSET DataMOS
+    MOV AX,I
+    MOV BX,FileLockEntrySize
+    MUL BX
+    ADD SI,AX
+    ADD SI,OFFSET DataMOS.FileLocks
+
+    LEA DI,LockEntry
+    PUSH SS
+    POP ES
+    MOV CX,FileLockEntrySize
+    CLD
+    REP MOVSB
+    POP DS
+   END;
+
+   { Chercher le verrou correspondant }
+   If LockEntry.InUse and (LockEntry.Handle = Handle) and
+      (LockEntry.PSPOwner = CurrentPSP) and
+      (LockEntry.StartOffset = StartOffset) and
+      (LockEntry.Length = Length) Then Begin
+
+    { Libérer le verrou }
+    ASM
+     MOV SI,OFFSET DataMOS
+     MOV AX,I
+     MOV BX,FileLockEntrySize
+     MUL BX
+     ADD SI,AX
+     ADD SI,OFFSET DataMOS.FileLocks
+     MOV BYTE PTR [SI].FileLockEntry.InUse,0
+    END;
+
+    ClearExtendedError;
+    DOS5Ch_LockUnlockRegion := 0;
+    Exit;
+   End;
+  End;
+
+  { Verrou non trouvé }
+  SetExtendedError(ERROR_INVALID_PARAMETER, ERRCLASS_BADCALL, ERRACT_USER, ERRLOC_UNK);
+  DOS5Ch_LockUnlockRegion := ERROR_INVALID_PARAMETER;
+
+ End Else Begin
+  { Action invalide }
+  SetExtendedError(ERROR_INVALID_FUNCTION, ERRCLASS_BADCALL, ERRACT_USER, ERRLOC_UNK);
+  DOS5Ch_LockUnlockRegion := ERROR_INVALID_FUNCTION;
+ End;
+
+ { Succès pour le lock }
+ If Action = 1 Then Begin
+  ClearExtendedError;
+  DOS5Ch_LockUnlockRegion := 0;
+ End;
 End;
 
 Procedure SetIntVec(_AL:Byte;_DS,_DX:Word);Assembler;ASM
