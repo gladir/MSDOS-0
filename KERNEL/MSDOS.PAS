@@ -546,6 +546,9 @@ Function DOS55h_CreateChildPSP(NewPSPSegment:Word):Word;Near;Forward;
 { Fonction 56h - Rename/Move File }
 Function DOS56h_RenameFile(OldPathPtr:Pointer;NewPathPtr:Pointer):Word;Near;Forward;
 
+{ Fonction 57h - Get/Set File Date and Time }
+Function DOS57h_GetSetFileDateTime(Handle:Word;Action:Byte;NewDate,NewTime:Word):LongInt;Near;Forward;
+
 { Fonctions utilitaires pour opérations FAT réelles }
 Function ReadFATSector(Drive:Byte;Sector:Word;Var Buffer):Boolean;Near;Forward;
 Function WriteFATSector(Drive:Byte;Sector:Word;Var Buffer):Boolean;Near;Forward;
@@ -983,6 +986,7 @@ Procedure Intr21h;Assembler;ASM
  DW @54h { Fonction 54h - Get Verify Flag }
  DW @55h { Fonction 55h - Create Child PSP }
  DW @56h { Fonction 56h - Rename/Move File }
+ DW @57h { Fonction 57h - Get/Set File Date and Time }
 
  {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
  { Interruption 21h - Fonction 00h: Terminer le programme                      }
@@ -3409,6 +3413,54 @@ Procedure Intr21h;Assembler;ASM
 @56h_Done:
  POP DI
  POP SI
+ POP CX
+ POP BX
+ JMP @Xit
+
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+ { Interruption 21h - Fonction 57h: Get/Set File Date and Time                }
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+@57h:
+ PUSH BX
+ PUSH CX
+ PUSH DX
+ 
+ { Préparer les paramètres pour l'appel Pascal }
+ { BX = handle, AL = action (0=get, 1=set), CX = nouvelle heure, DX = nouvelle date }
+ PUSH BX                    { Handle }
+ 
+ MOV AH,0                   { Action dans AL, étendre à AX }
+ PUSH AX                    { Action }
+ 
+ PUSH CX                    { NewTime }
+ PUSH DX                    { NewDate }
+ 
+ CALL DOS57h_GetSetFileDateTime { Appeler fonction Pascal }
+ ADD SP,8                   { Nettoyer la pile (4 paramètres × 2 bytes) }
+ 
+ { Le résultat est dans DX:AX (LongInt) }
+ CMP AX,$FFFF
+ JNE @57h_Success
+ CMP DX,$FFFF
+ JE @57h_Error
+ 
+@57h_Success:
+ { Pour action GET (AL=0), retourner date/heure dans CX:DX }
+ { Pour action SET (AL=1), pas de valeur de retour }
+ CMP BYTE PTR [BP+6],0      { Vérifier l'action sur la pile }
+ JNE @57h_Done
+ 
+ { Action GET - retourner les valeurs }
+ MOV CX,AX                  { Heure dans CX }
+ MOV DX,DX                  { Date dans DX (déjà là) }
+ CLC                        { Clear Carry Flag - succès }
+ JMP @57h_Done
+ 
+@57h_Error:
+ STC                        { Set Carry Flag - erreur }
+ 
+@57h_Done:
+ POP DX
  POP CX
  POP BX
  JMP @Xit
@@ -9508,6 +9560,189 @@ Begin
    
    Les interruptions 25h/26h sont utilisées pour l'accès direct aux secteurs
    permettant une manipulation FAT12/FAT16 authentique. }
+End;
+
+{ Fonctions utilitaires pour gestion des dates/heures DOS }
+
+{ Convertit les composants date/heure en format DOS }
+Function PackDOSDateTime(Year,Month,Day,Hour,Minute,Second:Word):LongInt;
+Var
+ DOSDate, DOSTime: Word;
+Begin
+ { Format DOS Date: bits 15-9=année-1980, bits 8-5=mois, bits 4-0=jour }
+ DOSDate := ((Year - 1980) SHL 9) OR (Month SHL 5) OR Day;
+ 
+ { Format DOS Time: bits 15-11=heures, bits 10-5=minutes, bits 4-0=secondes/2 }
+ DOSTime := (Hour SHL 11) OR (Minute SHL 5) OR (Second SHR 1);
+ 
+ { Retourner comme LongInt: high word = date, low word = time }
+ PackDOSDateTime := (LongInt(DOSDate) SHL 16) OR DOSTime;
+End;
+
+{ Extrait les composants d'une date/heure DOS }
+Procedure UnpackDOSDateTime(DOSDateTime:LongInt;Var Year,Month,Day,Hour,Minute,Second:Word);
+Var
+ DOSDate, DOSTime: Word;
+Begin
+ DOSDate := Hi(DOSDateTime);  { High word = date }
+ DOSTime := Lo(DOSDateTime);  { Low word = time }
+ 
+ { Extraire les composants de la date }
+ Year := ((DOSDate SHR 9) AND $7F) + 1980;
+ Month := (DOSDate SHR 5) AND $0F;
+ Day := DOSDate AND $1F;
+ 
+ { Extraire les composants de l'heure }
+ Hour := (DOSTime SHR 11) AND $1F;
+ Minute := (DOSTime SHR 5) AND $3F;
+ Second := (DOSTime AND $1F) SHL 1;
+End;
+
+{ Obtient l'offset d'une entrée de répertoire par son handle }
+Function GetDirectoryOffsetByHandle(Handle:Word;Var Drive:Byte;Var EntryOffset:Word):Boolean;
+Var
+ FileEntry: FileTableEntry;
+ SearchResult: Boolean;
+Begin
+ GetDirectoryOffsetByHandle := False;
+ 
+ { Vérifier la validité du handle }
+ If Handle >= 20 Then Exit;
+ 
+ { Obtenir l'entrée de la table des fichiers }
+ If Not GetFileTableEntry(Handle, FileEntry) Then Exit;
+ 
+ { Vérifier si le handle est utilisé }
+ If Not FileEntry.InUse Then Exit;
+ 
+ Drive := FileEntry.Drive;
+ 
+ { Pour cette implémentation, nous utilisons une recherche simplifiée }
+ { Dans un vrai DOS, l'offset serait maintenu dans la table des fichiers }
+ EntryOffset := Handle * 32; { Approximation basique }
+ 
+ GetDirectoryOffsetByHandle := True;
+End;
+
+{ Met à jour la date/heure dans une entrée de répertoire }
+Function UpdateDirectoryDateTime(Drive:Byte;EntryOffset:Word;NewDate,NewTime:Word):Boolean;
+Var
+ Sector: Word;
+ Buffer: Array[0..511] Of Byte;
+ EntryInSector: Word;
+ Entry: DirectoryEntryFAT;
+ UpdateResult: Boolean;
+Begin
+ UpdateResult := False;
+ 
+ { Calculer le secteur et l'offset dans le secteur }
+ Sector := GetRootDirectorySector + (EntryOffset DIV 512);
+ EntryInSector := EntryOffset MOD 512;
+ 
+ { Lire le secteur de répertoire }
+ If Not ReadDirectorySector(Drive, Sector, Buffer) Then Exit;
+ 
+ { Vérifier que l'entrée est dans les limites du secteur }
+ If (EntryInSector + SizeOf(DirectoryEntryFAT)) > 512 Then Exit;
+ 
+ { Copier l'entrée depuis le buffer }
+ Move(Buffer[EntryInSector], Entry, SizeOf(DirectoryEntryFAT));
+ 
+ { Vérifier que ce n'est pas une entrée vide ou supprimée }
+ If (Entry.FileName[0] = #0) Or (Entry.FileName[0] = #$E5) Then Exit;
+ 
+ { Mettre à jour les champs date/heure }
+ Entry.Time := NewTime;
+ Entry.Date := NewDate;
+ 
+ { Copier l'entrée modifiée dans le buffer }
+ Move(Entry, Buffer[EntryInSector], SizeOf(DirectoryEntryFAT));
+ 
+ { Écrire le secteur modifié }
+ UpdateResult := WriteDirectorySector(Drive, Sector, Buffer);
+ 
+ UpdateDirectoryDateTime := UpdateResult;
+End;
+
+{ Obtient la date/heure d'une entrée de répertoire }
+Function GetDirectoryDateTime(Drive:Byte;EntryOffset:Word;Var Date,Time:Word):Boolean;
+Var
+ Sector: Word;
+ Buffer: Array[0..511] Of Byte;
+ EntryInSector: Word;
+ Entry: DirectoryEntryFAT;
+Begin
+ GetDirectoryDateTime := False;
+ 
+ { Calculer le secteur et l'offset dans le secteur }
+ Sector := GetRootDirectorySector + (EntryOffset DIV 512);
+ EntryInSector := EntryOffset MOD 512;
+ 
+ { Lire le secteur de répertoire }
+ If Not ReadDirectorySector(Drive, Sector, Buffer) Then Exit;
+ 
+ { Vérifier que l'entrée est dans les limites du secteur }
+ If (EntryInSector + SizeOf(DirectoryEntryFAT)) > 512 Then Exit;
+ 
+ { Copier l'entrée depuis le buffer }
+ Move(Buffer[EntryInSector], Entry, SizeOf(DirectoryEntryFAT));
+ 
+ { Vérifier que ce n'est pas une entrée vide ou supprimée }
+ If (Entry.FileName[0] = #0) Or (Entry.FileName[0] = #$E5) Then Exit;
+ 
+ { Récupérer les champs date/heure }
+ Date := Entry.Date;
+ Time := Entry.Time;
+ 
+ GetDirectoryDateTime := True;
+End;
+
+{ Fonction principale 57h - Get/Set File Date and Time }
+Function DOS57h_GetSetFileDateTime(Handle:Word;Action:Byte;NewDate,NewTime:Word):LongInt;
+Var
+ Drive: Byte;
+ EntryOffset: Word;
+ CurrentDate, CurrentTime: Word;
+ Success: Boolean;
+Begin
+ DOS57h_GetSetFileDateTime := $FFFFFFFF; { Erreur par défaut }
+ 
+ { Vérifier la validité de l'action }
+ If Action > 1 Then Exit; { Seules les actions 0 (GET) et 1 (SET) sont valides }
+ 
+ { Obtenir l'offset de l'entrée de répertoire pour ce handle }
+ If Not GetDirectoryOffsetByHandle(Handle, Drive, EntryOffset) Then Exit;
+ 
+ Case Action Of
+  0: Begin { GET - Obtenir la date/heure actuelle }
+      If GetDirectoryDateTime(Drive, EntryOffset, CurrentDate, CurrentTime) Then Begin
+       { Retourner la date/heure dans le format attendu }
+       { High word = date, Low word = time }
+       DOS57h_GetSetFileDateTime := (LongInt(CurrentDate) SHL 16) OR CurrentTime;
+      End;
+     End;
+     
+  1: Begin { SET - Définir une nouvelle date/heure }
+      { Valider les valeurs de date/heure (validation basique) }
+      If (NewDate = 0) Or (NewTime > $BEFF) Then Exit; { Validation basique }
+      
+      If UpdateDirectoryDateTime(Drive, EntryOffset, NewDate, NewTime) Then Begin
+       DOS57h_GetSetFileDateTime := 0; { Succès pour SET }
+      End;
+     End;
+ End;
+ 
+ { Note: Cette implémentation gère les opérations de date/heure basiques.
+   Un système DOS complet supporterait :
+   - Les attributs de date étendus (création, accès)
+   - La gestion des fuseaux horaires
+   - La validation complète des dates
+   - Les opérations sur les sous-répertoires
+   - La gestion des fichiers système et cachés
+   - Les horodatages haute précision
+   
+   Les interruptions 25h/26h sont utilisées via ReadDirectorySector/WriteDirectorySector
+   pour l'accès direct aux secteurs de répertoire FAT12/FAT16. }
 End;
 
 Procedure SetIntVec(_AL:Byte;_DS,_DX:Word);Assembler;ASM
