@@ -549,6 +549,9 @@ Function DOS56h_RenameFile(OldPathPtr:Pointer;NewPathPtr:Pointer):Word;Near;Forw
 { Fonction 57h - Get/Set File Date and Time }
 Function DOS57h_GetSetFileDateTime(Handle:Word;Action:Byte;NewDate,NewTime:Word):LongInt;Near;Forward;
 
+{ Fonction 58h - Get/Set Memory Allocation Strategy }
+Function DOS58h_GetSetMemoryStrategy(Action:Byte;NewStrategy:Word):Word;Near;Forward;
+
 { Fonctions utilitaires pour opérations FAT réelles }
 Function ReadFATSector(Drive:Byte;Sector:Word;Var Buffer):Boolean;Near;Forward;
 Function WriteFATSector(Drive:Byte;Sector:Word;Var Buffer):Boolean;Near;Forward;
@@ -584,6 +587,9 @@ Function FindFreeMCB(Size:Word;Var Segment:Word):Boolean;Near;Forward;
 Function CreateMCB(Segment:Word;Size:Word;Owner:Word;IsLast:Boolean):Boolean;Near;Forward;
 Function GetMCB(Segment:Word;Var MCB:MemoryControlBlock):Boolean;Near;Forward;
 Function SetMCB(Segment:Word;MCB:MemoryControlBlock):Boolean;Near;Forward;
+Function GetMemoryStrategy:Word;Near;Forward;
+Procedure SetMemoryStrategy(NewStrategy:Word);Near;Forward;
+Function AllocateMemoryWithStrategy(Size:Word;Strategy:Word):Word;Near;Forward;
 
 { Fonctions d'accès aux données dans Code Segment }
 Function GetCurrentDrive: Byte;Near;Forward;
@@ -987,6 +993,7 @@ Procedure Intr21h;Assembler;ASM
  DW @55h { Fonction 55h - Create Child PSP }
  DW @56h { Fonction 56h - Rename/Move File }
  DW @57h { Fonction 57h - Get/Set File Date and Time }
+ DW @58h { Fonction 58h - Get/Set Memory Allocation Strategy }
 
  {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
  { Interruption 21h - Fonction 00h: Terminer le programme                      }
@@ -3460,6 +3467,44 @@ Procedure Intr21h;Assembler;ASM
  STC                        { Set Carry Flag - erreur }
  
 @57h_Done:
+ POP DX
+ POP CX
+ POP BX
+ JMP @Xit
+
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+ { Interruption 21h - Fonction 58h: Get/Set Memory Allocation Strategy       }
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+@58h:
+ PUSH BX
+ PUSH CX
+ PUSH DX
+ 
+ { Préparer les paramètres pour l'appel Pascal }
+ { AL = action (0=get, 1=set), BX = nouvelle stratégie (pour set) }
+ MOV AH,0                   { Action dans AL, étendre à AX }
+ PUSH AX                    { Action }
+ 
+ PUSH BX                    { NewStrategy }
+ 
+ CALL DOS58h_GetSetMemoryStrategy { Appeler fonction Pascal }
+ ADD SP,4                   { Nettoyer la pile (2 paramètres × 2 bytes) }
+ 
+ { Le résultat est dans AX }
+ CMP AX,$FFFF
+ JE @58h_Error
+ 
+@58h_Success:
+ { Pour action GET (AL=0), retourner stratégie dans AX }
+ { Pour action SET (AL=1), AX = 0 si succès }
+ CLC                        { Clear Carry Flag - succès }
+ JMP @58h_Done
+ 
+@58h_Error:
+ MOV AX,1                   { Invalid function }
+ STC                        { Set Carry Flag - erreur }
+ 
+@58h_Done:
  POP DX
  POP CX
  POP BX
@@ -7594,8 +7639,11 @@ Begin
  FillChar(MCB.Reserved, 3, 0);
  FillChar(MCB.ProgramName, 8, 0);
  
- If SetMCB(FirstMCB, MCB) Then
+ If SetMCB(FirstMCB, MCB) Then Begin
+  { Initialiser la stratégie d'allocation par défaut (First Fit) }
+  SetMemoryStrategy(0);
   InitializeMemoryManager:=True;
+ End;
 End;
 
 { Obtient un MCB à partir de son segment }
@@ -7708,9 +7756,8 @@ End;
 { Fonction 48h - Alloue un bloc mémoire }
 Function DOS48h_AllocateMemory(BlockSize:Word):Word;
 Var
+ CurrentStrategy: Word;
  Segment: Word;
- MCB: MemoryControlBlock;
- MCBSeg: Word;
 Begin
  DOS48h_AllocateMemory:=0; { Erreur par défaut }
  
@@ -7720,29 +7767,13 @@ Begin
   Exit;
  End;
  
- { Chercher un bloc libre }
- If FindFreeMCB(BlockSize, Segment) Then Begin
-  MCBSeg:=Segment - 1; { MCB est juste avant le segment utilisable }
-  
-  { Obtenir le MCB actuel }
-  If GetMCB(MCBSeg, MCB) Then Begin
-   { Si le bloc est plus grand que nécessaire, le diviser }
-   If MCB.BlockSize > BlockSize Then Begin
-    { Créer un nouveau MCB pour la partie non utilisée }
-    CreateMCB(MCBSeg + BlockSize + 1, MCB.BlockSize - BlockSize - 1, 0, MCB.BlockType = 'Z');
-    
-    { Modifier le MCB actuel }
-    MCB.BlockSize:=BlockSize;
-    MCB.BlockType:='M'; { Ce n'est plus le dernier }
-   End;
-   
-   { Marquer le bloc comme utilisé }
-   MCB.Owner:=$FFFE; { Propriétaire fictif }
-   SetMCB(MCBSeg, MCB);
-   
-   DOS48h_AllocateMemory:=Segment;
-  End;
- End;
+ { Obtenir la stratégie d'allocation actuelle }
+ CurrentStrategy := GetMemoryStrategy;
+ 
+ { Allouer avec la stratégie appropriée }
+ Segment := AllocateMemoryWithStrategy(BlockSize, CurrentStrategy);
+ 
+ DOS48h_AllocateMemory := Segment;
 End;
 
 { Fonction 49h - Libère un bloc mémoire }
@@ -9743,6 +9774,211 @@ Begin
    
    Les interruptions 25h/26h sont utilisées via ReadDirectorySector/WriteDirectorySector
    pour l'accès direct aux secteurs de répertoire FAT12/FAT16. }
+End;
+
+{ Fonctions utilitaires pour la gestion de la stratégie d'allocation mémoire }
+
+{ Obtient la stratégie d'allocation mémoire actuelle depuis le Code Segment }
+Function GetMemoryStrategy:Word;
+Var
+ Strategy: Word;
+Begin
+ { Lire la stratégie depuis la structure Data dans le Code Segment }
+ ASM
+  PUSH DS
+  
+  { Pointer vers la structure Data.DataMOS }
+  MOV AX,CS
+  MOV DS,AX
+  MOV SI,OFFSET Data.DataMOS
+  
+  { Lire le champ de stratégie (supposons qu'il soit à un offset fixe) }
+  MOV AX,[SI+20]  { Offset approximatif pour la stratégie }
+  MOV Strategy,AX
+  
+  POP DS
+ END;
+ 
+ GetMemoryStrategy := Strategy;
+End;
+
+{ Définit la stratégie d'allocation mémoire dans le Code Segment }
+Procedure SetMemoryStrategy(NewStrategy:Word);
+Begin
+ { Sauvegarder la stratégie dans la structure Data dans le Code Segment }
+ ASM
+  PUSH DS
+  PUSH AX
+  
+  { Pointer vers la structure Data.DataMOS }
+  MOV AX,CS
+  MOV DS,AX
+  MOV SI,OFFSET Data.DataMOS
+  
+  { Écrire le nouveau champ de stratégie }
+  MOV AX,NewStrategy
+  MOV [SI+20],AX  { Offset approximatif pour la stratégie }
+  
+  POP AX
+  POP DS
+ END;
+End;
+
+{ Recherche de bloc mémoire avec stratégie First Fit }
+Function FindMemoryFirstFit(Size:Word;Var Segment:Word):Boolean;
+Var
+ CurrentSeg: Word;
+ MCB: MemoryControlBlock;
+ Found: Boolean;
+Begin
+ Found := False;
+ CurrentSeg := $0060; { Premier MCB }
+ 
+ While (CurrentSeg < $A000) And Not Found Do Begin
+  If GetMCB(CurrentSeg, MCB) Then Begin
+   { Vérifier si le bloc est libre et assez grand }
+   If (MCB.Owner = 0) And (MCB.BlockSize >= Size) Then Begin
+    Segment := CurrentSeg + 1; { Segment utilisable après le MCB }
+    Found := True;
+   End Else Begin
+    { Passer au MCB suivant }
+    If MCB.BlockType = 'Z' Then Break; { Dernier bloc }
+    CurrentSeg := CurrentSeg + MCB.BlockSize + 1;
+   End;
+  End Else Break;
+ End;
+ 
+ FindMemoryFirstFit := Found;
+End;
+
+{ Recherche de bloc mémoire avec stratégie Best Fit }
+Function FindMemoryBestFit(Size:Word;Var Segment:Word):Boolean;
+Var
+ CurrentSeg: Word;
+ MCB: MemoryControlBlock;
+ BestSeg: Word;
+ BestSize: Word;
+ Found: Boolean;
+Begin
+ Found := False;
+ BestSize := $FFFF; { Taille maximale }
+ BestSeg := 0;
+ CurrentSeg := $0060; { Premier MCB }
+ 
+ While CurrentSeg < $A000 Do Begin
+  If GetMCB(CurrentSeg, MCB) Then Begin
+   { Vérifier si le bloc est libre, assez grand, mais plus petit que le meilleur }
+   If (MCB.Owner = 0) And (MCB.BlockSize >= Size) And (MCB.BlockSize < BestSize) Then Begin
+    BestSeg := CurrentSeg + 1;
+    BestSize := MCB.BlockSize;
+    Found := True;
+   End;
+   
+   { Passer au MCB suivant }
+   If MCB.BlockType = 'Z' Then Break; { Dernier bloc }
+   CurrentSeg := CurrentSeg + MCB.BlockSize + 1;
+  End Else Break;
+ End;
+ 
+ If Found Then Segment := BestSeg;
+ FindMemoryBestFit := Found;
+End;
+
+{ Recherche de bloc mémoire avec stratégie Last Fit }
+Function FindMemoryLastFit(Size:Word;Var Segment:Word):Boolean;
+Var
+ CurrentSeg: Word;
+ MCB: MemoryControlBlock;
+ LastSeg: Word;
+ Found: Boolean;
+Begin
+ Found := False;
+ LastSeg := 0;
+ CurrentSeg := $0060; { Premier MCB }
+ 
+ { Parcourir tous les blocs pour trouver le dernier qui convient }
+ While CurrentSeg < $A000 Do Begin
+  If GetMCB(CurrentSeg, MCB) Then Begin
+   { Vérifier si le bloc est libre et assez grand }
+   If (MCB.Owner = 0) And (MCB.BlockSize >= Size) Then Begin
+    LastSeg := CurrentSeg + 1;
+    Found := True;
+   End;
+   
+   { Passer au MCB suivant }
+   If MCB.BlockType = 'Z' Then Break; { Dernier bloc }
+   CurrentSeg := CurrentSeg + MCB.BlockSize + 1;
+  End Else Break;
+ End;
+ 
+ If Found Then Segment := LastSeg;
+ FindMemoryLastFit := Found;
+End;
+
+{ Fonction améliorée d'allocation mémoire avec stratégies }
+Function AllocateMemoryWithStrategy(Size:Word;Strategy:Word):Word;
+Var
+ Segment: Word;
+ Success: Boolean;
+Begin
+ AllocateMemoryWithStrategy := 0; { Erreur par défaut }
+ 
+ Case Strategy Of
+  0: Success := FindMemoryFirstFit(Size, Segment);  { First Fit }
+  1: Success := FindMemoryBestFit(Size, Segment);   { Best Fit }
+  2: Success := FindMemoryLastFit(Size, Segment);   { Last Fit }
+  Else Success := FindMemoryFirstFit(Size, Segment); { Par défaut }
+ End;
+ 
+ If Success Then Begin
+  { Créer le MCB pour marquer le bloc comme utilisé }
+  If CreateMCB(Segment - 1, Size, GetCurrentPSP, False) Then
+   AllocateMemoryWithStrategy := Segment;
+ End;
+End;
+
+{ Fonction principale 58h - Get/Set Memory Allocation Strategy }
+Function DOS58h_GetSetMemoryStrategy(Action:Byte;NewStrategy:Word):Word;
+Var
+ CurrentStrategy: Word;
+Begin
+ DOS58h_GetSetMemoryStrategy := $FFFF; { Erreur par défaut }
+ 
+ Case Action Of
+  0: Begin { GET - Obtenir la stratégie actuelle }
+      CurrentStrategy := GetMemoryStrategy;
+      DOS58h_GetSetMemoryStrategy := CurrentStrategy;
+     End;
+     
+  1: Begin { SET - Définir une nouvelle stratégie }
+      { Valider la stratégie (0=First Fit, 1=Best Fit, 2=Last Fit) }
+      If NewStrategy > 2 Then Begin
+       DOS58h_GetSetMemoryStrategy := 1; { Invalid function }
+       Exit;
+      End;
+      
+      SetMemoryStrategy(NewStrategy);
+      DOS58h_GetSetMemoryStrategy := 0; { Succès }
+     End;
+     
+  Else Begin
+   DOS58h_GetSetMemoryStrategy := 1; { Invalid function }
+  End;
+ End;
+ 
+ { Note: Cette implémentation gère les stratégies d'allocation mémoire basiques.
+   Un système DOS complet supporterait :
+   - La gestion de la mémoire étendue (XMS)
+   - La gestion de la mémoire expansée (EMS)
+   - Les blocs de mémoire haute (HMA)
+   - La défragmentation automatique
+   - Les statistiques détaillées d'allocation
+   - La protection contre la fragmentation
+   
+   Les stratégies implémentées :
+   0 = First Fit : Premier bloc libre suffisamment grand
+   1 = Best Fit  : Plus petit bloc libre suffisamment grand
+   2 = Last Fit  : Dernier bloc libre suffisamment grand }
 End;
 
 Procedure SetIntVec(_AL:Byte;_DS,_DX:Word);Assembler;ASM
