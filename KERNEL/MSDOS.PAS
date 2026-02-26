@@ -8854,30 +8854,55 @@ Begin
 End;
 
 { Fonction 2Eh - Set/Reset Verify Flag }
+{ Entrée: AL = 0 (désactiver) ou 1 (activer) la vérification }
+{ Sortie: AX = 0 (succès) ou 1 (fonction invalide) }
 Function DOS2Eh_SetVerifyFlag(VerifyState:Byte):Word;
 Begin
  DOS2Eh_SetVerifyFlag:=0; { Succès par défaut }
  
- { Valider le paramètre (0=off, 1=on) }
+ { Valider le paramètre (0=off, 1=on, autres valeurs = erreur) }
  If VerifyState > 1 Then Begin
-  DOS2Eh_SetVerifyFlag:=1; { Paramètre invalide }
+  DOS2Eh_SetVerifyFlag:=1; { Fonction invalide }
   Exit;
  End;
  
- { Mettre à jour le flag de vérification }
+ { Mettre à jour le flag de vérification dans le Code Segment }
  SetVerifyFlag(VerifyState);
  
- { Dans un vrai système, on pourrait aussi configurer le contrôleur disque }
- { pour activer/désactiver la vérification matérielle }
+ { Dans un vrai DOS, cette fonction pourrait aussi :
+   - Configurer le contrôleur de disque pour la vérification matérielle
+   - Notifier les drivers de périphériques du changement d'état
+   - Mettre à jour les paramètres BIOS si nécessaire }
+ 
+ { Forcer un flush des buffers disque si on active la vérification }
+ If VerifyState = 1 Then Begin
+  { Simuler un flush des buffers - dans un vrai DOS, cela forcerait
+    l'écriture de tous les buffers sales sur disque }
+ End;
  
  DOS2Eh_SetVerifyFlag:=0; { Succès }
 End;
 
 { Fonction 54h - Get Verify Flag }
+{ Entrée: Aucune }
+{ Sortie: AL = état actuel (0=désactivé, 1=activé) }
 Function DOS54h_GetVerifyFlag:Byte;
+Var
+ CurrentFlag: Byte;
 Begin
- { Retourner l'état actuel du flag de vérification }
- DOS54h_GetVerifyFlag:=GetVerifyFlag;
+ { Obtenir l'état actuel du flag de vérification depuis le Code Segment }
+ CurrentFlag := GetVerifyFlag;
+ 
+ { S'assurer que la valeur retournée est valide (0 ou 1) }
+ If CurrentFlag > 1 Then
+  CurrentFlag := 0; { Valeur par défaut si corrompue }
+ 
+ DOS54h_GetVerifyFlag := CurrentFlag;
+ 
+ { Note : Cette fonction est utilisée par :
+   - Les utilitaires système pour vérifier l'état de vérification
+   - Les programmes qui veulent adapter leur comportement selon l'état
+   - Les shells pour afficher l'état du système }
 End;
 
 Procedure SetIntVec(_AL:Byte;_DS,_DX:Word);Assembler;ASM
