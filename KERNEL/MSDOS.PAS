@@ -114,10 +114,14 @@ Const
  ERROR_INVALID_BLOCK         = 9;   { Bloc de mémoire invalide }
  ERROR_BAD_ENVIRONMENT       = 10;  { Environnement incorrect }
  ERROR_BAD_FORMAT            = 11;  { Format incorrect }
+ ERROR_INVALID_PARAMETER     = 87;  { Paramètre invalide }
+ ERROR_NO_MORE_FILES         = 18;  { Plus de fichiers }
+ ERROR_FILE_EXISTS           = 80;  { Fichier existe déjà }
  
  { Classes d'erreur }
  ERRCLASS_OUTOFRESOURCE     = 1;    { Ressources épuisées }
  ERRCLASS_TEMPSIT           = 2;    { Situation temporaire }
+ ERRCLASS_TEMPFAIL          = 2;    { Échec temporaire (alias de TEMPSIT) }
  ERRCLASS_AUTH              = 3;    { Autorisation }
  ERRCLASS_INTRN             = 4;    { Erreur interne }
  ERRCLASS_HRDFAIL           = 5;    { Défaillance matérielle }
@@ -129,6 +133,7 @@ Const
  ERRCLASS_MEDIA             = 11;   { Erreur média }
  ERRCLASS_EXISTS            = 12;   { Existe déjà }
  ERRCLASS_UNK               = 13;   { Inconnu }
+ ERRCLASS_BADCALL           = 14;   { Appel incorrect }
  
  { Actions suggérées }
  ERRACT_RETRY               = 1;    { Réessayer }
@@ -304,6 +309,7 @@ Type
 { Structure pour la table des fichiers ouverts }
 Type
  PBytePtr = ^Byte;       { Pointeur vers Byte pour Turbo Pascal }
+ PChar = ^Char;          { Pointeur vers Char pour chaînes ASCIIZ }
 
  FileTableEntry = Record
   InUse: Boolean;         { Fichier en cours d'utilisation }
@@ -607,6 +613,12 @@ Function DOS58h_GetSetMemoryStrategy(Action:Byte;NewStrategy:Word):Word;Near;For
 
 { Fonction 59h - Get Extended Error Information }
 Function DOS59h_GetExtendedError:LongInt;Near;Forward;
+
+{ Fonction 5Ah - Create Temporary File }
+Function DOS5Ah_CreateTempFile(PathPtr:Pointer;Attributes:Word):Word;Near;Forward;
+
+{ Fonction 5Bh - Create New File }
+Function DOS5Bh_CreateNewFile(PathPtr:Pointer;Attributes:Word):Word;Near;Forward;
 
 { Fonctions utilitaires pour opérations FAT réelles }
 Function ReadFATSector(Drive:Byte;Sector:Word;Var Buffer):Boolean;Near;Forward;
@@ -1062,6 +1074,8 @@ Procedure Intr21h;Assembler;ASM
  DW @57h { Fonction 57h - Get/Set File Date and Time }
  DW @58h { Fonction 58h - Get/Set Memory Allocation Strategy }
  DW @59h { Fonction 59h - Get Extended Error Information }
+ DW @5Ah { Fonction 5Ah - Create Temporary File }
+ DW @5Bh { Fonction 5Bh - Create New File }
 
  {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
  { Interruption 21h - Fonction 00h: Terminer le programme                      }
@@ -3624,6 +3638,80 @@ Procedure Intr21h;Assembler;ASM
  POP DX
  POP CX
  POP BX
+ JMP @Xit
+
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+ { Interruption 21h - Fonction 5Ah: Create Temporary File                     }
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+@5Ah:
+ PUSH CX                    { Sauvegarder les registres }
+ PUSH SI
+ PUSH DI
+
+ { DS:DX pointe vers le chemin de répertoire ASCIIZ }
+ { CX contient les attributs de fichier }
+ PUSH DS                    { Segment du chemin }
+ PUSH DX                    { Offset du chemin }
+ PUSH CX                    { Attributs }
+
+ CALL DOS5Ah_CreateTempFile { Appeler fonction Pascal }
+ { AX contient le handle de fichier ou $FFFF si erreur }
+ 
+ ADD SP,6                   { Nettoyer la pile (3 paramètres * 2) }
+ 
+ CMP AX,0FFFFh              { Vérifier si erreur }
+ JE @5AhError               { Si erreur }
+
+ { Succès - AX contient le handle }
+ CLC                        { Clear Carry Flag }
+ JMP @5AhEnd
+
+@5AhError:
+ { Erreur }
+ MOV AX,3                   { Path not found par défaut }
+ STC                        { Set Carry Flag }
+
+@5AhEnd:
+ POP DI
+ POP SI
+ POP CX
+ JMP @Xit
+
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+ { Interruption 21h - Fonction 5Bh: Create New File                           }
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+@5Bh:
+ PUSH CX                    { Sauvegarder les registres }
+ PUSH SI
+ PUSH DI
+
+ { DS:DX pointe vers le nom de fichier ASCIIZ }
+ { CX contient les attributs de fichier }
+ PUSH DS                    { Segment du nom de fichier }
+ PUSH DX                    { Offset du nom de fichier }
+ PUSH CX                    { Attributs }
+
+ CALL DOS5Bh_CreateNewFile  { Appeler fonction Pascal }
+ { AX contient le handle de fichier ou $FFFF si erreur }
+ 
+ ADD SP,6                   { Nettoyer la pile (3 paramètres * 2) }
+ 
+ CMP AX,0FFFFh              { Vérifier si erreur }
+ JE @5BhError               { Si erreur }
+
+ { Succès - AX contient le handle }
+ CLC                        { Clear Carry Flag }
+ JMP @5BhEnd
+
+@5BhError:
+ { Erreur }
+ MOV AX,80                  { File already exists (5Bh specific) }
+ STC                        { Set Carry Flag }
+
+@5BhEnd:
+ POP DI
+ POP SI
+ POP CX
  JMP @Xit
 
 @Xit:
@@ -10521,6 +10609,148 @@ Begin
  
  { Note: Dans le handler assembleur, le Locus sera récupéré séparément }
  DOS59h_GetExtendedError := Result;
+End;
+
+{ Fonction 5Ah - Create Temporary File }
+Function DOS5Ah_CreateTempFile(PathPtr:Pointer;Attributes:Word):Word;
+Var
+ TempFileName: String;
+ TempFullPath: String;
+ Counter: Word;
+ Handle: Word;
+ PathStr: String;
+ Drive: Byte;
+ DirPath: String;
+ FileName: String;
+ P: PChar;
+ I: Byte;
+Begin
+ DOS5Ah_CreateTempFile := $FFFF; { Erreur par défaut }
+ 
+ { Convertir pointeur ASCIIZ en string Pascal }
+ P := PChar(PathPtr);
+ PathStr := '';
+ I := 0;
+ While (P^ <> #0) and (I < 255) Do Begin
+  PathStr := PathStr + P^;
+  Inc(P);
+  Inc(I);
+ End;
+ If Length(PathStr) = 0 Then Begin
+  PathStr := '.'; { Répertoire courant si vide }
+ End;
+ 
+ { S'assurer que le chemin se termine par '\' }
+ If PathStr[Length(PathStr)] <> '\' Then
+  PathStr := PathStr + '\';
+ 
+ { Générer un nom de fichier temporaire unique }
+ Counter := 1;
+ Repeat
+  { Format: TMPxxxxx.TMP où xxxxx est un nombre }
+  Str(Counter, TempFileName);
+  While Length(TempFileName) < 5 Do
+   TempFileName := '0' + TempFileName;
+  TempFileName := 'TMP' + TempFileName + '.TMP';
+  
+  TempFullPath := PathStr + TempFileName;
+  
+  { Vérifier si le fichier existe déjà }
+  Handle := DOS3Dh_OpenFile(Addr(TempFullPath), 0); { Mode lecture seule }
+  If Handle <> $FFFF Then Begin
+   { Le fichier existe, fermer et essayer un autre nom }
+   DOS3Eh_CloseFile(Handle);
+   Inc(Counter);
+   If Counter > 9999 Then Begin
+    SetExtendedError(ERROR_NO_MORE_FILES, ERRCLASS_TEMPFAIL, ERRACT_RETRY, ERRLOC_UNK);
+    Exit; { Trop de tentatives }
+   End;
+  End Else Begin
+   { Le fichier n'existe pas, nous pouvons le créer }
+   Break;
+  End;
+ Until False;
+ 
+ { Créer le fichier temporaire }
+ Handle := DOS3Ch_CreateOpenFile(Addr(TempFullPath));
+ If Handle = $FFFF Then Begin
+  SetExtendedError(ERROR_PATH_NOT_FOUND, ERRCLASS_NOTFND, ERRACT_USER, ERRLOC_DISK);
+  Exit;
+ End;
+ 
+ { Copier le nom généré dans le chemin d'origine (modification du buffer appelant) }
+ { Attention: ceci modifie le buffer de l'appelant avec le nom généré }
+ Move(TempFullPath[1], PathPtr^, Length(TempFullPath));
+ P := PChar(PathPtr);
+ Inc(P, Length(TempFullPath));
+ P^ := #0; { Terminateur null }
+ 
+ { Définir les attributs si nécessaires }
+ If Attributes <> 0 Then Begin
+  If DOS43h_GetSetFileAttributes(PathPtr, 1, Attributes) = $FFFF Then Begin
+   { Erreur lors de la définition des attributs - fermer le fichier }
+   DOS3Eh_CloseFile(Handle);
+   DOS5Ah_CreateTempFile := $FFFF;
+   Exit;
+  End;
+ End;
+ 
+ ClearExtendedError;
+ DOS5Ah_CreateTempFile := Handle;
+End;
+
+{ Fonction 5Bh - Create New File }
+Function DOS5Bh_CreateNewFile(PathPtr:Pointer;Attributes:Word):Word;
+Var
+ PathStr: String;
+ Handle: Word;
+ P: PChar;
+ I: Byte;
+Begin
+ DOS5Bh_CreateNewFile := $FFFF; { Erreur par défaut }
+ 
+ { Convertir pointeur ASCIIZ en string Pascal }
+ P := PChar(PathPtr);
+ PathStr := '';
+ I := 0;
+ While (P^ <> #0) and (I < 255) Do Begin
+  PathStr := PathStr + P^;
+  Inc(P);
+  Inc(I);
+ End;
+ If Length(PathStr) = 0 Then Begin
+  SetExtendedError(ERROR_INVALID_PARAMETER, ERRCLASS_BADCALL, ERRACT_USER, ERRLOC_UNK);
+  Exit;
+ End;
+ 
+ { D'abord, vérifier si le fichier existe déjà }
+ Handle := DOS3Dh_OpenFile(PathPtr, 0); { Mode lecture seule }
+ If Handle <> $FFFF Then Begin
+  { Le fichier existe déjà - c'est une erreur pour 5Bh }
+  DOS3Eh_CloseFile(Handle);
+  SetExtendedError(ERROR_FILE_EXISTS, ERRCLASS_EXISTS, ERRACT_USER, ERRLOC_DISK);
+  Exit;
+ End;
+ 
+ { Le fichier n'existe pas, le créer }
+ Handle := DOS3Ch_CreateOpenFile(PathPtr);
+ If Handle = $FFFF Then Begin
+  SetExtendedError(ERROR_PATH_NOT_FOUND, ERRCLASS_NOTFND, ERRACT_USER, ERRLOC_DISK);
+  Exit;
+ End;
+ 
+ { Définir les attributs si nécessaires }
+ If Attributes <> 0 Then Begin
+  If DOS43h_GetSetFileAttributes(PathPtr, 1, Attributes) = $FFFF Then Begin
+   { Erreur lors de la définition des attributs - fermer le fichier }
+   DOS3Eh_CloseFile(Handle);
+   DOS5Bh_CreateNewFile := $FFFF;
+   Exit;
+  End;
+ End;
+ 
+ ClearExtendedError;
+ DOS5Bh_CreateNewFile := Handle;
 End;
 
 Procedure SetIntVec(_AL:Byte;_DS,_DX:Word);Assembler;ASM
