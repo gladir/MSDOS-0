@@ -280,6 +280,17 @@ Type
   LockType: Byte;                    { Type de verrou (0=read, 1=write) }
  End;
 
+ FileTableEntry = Record
+  InUse: Boolean;         { Fichier en cours d'utilisation }
+  Drive: Byte;           { Lecteur (0=A:, 1=B:, etc.) }
+  FirstCluster: Word;    { Premier cluster du fichier }
+  FileSize: LongInt;     { Taille du fichier }
+  CurrentPos: LongInt;   { Position courante dans le fichier }
+  Attributes: Byte;      { Attributs du fichier }
+  CurrentCluster: Word;  { Cluster courant pour lecture/écriture }
+  ClusterOffset: Word;   { Offset dans le cluster courant }
+ End;
+
   { Structure pour les données internes DOS }
  DataMOS=Record
   Key:Byte;
@@ -292,6 +303,12 @@ Type
   CurrentPSP:Word;     { Segment du PSP courant }
   VerifyFlag:Byte;     { Flag de vérification en écriture (0=off, 1=on) }
   FindState: FindFileState; { État de la recherche de fichiers }
+  CurrentDir: Array[0..25] of Record
+   Drive: Byte;
+   Cluster: Word;
+   Path: String[127];
+  End;
+  FileTable:Array[0..19]of FileTableEntry;
   { Données pour fonction 59h - Get Extended Error Information }
   ExtendedError:Word;       { Code d'erreur étendu }
   ErrorClass:Byte;          { Classe d'erreur }
@@ -322,17 +339,6 @@ Type
 Type
  PBytePtr = ^Byte;       { Pointeur vers Byte pour Turbo Pascal }
  PChar = ^Char;          { Pointeur vers Char pour chaînes ASCIIZ }
-
- FileTableEntry = Record
-  InUse: Boolean;         { Fichier en cours d'utilisation }
-  Drive: Byte;           { Lecteur (0=A:, 1=B:, etc.) }
-  FirstCluster: Word;    { Premier cluster du fichier }
-  FileSize: LongInt;     { Taille du fichier }
-  CurrentPos: LongInt;   { Position courante dans le fichier }
-  Attributes: Byte;      { Attributs du fichier }
-  CurrentCluster: Word;  { Cluster courant pour lecture/écriture }
-  ClusterOffset: Word;   { Offset dans le cluster courant }
- End;
 
  { Bloc de contrôle mémoire (MCB - Memory Control Block) }
  MemoryControlBlock = Record
