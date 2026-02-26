@@ -467,6 +467,7 @@ End;
 {$ENDIF}
 
 { DÃ©clarations Forward }
+Procedure Intr1Ah;Interrupt;Forward;
 Procedure Intr20h;Interrupt;Forward;
 Procedure Intr21h;Interrupt;Forward;
 Procedure Intr25h;Interrupt;Forward;
@@ -475,8 +476,6 @@ Procedure Intr28h;Interrupt;Forward;
 Procedure Intr2Ah;Interrupt;Forward;
 Procedure Intr2Fh;Interrupt;Forward;
 Procedure Intr33h;Interrupt;Forward;
-
-
 
 { DÃ©clarations des fonctions DOS }
 Function DOS4Eh_FindFirstFile(Path:String;Attr:Byte;var DTA:DTAStruct):Word;Forward;
@@ -1055,11 +1054,14 @@ Procedure Data;Assembler;ASM
 
 END;
 
+Procedure Intr1Ah;Assembler;ASM
+END;
+
 Procedure Intr20h;
 Begin
  { INT 20h - Program Terminate }
  { Cette interruption termine le programme courant et retourne au DOS }
- 
+
  ASM
   PUSH AX
   PUSH BX
@@ -1069,7 +1071,7 @@ Begin
   PUSH DI
   PUSH DS
   PUSH ES
-  
+
   { Fermer tous les fichiers ouverts par le PSP courant }
   { Parcourir la FileTable et marquer les fichiers comme fermÃ©s }
   MOV CX,20                    { 20 entrÃ©es dans FileTable }
@@ -1083,22 +1085,22 @@ Begin
   MOV BYTE PTR [Data + BX],0   { Marquer InUse = False }
   INC SI
   LOOP @CloseLoop
-  
+
   { Obtenir le PSP parent depuis le PSP courant }
   MOV DS,Data.DataMOS.CurrentPSP
   MOV AX,WORD PTR DS:[16h]     { Offset 16h = Parent PSP }
   MOV Data.DataMOS.CurrentPSP,AX
-  
+
   { Restaurer les vecteurs d'interruption sauvegardÃ©s }
   { INT 22h - Program Terminate Address }
   MOV AX,WORD PTR DS:[0Ah]     { Offset }
   MOV DX,WORD PTR DS:[0Ch]     { Segment }
   PUSH DX                      { _DS: Segment }
-  PUSH AX                      { _DX: Offset }  
+  PUSH AX                      { _DX: Offset }
   MOV AL,22h
   PUSH AX                      { _AL: NumÃ©ro d'interruption }
   CALL SetIntVec
-  
+
   { INT 23h - Ctrl-Break Exit Address }
   MOV AX,WORD PTR DS:[0Eh]     { Offset }
   MOV DX,WORD PTR DS:[10h]     { Segment }
@@ -1107,7 +1109,7 @@ Begin
   MOV AL,23h
   PUSH AX                      { _AL: NumÃ©ro d'interruption }
   CALL SetIntVec
-  
+
   { INT 24h - Critical Error Handler }
   MOV AX,WORD PTR DS:[12h]     { Offset }
   MOV DX,WORD PTR DS:[14h]     { Segment }
@@ -1116,15 +1118,15 @@ Begin
   MOV AL,24h
   PUSH AX                      { _AL: NumÃ©ro d'interruption }
   CALL SetIntVec
-  
+
   { Mettre le code de retour Ã  0 (terminaison normale) }
   MOV Data.DataMOS.LastReturnCode,0
-  
+
   { Obtenir l'adresse de terminaison }
   MOV DS,Data.DataMOS.CurrentPSP
   MOV SI,WORD PTR DS:[0Ah]     { Program Terminate Address (Offset) }
   MOV DI,WORD PTR DS:[0Ch]     { Program Terminate Address (Segment) }
-  
+
   { Restaurer les registres }
   POP ES
   POP DS
@@ -1134,7 +1136,7 @@ Begin
   POP CX
   POP BX
   POP AX
-  
+
   { Effectuer un saut FAR vers l'adresse de terminaison }
   PUSH DI      { Segment }
   PUSH SI      { Offset }
@@ -1244,6 +1246,169 @@ Procedure Intr21h;Assembler;ASM
  DW @5Ah { Fonction 5Ah - Create Temporary File }
  DW @5Bh { Fonction 5Bh - Create New File }
  DW @5Ch { Fonction 5Ch - Lock/Unlock File Region }
+ DW @Xit { Fonction 5Dh - a d‚velopper }
+ DW @Xit { Fonction 5Eh - a d‚velopper }
+ DW @Xit { Fonction 5Fh - a d‚velopper }
+ DW @Xit { Fonction 60h - a d‚velopper }
+ DW @Xit { Fonction 61h - a d‚velopper }
+ DW @Xit { Fonction 62h - a d‚velopper }
+ DW @Xit { Fonction 63h - a d‚velopper }
+ DW @Xit { Fonction 64h - a d‚velopper }
+ DW @Xit { Fonction 65h - a d‚velopper }
+ DW @Xit { Fonction 66h - a d‚velopper }
+ DW @Xit { Fonction 67h - a d‚velopper }
+ DW @Xit { Fonction 68h - a d‚velopper }
+ DW @Xit { Fonction 69h - a d‚velopper }
+ DW @Xit { Fonction 6Ah - a d‚velopper }
+ DW @Xit { Fonction 6Bh - a d‚velopper }
+ DW @Xit { Fonction 6Ch - a d‚velopper }
+ DW @Xit { Fonction 6Dh - a d‚velopper }
+ DW @Xit { Fonction 6Eh - a d‚velopper }
+ DW @Xit { Fonction 6Fh - a d‚velopper }
+ DW @Xit { Fonction 70h - a d‚velopper }
+ DW @Xit { Fonction 71h - a d‚velopper }
+ DW @Xit { Fonction 72h - a d‚velopper }
+ DW @Xit { Fonction 73h - a d‚velopper }
+ DW @Xit { Fonction 74h - a d‚velopper }
+ DW @Xit { Fonction 75h - a d‚velopper }
+ DW @Xit { Fonction 76h - a d‚velopper }
+ DW @Xit { Fonction 77h - a d‚velopper }
+ DW @Xit { Fonction 78h - a d‚velopper }
+ DW @Xit { Fonction 79h - a d‚velopper }
+ DW @Xit { Fonction 7Ah - a d‚velopper }
+ DW @Xit { Fonction 7Bh - a d‚velopper }
+ DW @Xit { Fonction 7Ch - a d‚velopper }
+ DW @Xit { Fonction 7Dh - a d‚velopper }
+ DW @Xit { Fonction 7Eh - a d‚velopper }
+ DW @Xit { Fonction 7Fh - a d‚velopper }
+ DW @Xit { Fonction 80h - a d‚velopper }
+ DW @Xit { Fonction 81h - a d‚velopper }
+ DW @Xit { Fonction 82h - a d‚velopper }
+ DW @Xit { Fonction 83h - a d‚velopper }
+ DW @Xit { Fonction 84h - a d‚velopper }
+ DW @Xit { Fonction 85h - a d‚velopper }
+ DW @Xit { Fonction 86h - a d‚velopper }
+ DW @Xit { Fonction 87h - a d‚velopper }
+ DW @Xit { Fonction 88h - a d‚velopper }
+ DW @Xit { Fonction 89h - a d‚velopper }
+ DW @Xit { Fonction 8Ah - a d‚velopper }
+ DW @Xit { Fonction 8Bh - a d‚velopper }
+ DW @Xit { Fonction 8Ch - a d‚velopper }
+ DW @Xit { Fonction 8Dh - a d‚velopper }
+ DW @Xit { Fonction 8Eh - a d‚velopper }
+ DW @Xit { Fonction 8Fh - a d‚velopper }
+ DW @Xit { Fonction 90h - a d‚velopper }
+ DW @Xit { Fonction 91h - a d‚velopper }
+ DW @Xit { Fonction 92h - a d‚velopper }
+ DW @Xit { Fonction 93h - a d‚velopper }
+ DW @Xit { Fonction 94h - a d‚velopper }
+ DW @Xit { Fonction 95h - a d‚velopper }
+ DW @Xit { Fonction 96h - a d‚velopper }
+ DW @Xit { Fonction 97h - a d‚velopper }
+ DW @Xit { Fonction 98h - a d‚velopper }
+ DW @Xit { Fonction 99h - a d‚velopper }
+ DW @Xit { Fonction 9Ah - a d‚velopper }
+ DW @Xit { Fonction 9Bh - a d‚velopper }
+ DW @Xit { Fonction 9Ch - a d‚velopper }
+ DW @Xit { Fonction 9Dh - a d‚velopper }
+ DW @Xit { Fonction 9Eh - a d‚velopper }
+ DW @Xit { Fonction 9Fh - a d‚velopper }
+ DW @Xit { Fonction A0h - a d‚velopper }
+ DW @Xit { Fonction A1h - a d‚velopper }
+ DW @Xit { Fonction A2h - a d‚velopper }
+ DW @Xit { Fonction A3h - a d‚velopper }
+ DW @Xit { Fonction A4h - a d‚velopper }
+ DW @Xit { Fonction A5h - a d‚velopper }
+ DW @Xit { Fonction A6h - a d‚velopper }
+ DW @Xit { Fonction A7h - a d‚velopper }
+ DW @Xit { Fonction A8h - a d‚velopper }
+ DW @Xit { Fonction A9h - a d‚velopper }
+ DW @Xit { Fonction AAh - a d‚velopper }
+ DW @Xit { Fonction ABh - a d‚velopper }
+ DW @Xit { Fonction ACh - a d‚velopper }
+ DW @Xit { Fonction ADh - a d‚velopper }
+ DW @Xit { Fonction AEh - a d‚velopper }
+ DW @Xit { Fonction AFh - a d‚velopper }
+ DW @Xit { Fonction B0h - a d‚velopper }
+ DW @Xit { Fonction B1h - a d‚velopper }
+ DW @Xit { Fonction B2h - a d‚velopper }
+ DW @Xit { Fonction B3h - a d‚velopper }
+ DW @Xit { Fonction B4h - a d‚velopper }
+ DW @Xit { Fonction B5h - a d‚velopper }
+ DW @Xit { Fonction B6h - a d‚velopper }
+ DW @Xit { Fonction B7h - a d‚velopper }
+ DW @Xit { Fonction B8h - a d‚velopper }
+ DW @Xit { Fonction B9h - a d‚velopper }
+ DW @Xit { Fonction BAh - a d‚velopper }
+ DW @Xit { Fonction BBh - a d‚velopper }
+ DW @Xit { Fonction BCh - a d‚velopper }
+ DW @Xit { Fonction BDh - a d‚velopper }
+ DW @Xit { Fonction BEh - a d‚velopper }
+ DW @Xit { Fonction BFh - a d‚velopper }
+ DW @Xit { Fonction C0h - a d‚velopper }
+ DW @Xit { Fonction C1h - a d‚velopper }
+ DW @Xit { Fonction C2h - a d‚velopper }
+ DW @Xit { Fonction C3h - a d‚velopper }
+ DW @Xit { Fonction C4h - a d‚velopper }
+ DW @Xit { Fonction C5h - a d‚velopper }
+ DW @Xit { Fonction C6h - a d‚velopper }
+ DW @Xit { Fonction C7h - a d‚velopper }
+ DW @Xit { Fonction C8h - a d‚velopper }
+ DW @Xit { Fonction C9h - a d‚velopper }
+ DW @Xit { Fonction CAh - a d‚velopper }
+ DW @Xit { Fonction CBh - a d‚velopper }
+ DW @Xit { Fonction CCh - a d‚velopper }
+ DW @Xit { Fonction CDh - a d‚velopper }
+ DW @Xit { Fonction CEh - a d‚velopper }
+ DW @Xit { Fonction CFh - a d‚velopper }
+ DW @Xit { Fonction D0h - a d‚velopper }
+ DW @Xit { Fonction D1h - a d‚velopper }
+ DW @Xit { Fonction D2h - a d‚velopper }
+ DW @Xit { Fonction D3h - a d‚velopper }
+ DW @Xit { Fonction D4h - a d‚velopper }
+ DW @Xit { Fonction D5h - a d‚velopper }
+ DW @Xit { Fonction D6h - a d‚velopper }
+ DW @Xit { Fonction D7h - a d‚velopper }
+ DW @Xit { Fonction D8h - a d‚velopper }
+ DW @Xit { Fonction D9h - a d‚velopper }
+ DW @Xit { Fonction DAh - a d‚velopper }
+ DW @Xit { Fonction DBh - a d‚velopper }
+ DW @Xit { Fonction DCh - a d‚velopper }
+ DW @Xit { Fonction DDh - a d‚velopper }
+ DW @Xit { Fonction DEh - a d‚velopper }
+ DW @Xit { Fonction DFh - a d‚velopper }
+ DW @Xit { Fonction E0h - a d‚velopper }
+ DW @Xit { Fonction E1h - a d‚velopper }
+ DW @Xit { Fonction E2h - a d‚velopper }
+ DW @Xit { Fonction E3h - a d‚velopper }
+ DW @Xit { Fonction E4h - a d‚velopper }
+ DW @Xit { Fonction E5h - a d‚velopper }
+ DW @Xit { Fonction E6h - a d‚velopper }
+ DW @Xit { Fonction E7h - a d‚velopper }
+ DW @Xit { Fonction E8h - a d‚velopper }
+ DW @Xit { Fonction E9h - a d‚velopper }
+ DW @Xit { Fonction EAh - a d‚velopper }
+ DW @Xit { Fonction EBh - a d‚velopper }
+ DW @Xit { Fonction ECh - a d‚velopper }
+ DW @Xit { Fonction EDh - a d‚velopper }
+ DW @Xit { Fonction EEh - a d‚velopper }
+ DW @Xit { Fonction EFh - a d‚velopper }
+ DW @Xit { Fonction F0h - a d‚velopper }
+ DW @Xit { Fonction F1h - a d‚velopper }
+ DW @Xit { Fonction F2h - a d‚velopper }
+ DW @Xit { Fonction F3h - a d‚velopper }
+ DW @Xit { Fonction F4h - a d‚velopper }
+ DW @Xit { Fonction F5h - a d‚velopper }
+ DW @Xit { Fonction F6h - a d‚velopper }
+ DW @Xit { Fonction F7h - a d‚velopper }
+ DW @Xit { Fonction F8h - a d‚velopper }
+ DW @Xit { Fonction F9h - a d‚velopper }
+ DW @Xit { Fonction FAh - a d‚velopper }
+ DW @Xit { Fonction FBh - a d‚velopper }
+ DW @Xit { Fonction FCh - a d‚velopper }
+ DW @Xit { Fonction FDh - a d‚velopper }
+ DW @Xit { Fonction FEh - a d‚velopper }
+ DW @Xit { Fonction FFh - a d‚velopper }
 
  {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
  { Interruption 21h - Fonction 00h: Terminer le programme                      }
