@@ -8164,30 +8164,145 @@ End;
 
 { Lecture simplifiée d'un secteur pour Find File }
 Function ReadSectorSimple(Sector:Word;Var Buffer):Boolean;
+Var
+ DriveNum: Byte;
+ Head, Track, SectorNum: Byte;
+ ReadSuccess: Byte;
+ Result: Boolean;
 Begin
- { Pour l'instant, implémentation simplifiée }
- { Dans un vrai système, ceci ferait appel à INT 25h }
- ReadSectorSimple:=False; { Échec simulé pour l'instant }
+ Result := False;
+ ReadSuccess := 0;
  
- { Simuler une lecture de secteur vide pour les tests }
- FillChar(Buffer, 512, 0);
+ { Calculer les paramètres CHS pour le lecteur C: (disque dur) }
+ DriveNum := $80;  { Premier disque dur }
  
- { Marquer comme succès pour les tests }
- ReadSectorSimple:=True;
+ { Conversion LBA vers CHS (supposons géométrie standard 63 secteurs/piste, 16 têtes) }
+ Head := (Sector DIV 63) MOD 16;
+ Track := Sector DIV (63 * 16);
+ SectorNum := (Sector MOD 63) + 1;  { Les secteurs commencent à 1 }
+ 
+ { Préparer les registres pour INT 13h, fonction 02h (lecture secteur) }
+ ASM
+  { Sauvegarder les registres importants }
+  PUSH AX
+  PUSH BX
+  PUSH CX
+  PUSH DX
+  PUSH ES
+  
+  { Paramètres pour INT 13h fonction 02h }
+  MOV AH, 02h           { Fonction lecture secteur }
+  MOV AL, 1             { Nombre de secteurs à lire }
+  MOV DL, DriveNum      { Lecteur }
+  MOV DH, Head          { Tête }
+  MOV CH, Track         { Piste (cylindre) }
+  MOV CL, SectorNum     { Secteur }
+  
+  { Pointer ES:BX vers le buffer }
+  LES BX, Buffer
+  
+  { Appeler l'interruption BIOS }
+  INT 13h
+  
+  { Vérifier le résultat (CF=0 si succès) }
+  JC @ReadError
+  
+  { Succès }
+  MOV ReadSuccess, 1
+  JMP @ReadDone
+  
+@ReadError:
+  { Erreur }
+  MOV ReadSuccess, 0
+  
+@ReadDone:
+  { Restaurer les registres }
+  POP ES
+  POP DX
+  POP CX
+  POP BX
+  POP AX
+ END;
+ 
+ { Assigner le résultat }
+ Result := (ReadSuccess <> 0);
+ 
+ { Retourner le résultat final }
+ ReadSectorSimple := Result;
 End;
 
 { Écriture simplifiée d'un secteur avec vérification optionnelle }
 Function WriteSectorSimple(Sector:Word;Var Buffer):Boolean;
+Var
+ DriveNum: Byte;
+ Head, Track, SectorNum: Byte;
+ WriteSuccess: Byte;
+ Result: Boolean;
 Begin
- { Simulation d'écriture }
- WriteSectorSimple:=True;
+ Result := False;
+ WriteSuccess := 0;
  
- { Si la vérification est activée, utiliser la fonction avec vérification }
- If GetVerifyFlag <> 0 Then Begin
-  WriteSectorSimple:=WriteSectorWithVerify(0, Sector, @Buffer);
+ { Calculer les paramètres CHS pour le lecteur C: (disque dur) }
+ DriveNum := $80;  { Premier disque dur }
+ 
+ { Conversion LBA vers CHS (supposons géométrie standard 63 secteurs/piste, 16 têtes) }
+ Head := (Sector DIV 63) MOD 16;
+ Track := Sector DIV (63 * 16);
+ SectorNum := (Sector MOD 63) + 1;  { Les secteurs commencent à 1 }
+ 
+ { Préparer les registres pour INT 13h, fonction 03h (écriture secteur) }
+ ASM
+  { Sauvegarder les registres importants }
+  PUSH AX
+  PUSH BX
+  PUSH CX
+  PUSH DX
+  PUSH ES
+  
+  { Paramètres pour INT 13h fonction 03h }
+  MOV AH, 03h           { Fonction écriture secteur }
+  MOV AL, 1             { Nombre de secteurs à écrire }
+  MOV DL, DriveNum      { Lecteur }
+  MOV DH, Head          { Tête }
+  MOV CH, Track         { Piste (cylindre) }
+  MOV CL, SectorNum     { Secteur }
+  
+  { Pointer ES:BX vers le buffer }
+  LES BX, Buffer
+  
+  { Appeler l'interruption BIOS }
+  INT 13h
+  
+  { Vérifier le résultat (CF=0 si succès) }
+  JC @WriteError
+  
+  { Succès }
+  MOV WriteSuccess, 1
+  JMP @WriteDone
+  
+@WriteError:
+  { Erreur }
+  MOV WriteSuccess, 0
+  
+@WriteDone:
+  { Restaurer les registres }
+  POP ES
+  POP DX
+  POP CX
+  POP BX
+  POP AX
+ END;
+ 
+ { Assigner le résultat }
+ Result := (WriteSuccess <> 0);
+ 
+ { Si la vérification est activée, vérifier l'écriture }
+ If Result And (GetVerifyFlag <> 0) Then Begin
+  Result := VerifyWrite(DriveNum And $7F, Sector, @Buffer, 512);
  End;
  
- { Sinon, écriture normale (simulée pour l'instant) }
+ { Retourner le résultat final }
+ WriteSectorSimple := Result;
 End;
 
 { Fonctions d'accès aux données du kernel dans le Code Segment }
