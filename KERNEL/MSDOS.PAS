@@ -117,7 +117,7 @@ Const
  ERROR_INVALID_PARAMETER     = 87;  { Paramètre invalide }
  ERROR_NO_MORE_FILES         = 18;  { Plus de fichiers }
  ERROR_FILE_EXISTS           = 80;  { Fichier existe déjà }
- 
+
  { Classes d'erreur }
  ERRCLASS_OUTOFRESOURCE     = 1;    { Ressources épuisées }
  ERRCLASS_TEMPSIT           = 2;    { Situation temporaire }
@@ -134,7 +134,7 @@ Const
  ERRCLASS_EXISTS            = 12;   { Existe déjà }
  ERRCLASS_UNK               = 13;   { Inconnu }
  ERRCLASS_BADCALL           = 14;   { Appel incorrect }
- 
+
  { Actions suggérées }
  ERRACT_RETRY               = 1;    { Réessayer }
  ERRACT_DLYRET              = 2;    { Attendre puis réessayer }
@@ -143,7 +143,7 @@ Const
  ERRACT_PANIC               = 5;    { Arrêt immédiat }
  ERRACT_IGNORE              = 6;    { Ignorer }
  ERRACT_INTRET              = 7;    { Réessayer après correction }
- 
+
  { Localisation de l'erreur }
  ERRLOC_UNK                 = 1;    { Inconnue }
  ERRLOC_DISK                = 2;    { Disque }
@@ -445,14 +445,14 @@ End;
 {$IFNDEF FPC}
 { Aucune variable globale nécessaire en mode Turbo Pascal }
 {$ENDIF}{ Déclarations Forward }
-Procedure Intr20h;Forward;
-Procedure Intr21h;Forward;
-Procedure Intr25h;Forward;
-Procedure Intr26h;Forward;
-Procedure Intr28h;Forward;
-Procedure Intr2Ah;Forward;
-Procedure Intr2Fh;Forward;
-Procedure Intr33h;Forward;
+Procedure Intr20h;Interrupt;Forward;
+Procedure Intr21h;Interrupt;Forward;
+Procedure Intr25h;Interrupt;Forward;
+Procedure Intr26h;Interrupt;Forward;
+Procedure Intr28h;Interrupt;Forward;
+Procedure Intr2Ah;Interrupt;Forward;
+Procedure Intr2Fh;Interrupt;Forward;
+Procedure Intr33h;Interrupt;Forward;
 
 { Déclarations des fonctions DOS }
 Function DOS4Eh_FindFirstFile(Path:String;Attr:Byte;var DTA:DTAStruct):Word;Forward;
@@ -732,10 +732,10 @@ Begin
  SetIntVec($2A,CSeg,Ofs(Intr2Ah));
  SetIntVec($2F,CSeg,Ofs(Intr2Fh));
  SetIntVec($33,CSeg,Ofs(Intr33h));
- 
+
  { Initialiser le gestionnaire de mémoire }
  InitializeMemoryManager;
- 
+
  { Charger et exécuter COMMAND.COM ou COMMAND.EXE }
  LoadAndExecuteCommandProcessor;
  ASM
@@ -2088,15 +2088,15 @@ Procedure Intr21h;Assembler;ASM
  { Sortie : aucune }
  PUSH CX                    { Sauvegarder les registres }
  PUSH BX
- 
+
  { AL contient l'état de vérification (0=off, 1=on) }
  PUSH AX                    { État de vérification }
- 
+
  CALL DOS2Eh_SetVerifyFlag  { Appeler fonction Pascal }
  { AX contient le code d'erreur (mais ignoré par DOS) }
- 
+
  ADD SP,2                   { Nettoyer la pile }
- 
+
  POP BX
  POP CX
  JMP @Xit
@@ -3190,7 +3190,7 @@ Procedure Intr21h;Assembler;ASM
  PUSH DI
 
  { Paramètres: AL = type EXEC, DS:DX = nom fichier, ES:BX = bloc paramètres }
- 
+
  { Sauvegarder les paramètres sur la pile }
  PUSH ES                    { Segment bloc paramètres }
  PUSH BX                    { Offset bloc paramètres }
@@ -3273,20 +3273,20 @@ Procedure Intr21h;Assembler;ASM
  MOV AX,DS
  PUSH AX                    { Segment du nom de fichier }
  PUSH DX                    { Offset du nom de fichier }
- 
+
  { CL contient les attributs de recherche }
  MOV AL,CL
  PUSH AX                    { Attributs }
- 
+
  { ES:BX pointe vers la DTA }
  PUSH ES                    { Segment DTA }
  PUSH BX                    { Offset DTA }
 
  CALL DOS4Eh_FindFirstFile  { Appeler fonction Pascal }
  { AX contient le code d'erreur }
- 
+
  ADD SP,10                  { Nettoyer la pile (5 paramètres * 2) }
- 
+
  OR AX,AX                   { Tester le résultat }
  JZ @4EhSuccess
  STC                        { Set Carry Flag si erreur }
@@ -3316,9 +3316,9 @@ Procedure Intr21h;Assembler;ASM
 
  CALL DOS4Fh_FindNextFile   { Appeler fonction Pascal }
  { AX contient le code d'erreur }
- 
+
  ADD SP,4                   { Nettoyer la pile (2 paramètres * 2) }
- 
+
  OR AX,AX                   { Tester le résultat }
  JZ @4FhSuccess
  STC                        { Set Carry Flag si erreur }
@@ -3339,15 +3339,15 @@ Procedure Intr21h;Assembler;ASM
 @50h:
  PUSH CX                    { Sauvegarder les registres }
  PUSH BX
- 
+
  { BX contient l'adresse du nouveau PSP }
  PUSH BX                    { Segment PSP }
- 
+
  CALL DOS50h_SetPSPAddress  { Appeler fonction Pascal }
  { AX contient le code d'erreur }
- 
+
  ADD SP,2                   { Nettoyer la pile (1 paramètre * 2) }
- 
+
  OR AX,AX                   { Tester le résultat }
  JZ @50hSuccess
  STC                        { Set Carry Flag si erreur }
@@ -3365,13 +3365,13 @@ Procedure Intr21h;Assembler;ASM
  {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
 @51h:
  PUSH CX                    { Sauvegarder les registres }
- 
+
  CALL DOS51h_GetPSPAddress  { Appeler fonction Pascal }
  { AX contient l'adresse du PSP }
- 
+
  MOV BX,AX                  { Retourner PSP dans BX }
  CLC                        { Clear Carry Flag - toujours succès }
- 
+
  POP CX
  JMP @Xit
 
@@ -3380,14 +3380,14 @@ Procedure Intr21h;Assembler;ASM
  {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
 @52h:
  PUSH CX                    { Sauvegarder les registres }
- 
+
  CALL DOS52h_GetListOfLists { Appeler fonction Pascal }
  { AX:DX contient le pointeur vers Liste des Listes }
- 
+
  MOV BX,AX                  { BX = offset }
  MOV ES,DX                  { ES = segment }
  CLC                        { Clear Carry Flag - toujours succès }
- 
+
  POP CX
  JMP @Xit
 
@@ -3400,18 +3400,18 @@ Procedure Intr21h;Assembler;ASM
  PUSH DX
  PUSH SI
  PUSH DI
- 
+
  { DS:SI pointe vers BPB, ES:BP pointe vers DPB }
  PUSH DS                    { Segment BPB }
  PUSH SI                    { Offset BPB }
  PUSH ES                    { Segment DPB }
  PUSH BP                    { Offset DPB }
- 
+
  CALL DOS53h_TranslateBPBtoDPB { Appeler fonction Pascal }
  { AX contient le code d'erreur }
- 
+
  ADD SP,8                   { Nettoyer la pile (4 paramètres * 2) }
- 
+
  OR AX,AX                   { Tester le résultat }
  JZ @53hSuccess
  STC                        { Set Carry Flag si erreur }
@@ -3432,12 +3432,12 @@ Procedure Intr21h;Assembler;ASM
  {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
 @54h:
  PUSH CX                    { Sauvegarder les registres }
- 
+
  CALL DOS54h_GetVerifyFlag  { Appeler fonction Pascal }
  { AL contient l'état du flag de vérification }
- 
+
  CLC                        { Clear Carry Flag - toujours succès }
- 
+
  POP CX
  JMP @Xit
 
@@ -3448,23 +3448,23 @@ Procedure Intr21h;Assembler;ASM
  PUSH BX                    { Sauvegarder les registres }
  PUSH CX
  PUSH DX
- 
+
  MOV BX,DX                  { DX contient le segment du nouveau PSP }
  PUSH BX                    { Paramètre pour la fonction Pascal }
- 
+
  CALL DOS55h_CreateChildPSP { Appeler fonction Pascal }
  ADD SP,2                   { Nettoyer la pile }
- 
+
  { AX contient le code de retour (0=succès, autre=erreur) }
  CMP AX,0
  JNE @55h_Error
- 
+
  CLC                        { Clear Carry Flag - succès }
  JMP @55h_Done
- 
+
 @55h_Error:
  STC                        { Set Carry Flag - erreur }
- 
+
 @55h_Done:
  POP DX
  POP CX
@@ -3479,26 +3479,26 @@ Procedure Intr21h;Assembler;ASM
  PUSH CX
  PUSH SI
  PUSH DI
- 
+
  { DS:DX pointe vers l'ancien nom, ES:DI vers le nouveau nom }
  PUSH ES                    { Passer ES:DI comme paramètre (nouveau nom) }
  PUSH DI
  PUSH DS                    { Passer DS:DX comme paramètre (ancien nom) }
  PUSH DX
- 
+
  CALL DOS56h_RenameFile     { Appeler fonction Pascal }
  ADD SP,8                   { Nettoyer la pile (4 paramètres * 2 bytes) }
- 
+
  { AX contient le code de retour (0=succès, autre=erreur) }
  CMP AX,0
  JNE @56h_Error
- 
+
  CLC                        { Clear Carry Flag - succès }
  JMP @56h_Done
- 
+
 @56h_Error:
  STC                        { Set Carry Flag - erreur }
- 
+
 @56h_Done:
  POP DI
  POP SI
@@ -3513,41 +3513,41 @@ Procedure Intr21h;Assembler;ASM
  PUSH BX
  PUSH CX
  PUSH DX
- 
+
  { Préparer les paramètres pour l'appel Pascal }
  { BX = handle, AL = action (0=get, 1=set), CX = nouvelle heure, DX = nouvelle date }
  PUSH BX                    { Handle }
- 
+
  MOV AH,0                   { Action dans AL, étendre à AX }
  PUSH AX                    { Action }
- 
+
  PUSH CX                    { NewTime }
  PUSH DX                    { NewDate }
- 
+
  CALL DOS57h_GetSetFileDateTime { Appeler fonction Pascal }
  ADD SP,8                   { Nettoyer la pile (4 paramètres × 2 bytes) }
- 
+
  { Le résultat est dans DX:AX (LongInt) }
  CMP AX,$FFFF
  JNE @57h_Success
  CMP DX,$FFFF
  JE @57h_Error
- 
+
 @57h_Success:
  { Pour action GET (AL=0), retourner date/heure dans CX:DX }
  { Pour action SET (AL=1), pas de valeur de retour }
  CMP BYTE PTR [BP+6],0      { Vérifier l'action sur la pile }
  JNE @57h_Done
- 
+
  { Action GET - retourner les valeurs }
  MOV CX,AX                  { Heure dans CX }
  MOV DX,DX                  { Date dans DX (déjà là) }
  CLC                        { Clear Carry Flag - succès }
  JMP @57h_Done
- 
+
 @57h_Error:
  STC                        { Set Carry Flag - erreur }
- 
+
 @57h_Done:
  POP DX
  POP CX
@@ -3561,31 +3561,31 @@ Procedure Intr21h;Assembler;ASM
  PUSH BX
  PUSH CX
  PUSH DX
- 
+
  { Préparer les paramètres pour l'appel Pascal }
  { AL = action (0=get, 1=set), BX = nouvelle stratégie (pour set) }
  MOV AH,0                   { Action dans AL, étendre à AX }
  PUSH AX                    { Action }
- 
+
  PUSH BX                    { NewStrategy }
- 
+
  CALL DOS58h_GetSetMemoryStrategy { Appeler fonction Pascal }
  ADD SP,4                   { Nettoyer la pile (2 paramètres × 2 bytes) }
- 
+
  { Le résultat est dans AX }
  CMP AX,$FFFF
  JE @58h_Error
- 
+
 @58h_Success:
  { Pour action GET (AL=0), retourner stratégie dans AX }
  { Pour action SET (AL=1), AX = 0 si succès }
  CLC                        { Clear Carry Flag - succès }
  JMP @58h_Done
- 
+
 @58h_Error:
  MOV AX,1                   { Invalid function }
  STC                        { Set Carry Flag - erreur }
- 
+
 @58h_Done:
  POP DX
  POP CX
@@ -3599,29 +3599,29 @@ Procedure Intr21h;Assembler;ASM
  PUSH BX
  PUSH CX
  PUSH DX
- 
+
  { Appeler la fonction Pascal }
  CALL DOS59h_GetExtendedError
- 
+
  { Le résultat est dans DX:AX (LongInt) }
  { AX = Extended Error Code }
  { BH = Error Class }
  { BL = Suggested Action }
  { CH = Locus }
  { CL = non utilisé (0) }
- 
+
  { Décomposer le résultat LongInt }
  { DX contient: High byte = Error Class, Low byte = Suggested Action }
  { AX contient: Extended Error Code }
  MOV BX,DX                  { BX = Error Class:Suggested Action }
  MOV CX,DX                  { CX = Error Class:Suggested Action }
- 
+
  { Réorganiser les registres selon le format DOS 59h }
  MOV BH,DH                  { BH = Error Class }
  MOV BL,DL                  { BL = Suggested Action }
  MOV CH,DH                  { CH = Locus (sera ajusté) }
  MOV CL,0                   { CL = réservé }
- 
+
  { Pour obtenir le Locus directement depuis DataMOS }
  PUSH AX
  PUSH BX
@@ -3632,9 +3632,9 @@ Procedure Intr21h;Assembler;ASM
  POP SI
  POP BX
  POP AX
- 
+
  CLC                        { Clear Carry Flag - toujours succès pour 59h }
- 
+
  POP DX
  POP CX
  POP BX
@@ -3656,9 +3656,9 @@ Procedure Intr21h;Assembler;ASM
 
  CALL DOS5Ah_CreateTempFile { Appeler fonction Pascal }
  { AX contient le handle de fichier ou $FFFF si erreur }
- 
+
  ADD SP,6                   { Nettoyer la pile (3 paramètres * 2) }
- 
+
  CMP AX,0FFFFh              { Vérifier si erreur }
  JE @5AhError               { Si erreur }
 
@@ -3693,9 +3693,9 @@ Procedure Intr21h;Assembler;ASM
 
  CALL DOS5Bh_CreateNewFile  { Appeler fonction Pascal }
  { AX contient le handle de fichier ou $FFFF si erreur }
- 
+
  ADD SP,6                   { Nettoyer la pile (3 paramètres * 2) }
- 
+
  CMP AX,0FFFFh              { Vérifier si erreur }
  JE @5BhError               { Si erreur }
 
@@ -7657,15 +7657,15 @@ Var
  NewEntry: FileTableEntry;
 Begin
  DOS45h_DuplicateHandle:=$FFFF; { Erreur par défaut }
- 
+
  { Vérifier la validité du handle source }
  If SourceHandle >= 20 Then Exit;
- 
+
  If Not GetFileTableEntry(SourceHandle, SourceEntry) Then Exit;
- 
+
  { Vérifier si le handle source est utilisé }
  If Not SourceEntry.InUse Then Exit;
- 
+
  { Trouver un nouveau handle libre }
  For NewHandle:=0 To 19 Do Begin
   If GetFileTableEntry(NewHandle, NewEntry) Then Begin
@@ -7679,7 +7679,7 @@ Begin
     NewEntry.FileSize:=SourceEntry.FileSize;
     NewEntry.Attributes:=SourceEntry.Attributes;
     NewEntry.ClusterOffset:=SourceEntry.ClusterOffset;
-    
+
     { Sauvegarder la nouvelle entrée }
     If SetFileTableEntry(NewHandle, NewEntry) Then Begin
      { Incrémenter le compteur de références si c'est un fichier }
@@ -7687,14 +7687,14 @@ Begin
       { Pour les fichiers normaux, on incrémente un compteur de références }
       { Dans cette implémentation simplifiée, on marque juste comme dupliqué }
      End;
-     
+
      DOS45h_DuplicateHandle:=NewHandle;
      Exit;
     End;
    End;
   End;
  End;
- 
+
  { Aucun handle libre trouvé }
  DOS45h_DuplicateHandle:=$FFFF;
 End;
@@ -7706,19 +7706,19 @@ Var
  TargetEntry: FileTableEntry;
 Begin
  DOS46h_ForceDuplicateHandle:=6; { Invalid handle par défaut }
- 
+
  { Vérifier la validité des handles }
  If (SourceHandle >= 20) Or (TargetHandle >= 20) Then Begin
   DOS46h_ForceDuplicateHandle:=6; { Invalid handle }
   Exit;
  End;
- 
+
  { Vérifier que le handle source existe }
  If Not GetFileTableEntry(SourceHandle, SourceEntry) Then Exit;
- 
+
  { Vérifier si le handle source est utilisé }
  If Not SourceEntry.InUse Then Exit;
- 
+
  { Si le handle de destination est déjà utilisé, le fermer d'abord }
  If GetFileTableEntry(TargetHandle, TargetEntry) Then Begin
   If TargetEntry.InUse Then Begin
@@ -7738,7 +7738,7 @@ Begin
   { Initialiser l'entrée de destination si elle n'existe pas }
   FillChar(TargetEntry, SizeOf(TargetEntry), 0);
  End;
- 
+
  { Copier toutes les informations du handle source vers la destination }
  TargetEntry.InUse:=True;
  TargetEntry.Drive:=SourceEntry.Drive;
@@ -7748,7 +7748,7 @@ Begin
  TargetEntry.FileSize:=SourceEntry.FileSize;
  TargetEntry.Attributes:=SourceEntry.Attributes;
  TargetEntry.ClusterOffset:=SourceEntry.ClusterOffset;
- 
+
  { Sauvegarder l'entrée de destination }
  If SetFileTableEntry(TargetHandle, TargetEntry) Then Begin
   { Marquer comme réussi }
@@ -7767,7 +7767,7 @@ Var
  PathStr: String;
 Begin
  DOS47h_GetCurrentDirectory:=15; { Invalid drive par défaut }
- 
+
  { Déterminer le lecteur à utiliser }
  If Drive = 0 Then
   CurrentDrive:=GetCurrentDrive
@@ -7778,10 +7778,10 @@ Begin
    Exit;
   End;
  End;
- 
+
  { Obtenir le cluster du répertoire courant pour ce lecteur }
  CurrentCluster:=GetCurrentDirCluster(CurrentDrive);
- 
+
  { Si c'est le répertoire racine, retourner chaîne vide }
  If CurrentCluster = 0 Then Begin
   { Écrire une chaîne vide dans le buffer }
@@ -7796,39 +7796,39 @@ Begin
   DOS47h_GetCurrentDirectory:=0;
   Exit;
  End;
- 
+
  { Pour cette implémentation simplifiée, retourner un chemin générique }
  { basé sur le numéro de cluster du répertoire courant }
  PathStr:='SUBDIR';
- 
+
  { Copier le chemin dans le buffer de l'utilisateur }
  ASM
   PUSH DS
   PUSH ES
-  
+
   { Pointer vers notre string PathStr }
   LEA SI,PathStr
   MOV CL,[SI]        { Longueur de la chaîne }
   INC SI             { Pointer vers le contenu }
-  
+
   { Pointer vers le buffer utilisateur }
   MOV AX,BufferSeg
   MOV ES,AX
   MOV DI,BufferOfs
-  
+
   { Copier le chemin }
   MOV CH,0
   CLD
   REP MOVSB
-  
+
   { Ajouter le terminateur null }
   MOV AL,0
   STOSB
-  
+
   POP ES
   POP DS
  END;
- 
+
  DOS47h_GetCurrentDirectory:=0; { Succès }
 End;
 
@@ -7841,27 +7841,27 @@ Var
  FirstMCB: Word;
 Begin
  InitializeMemoryManager:=False;
- 
+
  { Le premier MCB commence généralement à 0x0060 (après les vecteurs d'interruption) }
  FirstMCB:=$0060;
- 
+
  { Créer le premier MCB couvrant toute la mémoire conventionnelle }
  MCB.BlockType:='Z';      { Dernier bloc }
  MCB.Owner:=0;            { Bloc libre }
  MCB.BlockSize:=$9F00;    { ~640KB - adresse de départ }
  FillChar(MCB.Reserved, 3, 0);
  FillChar(MCB.ProgramName, 8, 0);
- 
+
  If SetMCB(FirstMCB, MCB) Then Begin
   { Initialiser la stratégie d'allocation par défaut (First Fit) }
   SetMemoryStrategy(0);
-  
+
   { Initialiser l'état UMB par défaut (non liés) }
   SetUMBLinkState(0);
-  
+
   { Initialiser les informations d'erreur étendue }
   ClearExtendedError;
-  
+
   InitializeMemoryManager:=True;
  End;
 End;
@@ -7877,13 +7877,13 @@ Begin
   MOV AX,Segment
   MOV DS,AX
   XOR SI,SI
-  
+
   { Pointer vers la structure MCB (paramètre Var) }
   LES DI,MCB
   MOV CX,16           { Taille d'un MCB }
   CLD
   REP MOVSB
-  
+
   POP ES
   POP DS
  END;
@@ -7901,13 +7901,13 @@ Begin
   MOV AX,Segment
   MOV ES,AX
   XOR DI,DI
-  
+
   { Pointer vers la structure MCB sur la pile }
   LEA SI,MCB
   MOV CX,16           { Taille d'un MCB }
   CLD
   REP MOVSB
-  
+
   POP DS
   POP ES
  END;
@@ -7924,17 +7924,17 @@ Begin
  FindFreeMCB:=False;
  Found:=False;
  CurrentSeg:=$0060; { Premier MCB }
- 
+
  While Not Found Do Begin
   If Not GetMCB(CurrentSeg, MCB) Then Break;
-  
+
   { Vérifier si le bloc est libre et assez grand }
   If (MCB.Owner = 0) And (MCB.BlockSize >= Size) Then Begin
    Segment:=CurrentSeg + 1; { Le segment utilisable est MCB + 1 }
    Found:=True;
    FindFreeMCB:=True;
   End;
-  
+
   { Passer au MCB suivant }
   If MCB.BlockType = 'Z' Then Break; { Dernier bloc }
   CurrentSeg:=CurrentSeg + MCB.BlockSize + 1;
@@ -7947,17 +7947,17 @@ Var
  MCB: MemoryControlBlock;
 Begin
  CreateMCB:=False;
- 
+
  If IsLast Then
   MCB.BlockType:='Z'
  Else
   MCB.BlockType:='M';
- 
+
  MCB.Owner:=Owner;
  MCB.BlockSize:=Size;
  FillChar(MCB.Reserved, 3, 0);
  FillChar(MCB.ProgramName, 8, 0);
- 
+
  { Copier le nom "COMMAND" pour les blocs système }
  If Owner <> 0 Then Begin
   MCB.ProgramName[0]:='C';
@@ -7969,7 +7969,7 @@ Begin
   MCB.ProgramName[6]:='D';
   MCB.ProgramName[7]:=#0;
  End;
- 
+
  CreateMCB:=SetMCB(Segment, MCB);
 End;
 
@@ -7980,19 +7980,19 @@ Var
  Segment: Word;
 Begin
  DOS48h_AllocateMemory:=0; { Erreur par défaut }
- 
+
  { Vérifier que la taille est raisonnable }
  If BlockSize = 0 Then Begin
   DOS48h_AllocateMemory:=0;
   Exit;
  End;
- 
+
  { Obtenir la stratégie d'allocation actuelle }
  CurrentStrategy := GetMemoryStrategy;
- 
+
  { Allouer avec la stratégie appropriée }
  Segment := AllocateMemoryWithStrategy(BlockSize, CurrentStrategy);
- 
+
  DOS48h_AllocateMemory := Segment;
 End;
 
@@ -8003,12 +8003,12 @@ Var
  MCB: MemoryControlBlock;
 Begin
  DOS49h_FreeMemory:=9; { Invalid memory block par défaut }
- 
+
  { Vérifier la validité du segment }
  If BlockSegment < $0061 Then Exit; { Trop bas }
- 
+
  MCBSeg:=BlockSegment - 1; { MCB est juste avant }
- 
+
  { Obtenir le MCB }
  If GetMCB(MCBSeg, MCB) Then Begin
   { Vérifier que le bloc est alloué }
@@ -8016,15 +8016,15 @@ Begin
    DOS49h_FreeMemory:=9; { Bloc déjà libre }
    Exit;
   End;
-  
+
   { Marquer le bloc comme libre }
   MCB.Owner:=0;
   FillChar(MCB.ProgramName, 8, 0);
   SetMCB(MCBSeg, MCB);
-  
+
   { Fusionner avec les blocs libres adjacents si possible }
   { (implémentation simplifiée - pas de fusion pour l'instant) }
-  
+
   DOS49h_FreeMemory:=0; { Succès }
  End;
 End;
@@ -8038,12 +8038,12 @@ Var
  NextMCB: MemoryControlBlock;
 Begin
  DOS4Ah_ModifyMemory:=9; { Invalid memory block par défaut }
- 
+
  { Vérifier la validité du segment }
  If BlockSegment < $0061 Then Exit;
- 
+
  MCBSeg:=BlockSegment - 1;
- 
+
  { Obtenir le MCB }
  If GetMCB(MCBSeg, MCB) Then Begin
   { Vérifier que le bloc est alloué }
@@ -8051,49 +8051,49 @@ Begin
    DOS4Ah_ModifyMemory:=9;
    Exit;
   End;
-  
+
   { Si la nouvelle taille est identique, rien à faire }
   If MCB.BlockSize = NewSize Then Begin
    DOS4Ah_ModifyMemory:=0;
    Exit;
   End;
-  
+
   { Si réduction de taille }
   If NewSize < MCB.BlockSize Then Begin
    { Créer un nouveau MCB pour la partie libérée }
    NextMCBSeg:=MCBSeg + NewSize + 1;
    CreateMCB(NextMCBSeg, MCB.BlockSize - NewSize - 1, 0, MCB.BlockType = 'Z');
-   
+
    { Modifier le MCB actuel }
    MCB.BlockSize:=NewSize;
    MCB.BlockType:='M';
    SetMCB(MCBSeg, MCB);
-   
+
    DOS4Ah_ModifyMemory:=0;
   End
   Else Begin
    { Agrandissement - vérifier si possible }
    NextMCBSeg:=MCBSeg + MCB.BlockSize + 1;
-   
+
    { Si ce n'est pas le dernier bloc, vérifier le suivant }
    If MCB.BlockType = 'M' Then Begin
     If GetMCB(NextMCBSeg, NextMCB) Then Begin
      { Si le bloc suivant est libre et assez grand }
-     If (NextMCB.Owner = 0) And 
+     If (NextMCB.Owner = 0) And
         (MCB.BlockSize + NextMCB.BlockSize + 1 >= NewSize) Then Begin
-      
+
       { Fusionner les blocs }
       MCB.BlockSize:=NewSize;
       MCB.BlockType:=NextMCB.BlockType;
-      
+
       { Si il reste de l'espace, créer un nouveau MCB libre }
       If MCB.BlockSize + NextMCB.BlockSize + 1 > NewSize Then Begin
-       CreateMCB(MCBSeg + NewSize + 1, 
+       CreateMCB(MCBSeg + NewSize + 1,
                 MCB.BlockSize + NextMCB.BlockSize + 1 - NewSize - 1,
                 0, NextMCB.BlockType = 'Z');
        MCB.BlockType:='M';
       End;
-      
+
       SetMCB(MCBSeg, MCB);
       DOS4Ah_ModifyMemory:=0;
      End
@@ -8117,63 +8117,63 @@ Var
  I: Integer;
 Begin
  CreatePSP:=0;
- 
+
  { Allouer un segment pour le PSP (256 octets = 16 paragraphes) }
  PSPSeg:=DOS48h_AllocateMemory(16);
  If PSPSeg = 0 Then Exit;
- 
+
  { Initialiser le PSP }
  FillChar(PSP, SizeOf(PSP), 0);
- 
+
  { INT 20h instruction (CD 20) }
  PSP.Int20h:=$20CD;
- 
+
  { Segment du haut de la mémoire }
  PSP.TopOfMemory:=TopMemory;
- 
+
  { Call to DOS dispatcher (9A 00 00 00 F0) }
  PSP.CallToDispatcher[0]:=$9A;
  PSP.CallToDispatcher[1]:=$00;
  PSP.CallToDispatcher[2]:=$00;
  PSP.CallToDispatcher[3]:=$00;
  PSP.CallToDispatcher[4]:=$F0;
- 
+
  { PSP parent }
  PSP.ParentPSP:=ParentPSP;
- 
+
  { Initialiser la table des handles (tous fermés sauf 0,1,2) }
  For I:=0 To 19 Do
   PSP.HandleTable[I]:=$FF; { Fermé }
  PSP.HandleTable[0]:=$01;   { STDIN }
  PSP.HandleTable[1]:=$01;   { STDOUT }
  PSP.HandleTable[2]:=$01;   { STDERR }
- 
+
  { Taille table handles }
  PSP.HandleTableSize:=20;
- 
+
  { DOS call (CD 21 CB) }
  PSP.DOSCall[0]:=$CD;
  PSP.DOSCall[1]:=$21;
  PSP.DOSCall[2]:=$CB;
- 
+
  { Copier le PSP en mémoire }
  ASM
   PUSH ES
   PUSH DS
-  
+
   MOV AX,PSPSeg
   MOV ES,AX
   XOR DI,DI
-  
+
   LEA SI,PSP
   MOV CX,256       { Taille d'un PSP }
   CLD
   REP MOVSB
-  
+
   POP DS
   POP ES
  END;
- 
+
  CreatePSP:=PSPSeg;
 End;
 
@@ -8184,41 +8184,41 @@ Var
  DefaultEnv: String;
 Begin
  SetupEnvironment:=0;
- 
+
  { Si aucun environnement spécifié, créer un environnement minimal }
  If EnvSeg = 0 Then Begin
   { Allouer 1KB pour l'environnement }
   EnvSegment:=DOS48h_AllocateMemory(64); { 64 paragraphes = 1KB }
   If EnvSegment = 0 Then Exit;
-  
+
   { Créer un environnement minimal }
   DefaultEnv:='PATH=C:\';
-  
+
   { Copier l'environnement }
   ASM
    PUSH ES
    PUSH DS
-   
+
    MOV AX,EnvSegment
    MOV ES,AX
    XOR DI,DI
-   
+
    LEA SI,DefaultEnv
    MOV CL,[SI]
    MOV CH,0
    INC SI
    CLD
    REP MOVSB
-   
+
    { Ajouter deux zéros de fin }
    MOV AL,0
    STOSB
    STOSB
-   
+
    POP DS
    POP ES
   END;
-  
+
   SetupEnvironment:=EnvSegment;
  End
  Else Begin
@@ -8236,11 +8236,11 @@ Var
  TotalRead: Word;
 Begin
  LoadComFile:=False;
- 
+
  { Allouer mémoire pour le programme (64KB max) }
  LoadSegment:=DOS48h_AllocateMemory(4096); { 64KB }
  If LoadSegment = 0 Then Exit;
- 
+
  { Note: Les fonctions DOS3Dh, DOS3Eh, etc. doivent être implémentées }
  { Pour l'instant, implémentation simplifiée }
  LoadComFile:=True;
@@ -8250,11 +8250,11 @@ End;
 Function LoadExeFile(FileName:String;Var LoadSegment:Word;Var ExeHdr:ExeHeader):Boolean;
 Begin
  LoadExeFile:=False;
- 
+
  { Allouer mémoire basique }
  LoadSegment:=DOS48h_AllocateMemory(1024); { 16KB }
  If LoadSegment = 0 Then Exit;
- 
+
  { Implémentation simplifiée pour l'instant }
  LoadExeFile:=True;
 End;
@@ -8277,20 +8277,20 @@ Var
  ProgPath: String;
 Begin
  DOS4Bh_ExecProgram:=2; { File not found par défaut }
- 
+
  { Convertir le chemin (implémentation simplifiée) }
  ProgPath:=ProgramPath;
- 
+
  { Déterminer le type de fichier }
  IsCOM:=(Pos('.COM', UpperCase(ProgPath)) > 0);
- 
+
  { Créer l'environnement }
  EnvSeg:=SetupEnvironment(ParamBlock.Environment, 0);
  If EnvSeg = 0 Then Begin
   DOS4Bh_ExecProgram:=8; { Insufficient memory }
   Exit;
  End;
- 
+
  { Charger le programme }
  If IsCOM Then Begin
   If Not LoadComFile(ProgPath, LoadSeg) Then Begin
@@ -8304,7 +8304,7 @@ Begin
    Exit;
   End;
  End;
- 
+
  { Créer le PSP }
  PSPSeg:=CreatePSP(0, LoadSeg + $1000); { Approximation }
  If PSPSeg = 0 Then Begin
@@ -8313,18 +8313,18 @@ Begin
   DOS4Bh_ExecProgram:=8;
   Exit;
  End;
- 
+
  { Pour type 00h (Load and Execute), transférer le contrôle }
  If ExecType = 0 Then Begin
   { Implémentation simplifiée - ne transfère pas réellement le contrôle }
   { Dans un vrai système, on ferait un FAR CALL vers le programme }
-  
+
   { Libérer les ressources pour l'instant }
   DOS49h_FreeMemory(PSPSeg);
   DOS49h_FreeMemory(LoadSeg);
   DOS49h_FreeMemory(EnvSeg);
  End;
- 
+
  DOS4Bh_ExecProgram:=0; { Succès }
 End;
 
@@ -8338,20 +8338,20 @@ Var
 Begin
  { Préparer les paramètres EXEC }
  FillChar(ParamBlock, SizeOf(ParamBlock), 0);
- 
+
  { Environnement par défaut (0 = hériter) }
  ParamBlock.Environment:=0;
- 
+
  { Ligne de commande vide }
  CommandLine:=#0;
  ParamBlock.CommandLine:=@CommandLine;
- 
+
  { FCB vides }
  FillChar(FCB1, SizeOf(FCB1), 0);
  FillChar(FCB2, SizeOf(FCB2), 0);
  ParamBlock.FCB1:=@FCB1;
  ParamBlock.FCB2:=@FCB2;
- 
+
  { Essayer de charger COMMAND.COM en premier }
  Result:=DOS4Bh_ExecProgram(0, 'C:\COMMAND.COM', ParamBlock);
  If Result <> 0 Then Begin
@@ -8366,7 +8366,7 @@ Begin
    End;
   End;
  End;
- 
+
  { Si aucun processeur de commandes n'est trouvé, continuer quand même }
  { Le système restera en mode noyau }
 End;
@@ -8400,10 +8400,10 @@ Begin
  Pos:=0;
  SubLen:=Length(SubStr);
  StrLen:=Length(S);
- 
+
  { Vérifier les cas limites }
  If (SubLen = 0) Or (StrLen = 0) Or (SubLen > StrLen) Then Exit;
- 
+
  { Rechercher la sous-chaîne }
  For I:=1 To (StrLen - SubLen + 1) Do Begin
   Found:=True;
@@ -8413,7 +8413,7 @@ Begin
     Break;
    End;
   End;
-  
+
   If Found Then Begin
    Pos:=I;
    Exit;
@@ -8431,7 +8431,7 @@ Begin
  FI:=1; MI:=1;
  FLen:=Length(FileName);
  MLen:=Length(Mask);
- 
+
  While (FI <= FLen) And (MI <= MLen) Do Begin
   Case Mask[MI] Of
    '*': Begin
@@ -8441,7 +8441,7 @@ Begin
      MatchFileName:=True;
      Exit;
     End;
-    
+
     { Chercher le prochain caractère non-wildcard dans le masque }
     While (FI <= FLen) Do Begin
      If MatchFileName(Copy(FileName,FI,FLen-FI+1),Copy(Mask,MI,MLen-MI+1)) Then Begin
@@ -8452,13 +8452,13 @@ Begin
     End;
     Exit;
    End;
-   
+
    '?': Begin
     { Wildcard ? - correspond à exactement un caractère }
     Inc(FI);
     Inc(MI);
    End;
-   
+
    Else Begin
     { Caractère normal - doit correspondre exactement (insensible à la casse) }
     If UpperCase(FileName[FI]) <> UpperCase(Mask[MI]) Then Exit;
@@ -8467,7 +8467,7 @@ Begin
    End;
   End;
  End;
- 
+
  { Vérifier si on a traité tous les caractères }
  If (FI > FLen) Then Begin
   { Si il reste des * à la fin du masque, c'est OK }
@@ -8483,13 +8483,13 @@ Var
  I: Byte;
 Begin
  Result:='';
- 
+
  { Nom principal (8 caractères max) }
  For I:=0 To 7 Do Begin
   If DOS83[I] <> ' ' Then Result:=Result + DOS83[I]
   Else Break;
  End;
- 
+
  { Extension (3 caractères max) }
  If DOS83[8] <> ' ' Then Begin
   Result:=Result + '.';
@@ -8498,7 +8498,7 @@ Begin
    Else Break;
   End;
  End;
- 
+
  DOS83ToString:=Result;
 End;
 
@@ -8511,13 +8511,13 @@ Var
  Drive: Byte;
 Begin
  GetRootDirectorySector:=0;
- 
+
  { Utiliser le lecteur courant }
  ASM
   MOV AL,Data.DataMOS.CurrDisk
   MOV Drive,AL
  END;
- 
+
  { Lire le boot sector - implémentation simplifiée }
  { Pour l'instant, retourner des valeurs par défaut pour FAT12 }
  If Drive <= 1 Then Begin { A: ou B: - disquettes }
@@ -8534,13 +8534,13 @@ Var
  Drive: Byte;
 Begin
  GetRootDirectorySize:=0;
- 
+
  { Utiliser le lecteur courant }
  ASM
   MOV AL,Data.DataMOS.CurrDisk
   MOV Drive,AL
  END;
- 
+
  { Retourner des valeurs par défaut selon le type de lecteur }
  If Drive <= 1 Then Begin { A: ou B: - disquettes }
   GetRootDirectorySize:=14; { 224 entrées * 32 bytes / 512 = 14 secteurs }
@@ -8559,15 +8559,15 @@ Var
 Begin
  Result := False;
  ReadSuccess := 0;
- 
+
  { Calculer les paramètres CHS pour le lecteur C: (disque dur) }
  DriveNum := $80;  { Premier disque dur }
- 
+
  { Conversion LBA vers CHS (supposons géométrie standard 63 secteurs/piste, 16 têtes) }
  Head := (Sector DIV 63) MOD 16;
  Track := Sector DIV (63 * 16);
  SectorNum := (Sector MOD 63) + 1;  { Les secteurs commencent à 1 }
- 
+
  { Préparer les registres pour INT 13h, fonction 02h (lecture secteur) }
  ASM
   { Sauvegarder les registres importants }
@@ -8576,7 +8576,7 @@ Begin
   PUSH CX
   PUSH DX
   PUSH ES
-  
+
   { Paramètres pour INT 13h fonction 02h }
   MOV AH, 02h           { Fonction lecture secteur }
   MOV AL, 1             { Nombre de secteurs à lire }
@@ -8584,24 +8584,24 @@ Begin
   MOV DH, Head          { Tête }
   MOV CH, Track         { Piste (cylindre) }
   MOV CL, SectorNum     { Secteur }
-  
+
   { Pointer ES:BX vers le buffer }
   LES BX, Buffer
-  
+
   { Appeler l'interruption BIOS }
   INT 13h
-  
+
   { Vérifier le résultat (CF=0 si succès) }
   JC @ReadError
-  
+
   { Succès }
   MOV ReadSuccess, 1
   JMP @ReadDone
-  
+
 @ReadError:
   { Erreur }
   MOV ReadSuccess, 0
-  
+
 @ReadDone:
   { Restaurer les registres }
   POP ES
@@ -8610,10 +8610,10 @@ Begin
   POP BX
   POP AX
  END;
- 
+
  { Assigner le résultat }
  Result := (ReadSuccess <> 0);
- 
+
  { Retourner le résultat final }
  ReadSectorSimple := Result;
 End;
@@ -8628,15 +8628,15 @@ Var
 Begin
  WriteResult := False;
  WriteSuccess := 0;
- 
+
  { Calculer les paramètres CHS pour le lecteur C: (disque dur) }
  DriveNum := $80;  { Premier disque dur }
- 
+
  { Conversion LBA vers CHS (supposons géométrie standard 63 secteurs/piste, 16 têtes) }
  Head := (Sector DIV 63) MOD 16;
  Track := Sector DIV (63 * 16);
  SectorNum := (Sector MOD 63) + 1;  { Les secteurs commencent à 1 }
- 
+
  { Préparer les registres pour INT 13h, fonction 03h (écriture secteur) }
  ASM
   { Sauvegarder les registres importants }
@@ -8645,7 +8645,7 @@ Begin
   PUSH CX
   PUSH DX
   PUSH ES
-  
+
   { Paramètres pour INT 13h fonction 03h }
   MOV AH, 03h           { Fonction écriture secteur }
   MOV AL, 1             { Nombre de secteurs à écrire }
@@ -8653,24 +8653,24 @@ Begin
   MOV DH, Head          { Tête }
   MOV CH, Track         { Piste (cylindre) }
   MOV CL, SectorNum     { Secteur }
-  
+
   { Pointer ES:BX vers le buffer }
   LES BX, Buffer
-  
+
   { Appeler l'interruption BIOS }
   INT 13h
-  
+
   { Vérifier le résultat (CF=0 si succès) }
   JC @WriteError
-  
+
   { Succès }
   MOV WriteSuccess, 1
   JMP @WriteDone
-  
+
 @WriteError:
   { Erreur }
   MOV WriteSuccess, 0
-  
+
 @WriteDone:
   { Restaurer les registres }
   POP ES
@@ -8679,15 +8679,15 @@ Begin
   POP BX
   POP AX
  END;
- 
+
  { Assigner le résultat }
  WriteResult := (WriteSuccess <> 0);
- 
+
  { Si la vérification est activée, vérifier l'écriture }
  If WriteResult And (GetVerifyFlag <> 0) Then Begin
   WriteResult := VerifyWrite(DriveNum And $7F, Sector, @Buffer, 512);
  End;
- 
+
  { Retourner le résultat final }
  WriteSectorSimple := WriteResult;
 End;
@@ -8701,17 +8701,17 @@ Begin
  ASM
   PUSH DS
   PUSH SI
-  
+
   { Pointer vers la structure Data.DataMOS.FindState }
   MOV SI,OFFSET Data.DataMOS
   ADD SI,TYPE DataMOS - TYPE FindFileState  { Offset vers FindState }
-  
+
   { Copier FindState depuis le Code Segment vers la variable paramètre }
   LES DI,State
   MOV CX,TYPE FindFileState
   CLD
   REP MOVSB
-  
+
   POP SI
   POP DS
  END;
@@ -8724,19 +8724,19 @@ Begin
  ASM
   PUSH ES
   PUSH DI
-  
+
   { Pointer vers la structure Data.DataMOS.FindState }
   PUSH CS
   POP ES
   MOV DI,OFFSET Data.DataMOS
   ADD DI,TYPE DataMOS - TYPE FindFileState  { Offset vers FindState }
-  
+
   { Copier State vers le Code Segment }
   LDS SI,State
   MOV CX,TYPE FindFileState
   CLD
   REP MOVSB
-  
+
   POP DI
   POP ES
  END;
@@ -8751,43 +8751,43 @@ Var
  ParentPSP: Word;
 Begin
  DOS4Ch_TerminateProgram:=0;
- 
+
  { Obtenir le PSP courant }
  CurrentPSP:=GetCurrentPSP;
  If CurrentPSP = 0 Then CurrentPSP:=$1000; { PSP par défaut si non défini }
- 
+
  { Lire le PSP pour obtenir le parent }
  ParentPSP:=0; { Valeur par défaut }
  ASM
   PUSH DS
   MOV AX,CurrentPSP
   MOV DS,AX
-  
+
   { Lire ParentPSP à l'offset $16 }
   MOV AX,[16h]       { Offset $16 = ParentPSP }
   MOV ParentPSP,AX
-  
+
   POP DS
  END;
- 
+
  { Sauvegarder le code de retour }
  { AH = 0 (terminaison normale), AL = code de sortie }
  SetLastReturnCode(ExitCode);
- 
+
  { Fermer les handles ouverts (implémentation simplifiée) }
  { Dans un vrai DOS, on fermerait tous les handles du processus }
- 
+
  { Libérer la mémoire du PSP et du programme }
  If CurrentPSP <> $1000 Then Begin { Ne pas libérer le PSP système }
   DOS49h_FreeMemory(CurrentPSP);
  End;
- 
+
  { Restaurer le PSP parent }
  SetCurrentPSP(ParentPSP);
- 
+
  { Dans un vrai DOS, on ferait un JMP vers le parent }
  { Pour l'instant, on retourne simplement }
- 
+
  DOS4Ch_TerminateProgram:=0;
 End;
 
@@ -8798,10 +8798,10 @@ Var
 Begin
  { Obtenir le code de retour du dernier programme terminé }
  ReturnCode:=GetLastReturnCode;
- 
+
  { Effacer le code de retour après lecture (comportement DOS) }
  SetLastReturnCode(0);
- 
+
  DOS4Dh_GetReturnCode:=ReturnCode;
 End;
 
@@ -8821,18 +8821,18 @@ Var
  FindState: FindFileState;
 Begin
  DOS4Eh_FindFirstFile:=18; { Pas d'autres fichiers par défaut }
- 
+
  { Initialiser l'état de recherche }
  GetFindState(FindState);
  With FindState Do Begin
   Active:=False;
   CurrentDir:=0;  { Répertoire racine par défaut }
   CurrentEntry:=0;
-  
+
   { Extraire le chemin et le masque de recherche }
   Pos:=Length(Path);
   While (Pos > 0) And (Path[Pos] <> '\') And (Path[Pos] <> '/') Do Dec(Pos);
-  
+
   If Pos > 0 Then Begin
    SearchPath:=Copy(Path,1,Pos);
    SearchName:=Copy(Path,Pos+1,Length(Path)-Pos);
@@ -8840,7 +8840,7 @@ Begin
    SearchPath:='';
    SearchName:=Path;
   End;
-  
+
   { Si pas de masque spécifié, utiliser *.* }
   If SearchName = '' Then SearchName:='*.*';
   SearchMask:=UpperCase(SearchName);
@@ -8848,37 +8848,37 @@ Begin
   SearchAttr:=Attr;
  End;
  SetFindState(FindState);
- 
+
  { Commencer la recherche dans le répertoire racine }
  RootDirSector:=GetRootDirectorySector;
  If RootDirSector = 0 Then Exit;
- 
+
  EntryIndex:=0;
  Sector:=RootDirSector;
- 
+
  { Parcourir les entrées du répertoire racine }
  While Sector < (RootDirSector + GetRootDirectorySize) Do Begin
   If Not ReadSectorSimple(Sector,Buffer) Then Exit;
-  
+
   For I:=0 To 15 Do Begin { 16 entrées par secteur }
    Move(Buffer[I * 32],DirEntry,SizeOf(DirectoryEntryFAT));
-   
+
    { Ignorer les entrées supprimées ou vides }
    If DirEntry.FileName[0] = #0 Then Break; { Fin des entrées }
    If DirEntry.FileName[0] = #$E5 Then Begin
     Inc(EntryIndex);
     Continue; { Entrée supprimée }
    End;
-   
+
    { Vérifier les attributs }
    If (DirEntry.Attributes And $08) <> 0 Then Begin { Volume Label }
     Inc(EntryIndex);
     Continue;
    End;
-   
+
    { Construire le nom du fichier }
    FileName:=DOS83ToString(DirEntry.FileName);
-   
+
    { Vérifier si le nom correspond au masque }
    If MatchFileName(FileName,FindState.SearchMask) Then Begin
     { Vérifier les attributs }
@@ -8893,18 +8893,18 @@ Begin
       Continue; { Pas un fichier }
      End;
     End;
-    
+
     { Fichier trouvé ! Remplir la DTA }
     FillChar(DTA.Reserved,21,0);
     DTA.Attribute:=DirEntry.Attributes;
     DTA.Time:=DirEntry.Time;
     DTA.Date:=DirEntry.Date;
     DTA.Size:=DirEntry.Size;
-    
+
     { Copier le nom (format 8.3 avec terminateur null) }
     Move(FileName[1],DTA.Name[0],Length(FileName));
     DTA.Name[Length(FileName)]:=#0;
-    
+
     { Mettre à jour l'état pour FindNext }
     GetFindState(FindState);
     With FindState Do Begin
@@ -8912,14 +8912,14 @@ Begin
      CurrentEntry:=EntryIndex + 1;
     End;
     SetFindState(FindState);
-    
+
     DOS4Eh_FindFirstFile:=0; { Succès }
     Exit;
    End;
-   
+
    Inc(EntryIndex);
   End;
-  
+
   Inc(Sector);
  End;
 End;
@@ -8936,25 +8936,25 @@ Var
  FindState: FindFileState;
 Begin
  DOS4Fh_FindNextFile:=18; { Pas d'autres fichiers }
- 
+
  { Vérifier si une recherche est active }
  GetFindState(FindState);
  If Not FindState.Active Then Exit;
- 
+
  RootDirSector:=GetRootDirectorySector;
  If RootDirSector = 0 Then Exit;
- 
+
  EntryIndex:=FindState.CurrentEntry;
  Sector:=RootDirSector + (EntryIndex Div 16);
  SectorEntry:=EntryIndex Mod 16;
- 
+
  { Continuer la recherche depuis la position courante }
  While Sector < (RootDirSector + GetRootDirectorySize) Do Begin
   If Not ReadSectorSimple(Sector,Buffer) Then Exit;
-  
+
   For I:=SectorEntry To 15 Do Begin { Continuer depuis la position courante }
    Move(Buffer[I * 32],DirEntry,SizeOf(DirectoryEntryFAT));
-   
+
    { Ignorer les entrées supprimées ou vides }
    If DirEntry.FileName[0] = #0 Then Begin
     GetFindState(FindState);
@@ -8962,21 +8962,21 @@ Begin
     SetFindState(FindState);
     Exit; { Fin des entrées }
    End;
-   
+
    If DirEntry.FileName[0] = #$E5 Then Begin
     Inc(EntryIndex);
     Continue; { Entrée supprimée }
    End;
-   
+
    { Vérifier les attributs }
    If (DirEntry.Attributes And $08) <> 0 Then Begin { Volume Label }
     Inc(EntryIndex);
     Continue;
    End;
-   
+
    { Construire le nom du fichier }
    FileName:=DOS83ToString(DirEntry.FileName);
-   
+
    { Vérifier si le nom correspond au masque }
    If MatchFileName(FileName,FindState.SearchMask) Then Begin
     { Vérifier les attributs }
@@ -8991,34 +8991,34 @@ Begin
       Continue; { Pas un fichier }
      End;
     End;
-    
+
     { Fichier trouvé ! Remplir la DTA }
     FillChar(DTA.Reserved,21,0);
     DTA.Attribute:=DirEntry.Attributes;
     DTA.Time:=DirEntry.Time;
     DTA.Date:=DirEntry.Date;
     DTA.Size:=DirEntry.Size;
-    
+
     { Copier le nom (format 8.3 avec terminateur null) }
     Move(FileName[1],DTA.Name[0],Length(FileName));
     DTA.Name[Length(FileName)]:=#0;
-    
+
     { Mettre à jour l'état pour le prochain FindNext }
     GetFindState(FindState);
     FindState.CurrentEntry:=EntryIndex + 1;
     SetFindState(FindState);
-    
+
     DOS4Fh_FindNextFile:=0; { Succès }
     Exit;
    End;
-   
+
    Inc(EntryIndex);
   End;
-  
+
   Inc(Sector);
   SectorEntry:=0; { Commencer au début du secteur suivant }
  End;
- 
+
  { Plus de fichiers trouvés }
  GetFindState(FindState);
  FindState.Active:=False;
@@ -9031,24 +9031,24 @@ End;
 Function DOS50h_SetPSPAddress(PSPSegment:Word):Word;
 Begin
  DOS50h_SetPSPAddress:=0; { Succès par défaut }
- 
+
  { Valider que le segment PSP est valide }
  If PSPSegment < $0060 Then Begin { En-dessous de la zone conventionnelle }
   DOS50h_SetPSPAddress:=1; { Erreur : segment invalide }
   Exit;
  End;
- 
+
  If PSPSegment > $A000 Then Begin { Au-dessus de 640KB }
   DOS50h_SetPSPAddress:=1; { Erreur : segment invalide }
   Exit;
  End;
- 
+
  { Sauvegarder le nouveau PSP courant }
  SetCurrentPSP(PSPSegment);
- 
+
  { Dans un vrai DOS, on pourrait aussi vérifier que le segment }
  { contient réellement un PSP valide (signature INT 20h, etc.) }
- 
+
  DOS50h_SetPSPAddress:=0; { Succès }
 End;
 
@@ -9069,11 +9069,11 @@ Begin
  ASM
   MOV AX,CS
   MOV DX,AX              { DX = segment }
-  
+
   { Calculer l'offset de la structure dans le segment de données }
   MOV AX,OFFSET Data
   ADD AX,3500            { Offset approximatif vers la structure }
-  
+
   { Retourner le pointeur dans AX:DX }
   { En Pascal, Pointer est retourné dans AX (offset) et DX (segment) }
  END;
@@ -9088,10 +9088,10 @@ Var
  Temp: Word;
 Begin
  DOS53h_TranslateBPBtoDPB:=$FFFF; { Erreur par défaut }
- 
+
  { Vérifier que les pointeurs ne sont pas nuls }
  If (BPBPtr = Nil) Or (DPBPtr = Nil) Then Exit;
- 
+
  { Copier le BPB depuis l'adresse fournie }
  ASM
   PUSH DS
@@ -9102,10 +9102,10 @@ Begin
   REP MOVSB
   POP DS
  END;
- 
+
  { Convertir BPB vers DPB }
  FillChar(DPB, SizeOf(DPB), 0);
- 
+
  { Copier les champs de base }
  DPB.BytesPerSector:=BPB.BytesPerSector;
  DPB.ReservedSectors:=BPB.ReservedSectors;
@@ -9113,11 +9113,11 @@ Begin
  DPB.MaxRootEntries:=BPB.RootDirEntries;
  DPB.SectorsPerFAT:=BPB.SectorsPerFAT;
  DPB.MediaID:=BPB.MediaDescriptor;
- 
+
  { Calculer les champs dérivés }
  SectorsPerCluster:=BPB.SectorsPerCluster;
  DPB.LastSectorInCluster:=SectorsPerCluster - 1;
- 
+
  { Calculer le décalage pour secteurs par cluster (log2) }
  DPB.SectorsPerClusterShift:=0;
  Temp:=SectorsPerCluster;
@@ -9125,19 +9125,19 @@ Begin
   Temp:=Temp Shr 1;
   Inc(DPB.SectorsPerClusterShift);
  End;
- 
+
  { Calculer secteur de début des données }
  DPB.FirstDirSector:=BPB.ReservedSectors + (BPB.NumberOfFATs * BPB.SectorsPerFAT);
  DPB.FirstDataSector:=DPB.FirstDirSector + ((BPB.RootDirEntries * 32) div BPB.BytesPerSector);
- 
+
  { Calculer nombre total de clusters }
  If BPB.TotalSectors = 0 Then
   Temp:=BPB.TotalSectorsLarge
  Else
   Temp:=BPB.TotalSectors;
-  
+
  DPB.HighestCluster:=(Temp - DPB.FirstDataSector) div SectorsPerCluster + 1;
- 
+
  { Initialiser autres champs }
  DPB.DriveNumber:=0; { A: par défaut }
  DPB.UnitNumber:=0;
@@ -9145,7 +9145,7 @@ Begin
  DPB.NextDPB:=Nil;
  DPB.FirstFreeCluster:=2; { Premier cluster utilisable }
  DPB.NumberFreeClusters:=$FFFF; { Inconnu }
- 
+
  { Copier le DPB vers l'adresse de destination }
  ASM
   PUSH ES
@@ -9156,7 +9156,7 @@ Begin
   REP MOVSB
   POP ES
  END;
- 
+
  DOS53h_TranslateBPBtoDPB:=0; { Succès }
 End;
 
@@ -9170,41 +9170,41 @@ Var
  Success: Boolean;
 Begin
  VerifyWrite:=False;
- 
+
  { Si la vérification est désactivée, retourner succès immédiatement }
  If GetVerifyFlag = 0 Then Begin
   VerifyWrite:=True;
   Exit;
  End;
- 
+
  { Relire le secteur qui vient d'être écrit }
  Success:=ReadSectorSimple(Sector, VerifyBuffer);
  If Not Success Then Exit;
- 
+
  { Comparer octet par octet avec le buffer original }
  ASM
   PUSH DS
   PUSH ES
-  
+
   LDS SI,Buffer               { DS:SI = buffer original }
   LEA DI,VerifyBuffer         { ES:DI = buffer relu }
   MOV CX,Size                 { Nombre d'octets à comparer }
   CLD                         { Direction forward }
   REPE CMPSB                  { Comparer les chaînes }
   JNZ @VerifyFailed          { Si différent, échec }
-  
+
   { Vérification réussie }
   MOV Success,1
   JMP @VerifyEnd
-  
+
 @VerifyFailed:
   MOV Success,0
-  
+
 @VerifyEnd:
   POP ES
   POP DS
  END;
- 
+
  VerifyWrite:=Success;
 End;
 
@@ -9216,16 +9216,16 @@ Var
  Retries: Byte;
 Begin
  WriteSectorWithVerify:=False;
- 
+
  { Essayer l'écriture avec jusqu'à 3 tentatives }
  For Retries:=1 To 3 Do Begin
   { Écrire le secteur }
   WriteSuccess:=True; { Simulation écriture pour l'instant }
-  
+
   If WriteSuccess Then Begin
    { Si la vérification est activée, vérifier l'écriture }
    VerifySuccess:=VerifyWrite(Drive, Sector, Buffer, 512);
-   
+
    If VerifySuccess Then Begin
     WriteSectorWithVerify:=True;
     Exit; { Succès complet }
@@ -9235,7 +9235,7 @@ Begin
    End;
   End;
  End;
- 
+
  { Toutes les tentatives ont échoué }
  WriteSectorWithVerify:=False;
 End;
@@ -9246,27 +9246,27 @@ End;
 Function DOS2Eh_SetVerifyFlag(VerifyState:Byte):Word;
 Begin
  DOS2Eh_SetVerifyFlag:=0; { Succès par défaut }
- 
+
  { Valider le paramètre (0=off, 1=on, autres valeurs = erreur) }
  If VerifyState > 1 Then Begin
   DOS2Eh_SetVerifyFlag:=1; { Fonction invalide }
   Exit;
  End;
- 
+
  { Mettre à jour le flag de vérification dans le Code Segment }
  SetVerifyFlag(VerifyState);
- 
+
  { Dans un vrai DOS, cette fonction pourrait aussi :
    - Configurer le contrôleur de disque pour la vérification matérielle
    - Notifier les drivers de périphériques du changement d'état
    - Mettre à jour les paramètres BIOS si nécessaire }
- 
+
  { Forcer un flush des buffers disque si on active la vérification }
  If VerifyState = 1 Then Begin
   { Simuler un flush des buffers - dans un vrai DOS, cela forcerait
     l'écriture de tous les buffers sales sur disque }
  End;
- 
+
  DOS2Eh_SetVerifyFlag:=0; { Succès }
 End;
 
@@ -9279,13 +9279,13 @@ Var
 Begin
  { Obtenir l'état actuel du flag de vérification depuis le Code Segment }
  CurrentFlag := GetVerifyFlag;
- 
+
  { S'assurer que la valeur retournée est valide (0 ou 1) }
  If CurrentFlag > 1 Then
   CurrentFlag := 0; { Valeur par défaut si corrompue }
- 
+
  DOS54h_GetVerifyFlag := CurrentFlag;
- 
+
  { Note : Cette fonction est utilisée par :
    - Les utilitaires système pour vérifier l'état de vérification
    - Les programmes qui veulent adapter leur comportement selon l'état
@@ -9302,74 +9302,74 @@ Var
  I: Integer;
 Begin
  DOS55h_CreateChildPSP := 8; { Insufficient memory par défaut }
- 
+
  { Vérifier que le segment est valide }
  If NewPSPSegment < $0060 Then Begin { En-dessous de la zone conventionnelle }
   DOS55h_CreateChildPSP := 7; { Memory control blocks destroyed }
   Exit;
  End;
- 
+
  If NewPSPSegment > $9FFF Then Begin { Au-dessus de 640KB }
   DOS55h_CreateChildPSP := 7; { Memory control blocks destroyed }
   Exit;
  End;
- 
+
  { Obtenir le PSP courant comme parent }
  CurrentPSP := GetCurrentPSP;
  If CurrentPSP = 0 Then CurrentPSP := $1000; { PSP par défaut }
- 
+
  { Initialiser le nouveau PSP }
  FillChar(NewPSP, SizeOf(NewPSP), 0);
- 
+
  { INT 20h instruction (CD 20) au début du PSP }
  NewPSP.Int20h := $20CD;
- 
+
  { Segment du haut de la mémoire (calculé à partir du segment + 256 bytes) }
  NewPSP.TopOfMemory := NewPSPSegment + $10; { +256 bytes en paragraphes }
- 
+
  { Call to DOS dispatcher (9A 00 00 00 F0) }
  NewPSP.CallToDispatcher[0] := $9A;
  NewPSP.CallToDispatcher[1] := $00;
  NewPSP.CallToDispatcher[2] := $00;
  NewPSP.CallToDispatcher[3] := $00;
  NewPSP.CallToDispatcher[4] := $F0;
- 
+
  { PSP parent }
  NewPSP.ParentPSP := CurrentPSP;
- 
+
  { Copier la table des handles du parent }
  ASM
   PUSH DS
   PUSH ES
   PUSH SI
   PUSH DI
-  
+
   { Lire les handles du PSP parent }
   MOV AX, CurrentPSP
   MOV DS, AX
   MOV SI, 18h        { Offset de la table des handles dans le PSP }
-  
+
   { Copier vers le nouveau PSP }
   LEA DI, NewPSP.HandleTable
   MOV CX, 20         { 20 handles à copier }
   CLD
   REP MOVSB
-  
+
   POP DI
   POP SI
   POP ES
   POP DS
  END;
- 
+
  { Taille table handles }
  NewPSP.HandleTableSize := 20;
  NewPSP.HandleTablePtr := Ptr(NewPSPSegment, $18); { Pointe vers la table }
- 
+
  { DOS call (CD 21 CB) }
  NewPSP.DOSCall[0] := $CD;
  NewPSP.DOSCall[1] := $21;
  NewPSP.DOSCall[2] := $CB; { RETF }
- 
+
  { Copier l'environnement du parent }
  ASM
   PUSH DS
@@ -9379,35 +9379,35 @@ Begin
   MOV NewPSP.Environment, AX
   POP DS
  END;
- 
+
  { Copier le PSP complet en mémoire au segment spécifié }
  ASM
   PUSH DS
   PUSH ES
   PUSH SI
   PUSH DI
-  
+
   { Source: notre structure NewPSP }
   LEA SI, NewPSP
-  
+
   { Destination: segment spécifié }
   MOV AX, NewPSPSegment
   MOV ES, AX
   MOV DI, 0
-  
+
   { Copier 256 bytes (taille d'un PSP) }
   MOV CX, 256
   CLD
   REP MOVSB
-  
+
   POP DI
   POP SI
   POP ES
   POP DS
  END;
- 
+
  DOS55h_CreateChildPSP := 0; { Succès }
- 
+
  { Note: Cette fonction était principalement utilisée dans DOS 1.x et 2.x
    Elle a été largement remplacée par les fonctions 26h et 4Bh dans les
    versions ultérieures, mais reste disponible pour compatibilité }
@@ -9422,10 +9422,10 @@ Var
  Result: Boolean;
 Begin
  Result := False;
- 
+
  { Convertir numéro de lecteur (0=A:, 1=B:, 2=C:) }
  DriveNum := Drive;
- 
+
  { Utiliser INT 25h pour lire le secteur }
  ASM
   PUSH AX
@@ -9433,21 +9433,21 @@ Begin
   PUSH CX
   PUSH DX
   PUSH DS
-  
+
   MOV AL, DriveNum       { Lecteur }
   MOV DX, Sector         { Secteur à lire }
   MOV CX, 1              { Nombre de secteurs }
   LDS BX, Buffer         { DS:BX pointe vers le buffer }
-  
+
   INT 25h                { Lecture absolue de secteur }
   JC @ReadFATError
-  
+
   MOV Result, 1          { Succès }
   JMP @ReadFATDone
-  
+
 @ReadFATError:
   MOV Result, 0          { Erreur }
-  
+
 @ReadFATDone:
   POPF                   { INT 25h laisse des flags sur la pile }
   POP DS
@@ -9456,7 +9456,7 @@ Begin
   POP BX
   POP AX
  END;
- 
+
  ReadFATSector := Result;
 End;
 
@@ -9467,9 +9467,9 @@ Var
  Result: Boolean;
 Begin
  Result := False;
- 
+
  DriveNum := Drive;
- 
+
  { Utiliser INT 26h pour écrire le secteur }
  ASM
   PUSH AX
@@ -9477,21 +9477,21 @@ Begin
   PUSH CX
   PUSH DX
   PUSH DS
-  
+
   MOV AL, DriveNum       { Lecteur }
   MOV DX, Sector         { Secteur à écrire }
   MOV CX, 1              { Nombre de secteurs }
   LDS BX, Buffer         { DS:BX pointe vers le buffer }
-  
+
   INT 26h                { Écriture absolue de secteur }
   JC @WriteFATError
-  
+
   MOV Result, 1          { Succès }
   JMP @WriteFATDone
-  
+
 @WriteFATError:
   MOV Result, 0          { Erreur }
-  
+
 @WriteFATDone:
   POPF                   { INT 26h laisse des flags sur la pile }
   POP DS
@@ -9500,7 +9500,7 @@ Begin
   POP BX
   POP AX
  END;
- 
+
  WriteFATSector := Result;
 End;
 
@@ -9518,12 +9518,12 @@ Var
 Begin
  { Même implémentation que WriteFATSector - avec vérification si activée }
  WriteResult := WriteFATSector(Drive, Sector, Buffer);
- 
+
  { Si la vérification est activée, vérifier l'écriture }
  If WriteResult And (GetVerifyFlag <> 0) Then Begin
   WriteResult := VerifyWrite(Drive, Sector, @Buffer, 512);
  End;
- 
+
  WriteDirectorySector := WriteResult;
 End;
 
@@ -9538,9 +9538,9 @@ Begin
  Drive := 2; { C: par défaut }
  DirPath := '';
  FileName := '';
- 
+
  If Length(Path) = 0 Then Exit;
- 
+
  { Chercher le drive (X:) }
  ColonPos := Pos(':', Path);
  If ColonPos = 2 Then Begin
@@ -9574,7 +9574,7 @@ Begin
   End;
   Delete(Path, 1, 2); { Enlever "X:" }
  End;
- 
+
  { Chercher le dernier backslash pour séparer répertoire et fichier }
  LastSlashPos := 0;
  FoundSlash := False;
@@ -9585,7 +9585,7 @@ Begin
    Break;
   End;
  End;
- 
+
  If FoundSlash Then Begin
   DirPath := Copy(Path, 1, LastSlashPos - 1);
   FileName := Copy(Path, LastSlashPos + 1, 255);
@@ -9593,10 +9593,10 @@ Begin
   DirPath := '';
   FileName := Path;
  End;
- 
+
  { Valider le nom de fichier (pas vide) }
  If Length(FileName) = 0 Then Exit;
- 
+
  ParseFullPath := True;
 End;
 
@@ -9614,32 +9614,32 @@ Var
 Begin
  FindDirectoryEntryByName := False;
  EntryOffset := 0;
- 
+
  { Pour cette implémentation, on cherche dans le répertoire racine }
  { Dans un système complet, on suivrait la chaîne de clusters }
- 
+
  { Calculer le secteur de début du répertoire racine }
  If Drive <= 1 Then
   RootSector := 19  { Disquettes }
  Else
   RootSector := 33; { Disques durs }
- 
+
  { Parcourir les secteurs du répertoire racine }
  For Sector := RootSector To RootSector + 31 Do Begin { Max 32 secteurs }
   If Not ReadDirectorySector(Drive, Sector, Buffer) Then Continue;
-  
+
   { Examiner chaque entrée de 32 bytes dans le secteur }
   For I := 0 To 15 Do Begin { 16 entrées par secteur }
    DirEntry := @Buffer[I * 32];
-   
+
    { Entrée libre ? }
    If DirEntry^.FileName[0] = #0 Then Break;
    { Entrée supprimée ? }
    If DirEntry^.FileName[0] = #$E5 Then Continue;
-   
+
    { Convertir le nom 8.3 en chaîne }
    EntryName := DOS83ToString(DirEntry^.FileName);
-   
+
    { Comparaison insensible à la casse }
    If UpperCase(EntryName) = UpperCase(FileName) Then Begin
     { Trouvé ! Copier l'entrée }
@@ -9664,25 +9664,25 @@ Var
  DotPos: Byte;
 Begin
  UpdateDirectoryEntryName := False;
- 
+
  { Calculer le secteur et l'index de l'entrée }
  If Drive <= 1 Then
   RootSector := 19
  Else
   RootSector := 33;
- 
+
  TargetSector := RootSector + (EntryOffset DIV 16);
  EntryIndex := EntryOffset MOD 16;
- 
+
  { Lire le secteur contenant l'entrée }
  If Not ReadDirectorySector(Drive, TargetSector, Buffer) Then Exit;
- 
+
  { Pointer vers l'entrée }
  DirEntry := @Buffer[EntryIndex * 32];
- 
+
  { Convertir le nouveau nom en format 8.3 }
  FillChar(DOS83Name, 11, Byte(' ')); { Remplir avec des espaces }
- 
+
  DotPos := Pos('.', NewName);
  If DotPos > 0 Then Begin
   { Nom avec extension }
@@ -9701,10 +9701,10 @@ Begin
    DOS83Name[I - 1] := UpCase(NewName[I]);
   End;
  End;
- 
+
  { Mettre à jour l'entrée }
  Move(DOS83Name, DirEntry^.FileName, 11);
- 
+
  { Réécrire le secteur }
  UpdateDirectoryEntryName := WriteDirectorySector(Drive, TargetSector, Buffer);
 End;
@@ -9724,7 +9724,7 @@ Var
  I: Byte;
 Begin
  DOS56h_RenameFile := 2; { File not found par défaut }
- 
+
  { Convertir les pointeurs ASCIIZ en chaînes Pascal }
  P := PChar(OldPathPtr);
  OldPath := '';
@@ -9734,7 +9734,7 @@ Begin
   Inc(P);
   Inc(I);
  End;
- 
+
  P := PChar(NewPathPtr);
  NewPath := '';
  I := 0;
@@ -9743,63 +9743,63 @@ Begin
   Inc(P);
   Inc(I);
  End;
- 
+
  { Analyser les chemins }
  If Not ParseFullPath(OldPath, OldDrive, OldDirPath, OldFileName) Then Begin
   DOS56h_RenameFile := 2; { File not found }
   Exit;
  End;
- 
+
  If Not ParseFullPath(NewPath, NewDrive, NewDirPath, NewFileName) Then Begin
   DOS56h_RenameFile := 3; { Path not found }
   Exit;
  End;
- 
+
  { Vérifier que c'est sur le même lecteur (DOS ne permet pas le déplacement entre lecteurs) }
  If OldDrive <> NewDrive Then Begin
   DOS56h_RenameFile := 17; { Not same device }
   Exit;
  End;
- 
+
  { Pour cette implémentation, on ne supporte que le renommage dans le même répertoire }
  { Un système complet supporterait le déplacement entre répertoires }
  If UpperCase(OldDirPath) <> UpperCase(NewDirPath) Then Begin
   DOS56h_RenameFile := 3; { Path not found }
   Exit;
  End;
- 
+
  { Chercher le fichier source }
  If Not FindDirectoryEntryByName(OldDrive, 0, OldFileName, OldEntry, EntryOffset) Then Begin
   DOS56h_RenameFile := 2; { File not found }
   Exit;
  End;
- 
+
  { Vérifier que ce n'est pas un répertoire (pour cette implémentation simplifiée) }
  If (OldEntry.Attributes And $10) <> 0 Then Begin
   DOS56h_RenameFile := 5; { Access denied }
   Exit;
  End;
- 
+
  { Vérifier que le nouveau nom n'existe pas déjà }
  If FindDirectoryEntryByName(NewDrive, 0, NewFileName, OldEntry, EntryOffset) Then Begin
   DOS56h_RenameFile := 80; { File already exists }
   Exit;
  End;
- 
+
  { Restaurer l'entrée originale (elle a été écrasée par la recherche du nouveau nom) }
  If Not FindDirectoryEntryByName(OldDrive, 0, OldFileName, OldEntry, EntryOffset) Then Begin
   DOS56h_RenameFile := 2; { File not found }
   Exit;
  End;
- 
+
  { Mettre à jour le nom dans l'entrée de répertoire }
  If Not UpdateDirectoryEntryName(OldDrive, 0, EntryOffset, NewFileName) Then Begin
   DOS56h_RenameFile := 5; { Access denied }
   Exit;
  End;
- 
+
  DOS56h_RenameFile := 0; { Succès }
- 
+
  { Note: Cette implémentation gère le renommage basique dans le répertoire racine.
    Un système DOS complet supporterait :
    - Le déplacement entre sous-répertoires
@@ -9808,7 +9808,7 @@ Begin
    - La gestion des liens et raccourcis
    - La validation complète des noms de fichiers
    - La gestion des fichiers ouverts (verrouillage)
-   
+
    Les interruptions 25h/26h sont utilisées pour l'accès direct aux secteurs
    permettant une manipulation FAT12/FAT16 authentique. }
 End;
@@ -9822,10 +9822,10 @@ Var
 Begin
  { Format DOS Date: bits 15-9=année-1980, bits 8-5=mois, bits 4-0=jour }
  DOSDate := ((Year - 1980) SHL 9) OR (Month SHL 5) OR Day;
- 
+
  { Format DOS Time: bits 15-11=heures, bits 10-5=minutes, bits 4-0=secondes/2 }
  DOSTime := (Hour SHL 11) OR (Minute SHL 5) OR (Second SHR 1);
- 
+
  { Retourner comme LongInt: high word = date, low word = time }
  PackDOSDateTime := (LongInt(DOSDate) SHL 16) OR DOSTime;
 End;
@@ -9837,12 +9837,12 @@ Var
 Begin
  DOSDate := Hi(DOSDateTime);  { High word = date }
  DOSTime := Lo(DOSDateTime);  { Low word = time }
- 
+
  { Extraire les composants de la date }
  Year := ((DOSDate SHR 9) AND $7F) + 1980;
  Month := (DOSDate SHR 5) AND $0F;
  Day := DOSDate AND $1F;
- 
+
  { Extraire les composants de l'heure }
  Hour := (DOSTime SHR 11) AND $1F;
  Minute := (DOSTime SHR 5) AND $3F;
@@ -9856,22 +9856,22 @@ Var
  SearchResult: Boolean;
 Begin
  GetDirectoryOffsetByHandle := False;
- 
+
  { Vérifier la validité du handle }
  If Handle >= 20 Then Exit;
- 
+
  { Obtenir l'entrée de la table des fichiers }
  If Not GetFileTableEntry(Handle, FileEntry) Then Exit;
- 
+
  { Vérifier si le handle est utilisé }
  If Not FileEntry.InUse Then Exit;
- 
+
  Drive := FileEntry.Drive;
- 
+
  { Pour cette implémentation, nous utilisons une recherche simplifiée }
  { Dans un vrai DOS, l'offset serait maintenu dans la table des fichiers }
  EntryOffset := Handle * 32; { Approximation basique }
- 
+
  GetDirectoryOffsetByHandle := True;
 End;
 
@@ -9885,33 +9885,33 @@ Var
  UpdateResult: Boolean;
 Begin
  UpdateResult := False;
- 
+
  { Calculer le secteur et l'offset dans le secteur }
  Sector := GetRootDirectorySector + (EntryOffset DIV 512);
  EntryInSector := EntryOffset MOD 512;
- 
+
  { Lire le secteur de répertoire }
  If Not ReadDirectorySector(Drive, Sector, Buffer) Then Exit;
- 
+
  { Vérifier que l'entrée est dans les limites du secteur }
  If (EntryInSector + SizeOf(DirectoryEntryFAT)) > 512 Then Exit;
- 
+
  { Copier l'entrée depuis le buffer }
  Move(Buffer[EntryInSector], Entry, SizeOf(DirectoryEntryFAT));
- 
+
  { Vérifier que ce n'est pas une entrée vide ou supprimée }
  If (Entry.FileName[0] = #0) Or (Entry.FileName[0] = #$E5) Then Exit;
- 
+
  { Mettre à jour les champs date/heure }
  Entry.Time := NewTime;
  Entry.Date := NewDate;
- 
+
  { Copier l'entrée modifiée dans le buffer }
  Move(Entry, Buffer[EntryInSector], SizeOf(DirectoryEntryFAT));
- 
+
  { Écrire le secteur modifié }
  UpdateResult := WriteDirectorySector(Drive, Sector, Buffer);
- 
+
  UpdateDirectoryDateTime := UpdateResult;
 End;
 
@@ -9924,27 +9924,27 @@ Var
  Entry: DirectoryEntryFAT;
 Begin
  GetDirectoryDateTime := False;
- 
+
  { Calculer le secteur et l'offset dans le secteur }
  Sector := GetRootDirectorySector + (EntryOffset DIV 512);
  EntryInSector := EntryOffset MOD 512;
- 
+
  { Lire le secteur de répertoire }
  If Not ReadDirectorySector(Drive, Sector, Buffer) Then Exit;
- 
+
  { Vérifier que l'entrée est dans les limites du secteur }
  If (EntryInSector + SizeOf(DirectoryEntryFAT)) > 512 Then Exit;
- 
+
  { Copier l'entrée depuis le buffer }
  Move(Buffer[EntryInSector], Entry, SizeOf(DirectoryEntryFAT));
- 
+
  { Vérifier que ce n'est pas une entrée vide ou supprimée }
  If (Entry.FileName[0] = #0) Or (Entry.FileName[0] = #$E5) Then Exit;
- 
+
  { Récupérer les champs date/heure }
  Date := Entry.Date;
  Time := Entry.Time;
- 
+
  GetDirectoryDateTime := True;
 End;
 
@@ -9957,13 +9957,13 @@ Var
  Success: Boolean;
 Begin
  DOS57h_GetSetFileDateTime := $FFFFFFFF; { Erreur par défaut }
- 
+
  { Vérifier la validité de l'action }
  If Action > 1 Then Exit; { Seules les actions 0 (GET) et 1 (SET) sont valides }
- 
+
  { Obtenir l'offset de l'entrée de répertoire pour ce handle }
  If Not GetDirectoryOffsetByHandle(Handle, Drive, EntryOffset) Then Exit;
- 
+
  Case Action Of
   0: Begin { GET - Obtenir la date/heure actuelle }
       If GetDirectoryDateTime(Drive, EntryOffset, CurrentDate, CurrentTime) Then Begin
@@ -9972,17 +9972,17 @@ Begin
        DOS57h_GetSetFileDateTime := (LongInt(CurrentDate) SHL 16) OR CurrentTime;
       End;
      End;
-     
+
   1: Begin { SET - Définir une nouvelle date/heure }
       { Valider les valeurs de date/heure (validation basique) }
       If (NewDate = 0) Or (NewTime > $BEFF) Then Exit; { Validation basique }
-      
+
       If UpdateDirectoryDateTime(Drive, EntryOffset, NewDate, NewTime) Then Begin
        DOS57h_GetSetFileDateTime := 0; { Succès pour SET }
       End;
      End;
  End;
- 
+
  { Note: Cette implémentation gère les opérations de date/heure basiques.
    Un système DOS complet supporterait :
    - Les attributs de date étendus (création, accès)
@@ -9991,7 +9991,7 @@ Begin
    - Les opérations sur les sous-répertoires
    - La gestion des fichiers système et cachés
    - Les horodatages haute précision
-   
+
    Les interruptions 25h/26h sont utilisées via ReadDirectorySector/WriteDirectorySector
    pour l'accès direct aux secteurs de répertoire FAT12/FAT16. }
 End;
@@ -10006,19 +10006,19 @@ Begin
  { Lire la stratégie depuis la structure Data dans le Code Segment }
  ASM
   PUSH DS
-  
+
   { Pointer vers la structure Data.DataMOS }
   MOV AX,CS
   MOV DS,AX
   MOV SI,OFFSET Data.DataMOS
-  
+
   { Lire le champ MemoryStrategy }
   MOV AX,[SI].DataMOS.MemoryStrategy
   MOV Strategy,AX
-  
+
   POP DS
  END;
- 
+
  GetMemoryStrategy := Strategy;
 End;
 
@@ -10029,16 +10029,16 @@ Begin
  ASM
   PUSH DS
   PUSH AX
-  
+
   { Pointer vers la structure Data.DataMOS }
   MOV AX,CS
   MOV DS,AX
   MOV SI,OFFSET Data.DataMOS
-  
+
   { Écrire le nouveau champ MemoryStrategy }
   MOV AX,NewStrategy
   MOV [SI].DataMOS.MemoryStrategy,AX
-  
+
   POP AX
   POP DS
  END;
@@ -10052,19 +10052,19 @@ Begin
  { Lire l'état de liaison UMB depuis la structure Data dans le Code Segment }
  ASM
   PUSH DS
-  
+
   { Pointer vers la structure Data.DataMOS }
   MOV AX,CS
   MOV DS,AX
   MOV SI,OFFSET Data.DataMOS
-  
+
   { Lire le champ UMBLinkState }
   MOV AX,[SI].DataMOS.UMBLinkState
   MOV LinkState,AX
-  
+
   POP DS
  END;
- 
+
  GetUMBLinkState := LinkState;
 End;
 
@@ -10075,16 +10075,16 @@ Begin
  ASM
   PUSH DS
   PUSH AX
-  
+
   { Pointer vers la structure Data.DataMOS }
   MOV AX,CS
   MOV DS,AX
   MOV SI,OFFSET Data.DataMOS
-  
+
   { Écrire le nouveau champ UMBLinkState }
   MOV AX,NewState
   MOV [SI].DataMOS.UMBLinkState,AX
-  
+
   POP AX
   POP DS
  END;
@@ -10105,12 +10105,12 @@ Var
  UMBSize: Word;
 Begin
  LinkUMBs := False;
- 
+
  { Pour cette implémentation, simuler la liaison des UMB }
  { Dans un vrai DOS, cela rechercherait les vrais blocs UMB }
  UMBSegment := $D000; { Segment UMB typique }
  UMBSize := $2000;    { Taille typique 128KB }
- 
+
  { Créer un MCB factice pour l'UMB }
  If CreateMCB(UMBSegment - 1, UMBSize, 0, True) Then
   LinkUMBs := True;
@@ -10133,7 +10133,7 @@ Var
 Begin
  Found := False;
  CurrentSeg := $0060; { Premier MCB }
- 
+
  While (CurrentSeg < $A000) And Not Found Do Begin
   If GetMCB(CurrentSeg, MCB) Then Begin
    { Vérifier si le bloc est libre et assez grand }
@@ -10147,7 +10147,7 @@ Begin
    End;
   End Else Break;
  End;
- 
+
  FindMemoryFirstFit := Found;
 End;
 
@@ -10164,7 +10164,7 @@ Begin
  BestSize := $FFFF; { Taille maximale }
  BestSeg := 0;
  CurrentSeg := $0060; { Premier MCB }
- 
+
  While CurrentSeg < $A000 Do Begin
   If GetMCB(CurrentSeg, MCB) Then Begin
    { Vérifier si le bloc est libre, assez grand, mais plus petit que le meilleur }
@@ -10173,13 +10173,13 @@ Begin
     BestSize := MCB.BlockSize;
     Found := True;
    End;
-   
+
    { Passer au MCB suivant }
    If MCB.BlockType = 'Z' Then Break; { Dernier bloc }
    CurrentSeg := CurrentSeg + MCB.BlockSize + 1;
   End Else Break;
  End;
- 
+
  If Found Then Segment := BestSeg;
  FindMemoryBestFit := Found;
 End;
@@ -10195,7 +10195,7 @@ Begin
  Found := False;
  LastSeg := 0;
  CurrentSeg := $0060; { Premier MCB }
- 
+
  { Parcourir tous les blocs pour trouver le dernier qui convient }
  While CurrentSeg < $A000 Do Begin
   If GetMCB(CurrentSeg, MCB) Then Begin
@@ -10204,13 +10204,13 @@ Begin
     LastSeg := CurrentSeg + 1;
     Found := True;
    End;
-   
+
    { Passer au MCB suivant }
    If MCB.BlockType = 'Z' Then Break; { Dernier bloc }
    CurrentSeg := CurrentSeg + MCB.BlockSize + 1;
   End Else Break;
  End;
- 
+
  If Found Then Segment := LastSeg;
  FindMemoryLastFit := Found;
 End;
@@ -10222,14 +10222,14 @@ Var
  Success: Boolean;
 Begin
  AllocateMemoryWithStrategy := 0; { Erreur par défaut }
- 
+
  Case Strategy Of
   0: Success := FindMemoryFirstFit(Size, Segment);  { First Fit }
   1: Success := FindMemoryBestFit(Size, Segment);   { Best Fit }
   2: Success := FindMemoryLastFit(Size, Segment);   { Last Fit }
   Else Success := FindMemoryFirstFit(Size, Segment); { Par défaut }
  End;
- 
+
  If Success Then Begin
   { Créer le MCB pour marquer le bloc comme utilisé }
   If CreateMCB(Segment - 1, Size, GetCurrentPSP, False) Then
@@ -10244,48 +10244,48 @@ Var
  CurrentUMBState: Word;
 Begin
  DOS58h_GetSetMemoryStrategy := $FFFF; { Erreur par défaut }
- 
+
  Case Action Of
   0: Begin { GET - Obtenir la stratégie actuelle }
       CurrentStrategy := GetMemoryStrategy;
       DOS58h_GetSetMemoryStrategy := CurrentStrategy;
      End;
-     
+
   1: Begin { SET - Définir une nouvelle stratégie }
       { Valider la stratégie (0=First Fit, 1=Best Fit, 2=Last Fit) }
       If NewStrategy > 2 Then Begin
        DOS58h_GetSetMemoryStrategy := 1; { Invalid function }
        Exit;
       End;
-      
+
       SetMemoryStrategy(NewStrategy);
       DOS58h_GetSetMemoryStrategy := 0; { Succès }
      End;
-     
+
   2: Begin { GET UMB Link State - Obtenir l'état de liaison UMB }
       { Vérifier si les UMB sont disponibles }
       If Not AreUMBsAvailable Then Begin
        DOS58h_GetSetMemoryStrategy := 1; { Invalid function }
        Exit;
       End;
-      
+
       CurrentUMBState := GetUMBLinkState;
       DOS58h_GetSetMemoryStrategy := CurrentUMBState;
      End;
-     
+
   3: Begin { SET UMB Link State - Définir l'état de liaison UMB }
       { Vérifier si les UMB sont disponibles }
       If Not AreUMBsAvailable Then Begin
        DOS58h_GetSetMemoryStrategy := 1; { Invalid function }
        Exit;
       End;
-      
+
       { Valider l'état (0=Unlinked, 1=Linked) }
       If NewStrategy > 1 Then Begin
        DOS58h_GetSetMemoryStrategy := 1; { Invalid function }
        Exit;
       End;
-      
+
       { Effectuer la liaison/déliaison selon l'état demandé }
       If NewStrategy = 1 Then Begin
        { Lier les UMB }
@@ -10305,12 +10305,12 @@ Begin
        End;
       End;
      End;
-     
+
   Else Begin
    DOS58h_GetSetMemoryStrategy := 1; { Invalid function }
   End;
  End;
- 
+
  { Note: Cette implémentation gère les stratégies d'allocation mémoire et UMB basiques.
    Un système DOS complet supporterait :
    - La gestion de la mémoire étendue (XMS)
@@ -10320,13 +10320,13 @@ Begin
    - Les statistiques détaillées d'allocation
    - La protection contre la fragmentation
    - La détection automatique des gestionnaires UMB (EMM386, QEMM, etc.)
-   
+
    Les sous-fonctions implémentées :
    00h = Get Memory Allocation Strategy
    01h = Set Memory Allocation Strategy (0=First Fit, 1=Best Fit, 2=Last Fit)
    02h = Get UMB Link State (0=Unlinked, 1=Linked)
    03h = Set UMB Link State (0=Unlink, 1=Link)
-   
+
    Les UMB (Upper Memory Blocks) permettent d'utiliser la mémoire haute
    entre 640KB et 1MB pour charger des programmes et pilotes. }
 End;
@@ -10340,25 +10340,25 @@ Begin
  ASM
   PUSH DS
   PUSH AX
-  
+
   { Pointer vers la structure Data.DataMOS }
   MOV AX,CS
   MOV DS,AX
   MOV SI,OFFSET Data.DataMOS
-  
+
   { Écrire les champs d'erreur étendue }
   MOV AX,ErrorCode
   MOV [SI].DataMOS.ExtendedError,AX
-  
+
   MOV AL,ErrorClass
   MOV [SI].DataMOS.ErrorClass,AL
-  
-  MOV AL,SuggestedAction  
+
+  MOV AL,SuggestedAction
   MOV [SI].DataMOS.SuggestedAction,AL
-  
+
   MOV AL,ErrorLocus
   MOV [SI].DataMOS.ErrorLocus,AL
-  
+
   POP AX
   POP DS
  END;
@@ -10371,19 +10371,19 @@ Var
 Begin
  ASM
   PUSH DS
-  
+
   { Pointer vers la structure Data.DataMOS }
   MOV AX,CS
   MOV DS,AX
   MOV SI,OFFSET Data.DataMOS
-  
+
   { Lire le champ ExtendedError }
   MOV AX,[SI].DataMOS.ExtendedError
   MOV ErrorCode,AX
-  
+
   POP DS
  END;
- 
+
  GetExtendedErrorCode := ErrorCode;
 End;
 
@@ -10394,19 +10394,19 @@ Var
 Begin
  ASM
   PUSH DS
-  
+
   { Pointer vers la structure Data.DataMOS }
   MOV AX,CS
   MOV DS,AX
   MOV SI,OFFSET Data.DataMOS
-  
+
   { Lire le champ ErrorClass }
   MOV AL,[SI].DataMOS.ErrorClass
   MOV ErrorClass,AL
-  
+
   POP DS
  END;
- 
+
  GetExtendedErrorClass := ErrorClass;
 End;
 
@@ -10417,19 +10417,19 @@ Var
 Begin
  ASM
   PUSH DS
-  
+
   { Pointer vers la structure Data.DataMOS }
   MOV AX,CS
   MOV DS,AX
   MOV SI,OFFSET Data.DataMOS
-  
+
   { Lire le champ SuggestedAction }
   MOV AL,[SI].DataMOS.SuggestedAction
   MOV SuggestedAction,AL
-  
+
   POP DS
  END;
- 
+
  GetExtendedSuggestedAction := SuggestedAction;
 End;
 
@@ -10440,19 +10440,19 @@ Var
 Begin
  ASM
   PUSH DS
-  
+
   { Pointer vers la structure Data.DataMOS }
   MOV AX,CS
   MOV DS,AX
   MOV SI,OFFSET Data.DataMOS
-  
+
   { Lire le champ ErrorLocus }
   MOV AL,[SI].DataMOS.ErrorLocus
   MOV ErrorLocus,AL
-  
+
   POP DS
  END;
- 
+
  GetExtendedErrorLocus := ErrorLocus;
 End;
 
@@ -10463,19 +10463,19 @@ Begin
  ASM
   PUSH DS
   PUSH AX
-  
+
   { Pointer vers la structure Data.DataMOS }
   MOV AX,CS
   MOV DS,AX
   MOV SI,OFFSET Data.DataMOS
-  
+
   { Effacer tous les champs d'erreur }
   MOV AX,0
   MOV [SI].DataMOS.ExtendedError,AX
   MOV [SI].DataMOS.ErrorClass,AL
   MOV [SI].DataMOS.SuggestedAction,AL
   MOV [SI].DataMOS.ErrorLocus,AL
-  
+
   POP AX
   POP DS
  END;
@@ -10493,56 +10493,56 @@ Begin
    SuggestedAction := ERRACT_ABORT;
    ErrorLocus := ERRLOC_UNK;
   End;
-  
+
   ERROR_FILE_NOT_FOUND: Begin
    ErrorClass := ERRCLASS_NOTFND;
    SuggestedAction := ERRACT_USER;
    ErrorLocus := ERRLOC_DISK;
   End;
-  
+
   ERROR_PATH_NOT_FOUND: Begin
    ErrorClass := ERRCLASS_NOTFND;
    SuggestedAction := ERRACT_USER;
    ErrorLocus := ERRLOC_DISK;
   End;
-  
+
   ERROR_TOO_MANY_OPEN_FILES: Begin
    ErrorClass := ERRCLASS_OUTOFRESOURCE;
    SuggestedAction := ERRACT_RETRY;
    ErrorLocus := ERRLOC_UNK;
   End;
-  
+
   ERROR_ACCESS_DENIED: Begin
    ErrorClass := ERRCLASS_AUTH;
    SuggestedAction := ERRACT_USER;
    ErrorLocus := ERRLOC_DISK;
   End;
-  
+
   ERROR_INVALID_HANDLE: Begin
    ErrorClass := ERRCLASS_APPERR;
    SuggestedAction := ERRACT_ABORT;
    ErrorLocus := ERRLOC_UNK;
   End;
-  
+
   ERROR_NOT_ENOUGH_MEMORY: Begin
    ErrorClass := ERRCLASS_OUTOFRESOURCE;
    SuggestedAction := ERRACT_ABORT;
    ErrorLocus := ERRLOC_MEM;
   End;
-  
+
   ERROR_INVALID_BLOCK: Begin
    ErrorClass := ERRCLASS_APPERR;
    SuggestedAction := ERRACT_ABORT;
    ErrorLocus := ERRLOC_MEM;
   End;
-  
+
   Else Begin { Erreur inconnue }
    ErrorClass := ERRCLASS_UNK;
    SuggestedAction := ERRACT_IGNORE;
    ErrorLocus := ERRLOC_UNK;
   End;
  End;
- 
+
  { Appeler la fonction complète }
  SetExtendedError(ErrorCode, ErrorClass, SuggestedAction, ErrorLocus);
 End;
@@ -10552,36 +10552,36 @@ Function GetExtendedErrorComponent(ComponentIndex:Byte):Byte;Assembler;
 ASM
  PUSH DS
  PUSH SI
- 
+
  { Pointer vers la structure Data.DataMOS }
  MOV AX,CS
  MOV DS,AX
  MOV SI,OFFSET Data.DataMOS
- 
+
  { Sélectionner le composant selon l'index }
  MOV AL,ComponentIndex
  CMP AL,1
  JE @GetClass
- CMP AL,2  
+ CMP AL,2
  JE @GetAction
  CMP AL,3
  JE @GetLocus
- 
+
  { Par défaut, retourner 0 }
  MOV AL,0
  JMP @Done
- 
+
 @GetClass:
  MOV AL,[SI].DataMOS.ErrorClass
  JMP @Done
- 
+
 @GetAction:
  MOV AL,[SI].DataMOS.SuggestedAction
  JMP @Done
- 
+
 @GetLocus:
  MOV AL,[SI].DataMOS.ErrorLocus
- 
+
 @Done:
  POP SI
  POP DS
@@ -10601,12 +10601,12 @@ Begin
  ErrorClass := GetExtendedErrorClass;
  SuggestedAction := GetExtendedSuggestedAction;
  ErrorLocus := GetExtendedErrorLocus;
- 
+
  { Empaqueter le résultat dans un LongInt }
  { High Word: ErrorClass dans le byte haut, SuggestedAction dans le byte bas }
  { Low Word: ErrorCode }
  Result := (LongInt(ErrorClass) SHL 24) OR (LongInt(SuggestedAction) SHL 16) OR ErrorCode;
- 
+
  { Note: Dans le handler assembleur, le Locus sera récupéré séparément }
  DOS59h_GetExtendedError := Result;
 End;
@@ -10626,7 +10626,7 @@ Var
  I: Byte;
 Begin
  DOS5Ah_CreateTempFile := $FFFF; { Erreur par défaut }
- 
+
  { Convertir pointeur ASCIIZ en string Pascal }
  P := PChar(PathPtr);
  PathStr := '';
@@ -10639,11 +10639,11 @@ Begin
  If Length(PathStr) = 0 Then Begin
   PathStr := '.'; { Répertoire courant si vide }
  End;
- 
+
  { S'assurer que le chemin se termine par '\' }
  If PathStr[Length(PathStr)] <> '\' Then
   PathStr := PathStr + '\';
- 
+
  { Générer un nom de fichier temporaire unique }
  Counter := 1;
  Repeat
@@ -10652,9 +10652,9 @@ Begin
   While Length(TempFileName) < 5 Do
    TempFileName := '0' + TempFileName;
   TempFileName := 'TMP' + TempFileName + '.TMP';
-  
+
   TempFullPath := PathStr + TempFileName;
-  
+
   { Vérifier si le fichier existe déjà }
   Handle := DOS3Dh_OpenFile(Addr(TempFullPath), 0); { Mode lecture seule }
   If Handle <> $FFFF Then Begin
@@ -10670,21 +10670,21 @@ Begin
    Break;
   End;
  Until False;
- 
+
  { Créer le fichier temporaire }
  Handle := DOS3Ch_CreateOpenFile(Addr(TempFullPath));
  If Handle = $FFFF Then Begin
   SetExtendedError(ERROR_PATH_NOT_FOUND, ERRCLASS_NOTFND, ERRACT_USER, ERRLOC_DISK);
   Exit;
  End;
- 
+
  { Copier le nom généré dans le chemin d'origine (modification du buffer appelant) }
  { Attention: ceci modifie le buffer de l'appelant avec le nom généré }
  Move(TempFullPath[1], PathPtr^, Length(TempFullPath));
  P := PChar(PathPtr);
  Inc(P, Length(TempFullPath));
  P^ := #0; { Terminateur null }
- 
+
  { Définir les attributs si nécessaires }
  If Attributes <> 0 Then Begin
   If DOS43h_GetSetFileAttributes(PathPtr, 1, Attributes) = $FFFF Then Begin
@@ -10694,7 +10694,7 @@ Begin
    Exit;
   End;
  End;
- 
+
  ClearExtendedError;
  DOS5Ah_CreateTempFile := Handle;
 End;
@@ -10708,7 +10708,7 @@ Var
  I: Byte;
 Begin
  DOS5Bh_CreateNewFile := $FFFF; { Erreur par défaut }
- 
+
  { Convertir pointeur ASCIIZ en string Pascal }
  P := PChar(PathPtr);
  PathStr := '';
@@ -10722,7 +10722,7 @@ Begin
   SetExtendedError(ERROR_INVALID_PARAMETER, ERRCLASS_BADCALL, ERRACT_USER, ERRLOC_UNK);
   Exit;
  End;
- 
+
  { D'abord, vérifier si le fichier existe déjà }
  Handle := DOS3Dh_OpenFile(PathPtr, 0); { Mode lecture seule }
  If Handle <> $FFFF Then Begin
@@ -10731,14 +10731,14 @@ Begin
   SetExtendedError(ERROR_FILE_EXISTS, ERRCLASS_EXISTS, ERRACT_USER, ERRLOC_DISK);
   Exit;
  End;
- 
+
  { Le fichier n'existe pas, le créer }
  Handle := DOS3Ch_CreateOpenFile(PathPtr);
  If Handle = $FFFF Then Begin
   SetExtendedError(ERROR_PATH_NOT_FOUND, ERRCLASS_NOTFND, ERRACT_USER, ERRLOC_DISK);
   Exit;
  End;
- 
+
  { Définir les attributs si nécessaires }
  If Attributes <> 0 Then Begin
   If DOS43h_GetSetFileAttributes(PathPtr, 1, Attributes) = $FFFF Then Begin
@@ -10748,7 +10748,7 @@ Begin
    Exit;
   End;
  End;
- 
+
  ClearExtendedError;
  DOS5Bh_CreateNewFile := Handle;
 End;
