@@ -4,124 +4,49 @@
   @abstract(Target: Turbo Pascal 7, Free Pascal 3.2)
 }
 
-{ PRINTFIX - TSR pour corriger les erreurs d'impression sur port parall√®le sous MS-DOS 5.x
-  
+{ PRINTFIX - TSR pour corriger les erreurs d'impression sur port paralläle sous MS-DOS 5.x
+
   Ce programme est un TSR (Terminate Stay Resident) qui intercepte l'interruption BIOS 17h
-  (services d'impression parall√®le) pour corriger un probl√®me sp√©cifique avec MS-DOS 5.0+.
-  
-  Probl√®me: Certains syst√®mes retournent le bit 3 du statut d'erreur E/S m√™me quand 
+  (services d'impression paralläle) pour corriger un probläme spÇcifique avec MS-DOS 5.0+.
+
+  Probläme: Certains systämes retournent le bit 3 d'Çtat d'erreur d'entrÇe/sortie màme quand
   l'imprimante fonctionne correctement, causant des erreurs "Write fault" sous MS-DOS 5.x.
-  
-  Solution: Ce TSR remplace le gestionnaire INT 17h et masque le bit 3 d'erreur E/S
-  pour √©viter ces faux positifs.
+
+  Solution: Ce TSR remplace le gestionnaire INT 17h et masque le bit 3 d'erreur d'entrÇe/sortie
+  pour Çviter ces faux positifs.
 }
-
-{$M 16384,0,0}  { M√©moire n√©cessaire pour TSR }
-
-{$IFDEF FPC}
-  {$MODE TP}
-  {$PACKRECORDS 1}
-{$ENDIF}
-
-{$IFDEF FPC}
-{$MODE OBJFPC}
-{$ENDIF}
 
 Program PRINTFIX;
 
-{ D√©clarations syst√®me pour TSR }
 {$IFDEF FPC}
-Type
-  PPointer = ^Pointer;
-  
-{ Fonctions syst√®me simul√©es pour Free Pascal }
-Procedure GetIntVec(IntNo: Byte; Var Vector: Pointer);
-Begin
-  { Simulation basique - en r√©alit√© il faudrait acc√©der √† la table des interruptions }
-  Vector := Nil;
-End;
-
-Procedure SetIntVec(IntNo: Byte; Vector: Pointer);
-Begin
-  { Simulation basique - en r√©alit√© il faudrait modifier la table des interruptions }
-End;
-
-Function GetEnv(VarName: String): String;
-Begin
-  GetEnv := '';
-End;
-
-Procedure Keep(ExitCode: Word; Size: Word);
-Begin
-  { Simulation - ne fait rien sous Free Pascal moderne }
-  Halt(ExitCode);
-End;
-
-Function ParamCount: Integer;
-Var i: Integer;
-Begin
-  i := 0;
-  While ParamStr(i+1) <> '' Do Inc(i);
-  ParamCount := i;
-End;
-
-Function ParamStr(Index: Integer): String;
-Begin
-  { Simulation basique }
-  ParamStr := '';
-End;
-
-{$ELSE}
-{ Turbo Pascal - utiliser les fonctions syst√®me natives }
-{$L-} { D√©sactiver les liens locaux }
-
-{ D√©clarations syst√®me pour Turbo Pascal }
-Procedure GetIntVec(IntNo: Byte; Var Vector: Pointer); assembler;
-asm
-  push es
-  mov al, IntNo
-  mov ah, 35h
-  int 21h
-  les di, Vector
-  mov word ptr es:[di], bx
-  mov word ptr es:[di+2], es
-  pop es
-end;
-
-Procedure SetIntVec(IntNo: Byte; Vector: Pointer); assembler;
-asm
-  push ds
-  mov al, IntNo
-  mov ah, 25h
-  lds dx, Vector
-  int 21h
-  pop ds
-end;
-
-Function GetEnv(VarName: String): String;
-Begin
-  { Version simplifi√©e pour Turbo Pascal }
-  GetEnv := '';
-End;
-
-Procedure Keep(ExitCode: Word; Size: Word); assembler;
-asm
-  mov al, byte ptr ExitCode
-  mov dx, Size
-  mov ah, 31h
-  int 21h
-end;
-
+ {$MODE TP}
+ {$ASMMODE INTEL}
 {$ENDIF}
 
-Var
-  Language : (_French,_English,_Germany,_Italian,_Spain,_Albanian,_Portuguese,_Swedish,_Danish,_Japanese);
-  OldInt17 : Pointer;  { Pointeur vers l'ancien gestionnaire INT 17h }
-  Installed : Boolean;
+Uses DOS;
 
-{ Fonction utilitaire pour convertir en majuscules }
+{$M 8192,0,0}  { MÇmoire nÇcessaire pour TSR }
+
+Var
+ Language:(_French,_English,_Germany,_Italian,_Spain,_Albanian,_Portuguese,_Swedish,_Danish,_Japanese);
+ TmpLanguage:String;
+ OldInt17:Pointer;  { Pointeur vers l'ancien gestionnaire INT 17h }
+ Installed:Boolean;
+
+ { Fonctions systäme pour TSR }
+{$IFNDEF FPC}
+ Procedure Keep(ExitCode:Word;Size:Word);Assembler;ASM
+  MOV AL,Byte Ptr ExitCode
+  MOV DX,Size
+  MOV AH,31h
+  INT 21h
+ END;
+{$ENDIF}
+
+ { Fonction utilitaire pour convertir en majuscules }
 Function StrToUpper(S:String):String;
-Var I:Byte;
+Var
+ I:Byte;
 Begin
  For I:=1 to Length(S)do Begin
   If S[I] in['a'..'z']Then S[I]:=Chr(Ord(S[I])-32);
@@ -129,43 +54,182 @@ Begin
  StrToUpper:=S;
 End;
 
-{ D√©tection de la langue syst√®me }
-Procedure DetectLanguage;
+ { Nouveau gestionnaire d'interruption 17h }
+Procedure NewInt17Handler;Assembler;ASM
+  { Sauvegarder les registres }
+ PUSH AX
+ PUSH BX
+ PUSH CX
+ PUSH DX
+ PUSH SI
+ PUSH DI
+ PUSH DS
+ PUSH ES
+ PUSHF
+  { VÇrifier si c'est la fonction Get Printer Status (AH=02h) }
+ CMP AH, 02h
+ jne @CallOldHandler
+  { Pour la fonction Get Printer Status, retourner un statut fixe }
+  { Bit 4 = Printer selected, Bit 7 = Printer not busy }
+ MOV AH, 90h
+ POPF
+ POP ES
+ POP DS
+ POP DI
+ POP SI
+ POP DX
+ POP CX
+ POP BX
+ POP AX
+ IRET
+@CallOldHandler:
+  { Restaurer les drapeaux }
+ POPF
+  { Restaurer les registres }
+ POP ES
+ POP DS
+ POP DI
+ POP SI
+ POP DX
+ POP CX
+ POP BX
+ POP AX
+  { Appeler l'ancien gestionnaire INT 17h }
+ PUSHF
+ CALL [OldInt17]
+  { Masquer le bit 3 (I/O error) d'Çtat retournÇ dans AH }
+ AND AH, 0F7h  { Bit 3 = 0 (pas d'erreur d'entrÇe/sortie) }
+ IRET
+END;
+
+ { VÇrifier si le TSR est dÇjÖ installÇ }
+Function IsAlreadyInstalled: Boolean;
 Var
-  Lang: String;
+ IntVec: Pointer;
 Begin
-  Language := _French;
-  Lang := StrToUpper(GetEnv('LANGUAGE'));
-  If Lang = 'EN' Then Language := _English
-  Else If Lang = 'GR' Then Language := _Germany
-  Else If Lang = 'IT' Then Language := _Italian
-  Else If Lang = 'SP' Then Language := _Spain
-  Else If (Lang = 'SQ') or (Lang = 'ALB') Then Language := _Albanian
-  Else If (Lang = 'PT') or (Lang = 'PRT') Then Language := _Portuguese
-  Else If (Lang = 'SE') or (Lang = 'SWE') Then Language := _Swedish
-  Else If (Lang = 'DK') or (Lang = 'DNK') Then Language := _Danish
-  Else If (Lang = 'JP') or (Lang = 'JPN') Then Language := _Japanese;
+ GetIntVec($17, IntVec);
+ IsAlreadyInstalled := (IntVec = @NewInt17Handler);
 End;
 
-{ Affichage de l'aide selon la langue }
-Procedure ShowHelp;
+{ Installer le TSR }
+Procedure InstallTSR;
+{$IFNDEF FPC}
+ Var
+  TSRSize: Word;
+{$ENDIF}
 Begin
+ If IsAlreadyInstalled Then Begin
   Case Language Of
-    _English: Begin
-      WriteLn('PRINTFIX - Fix parallel printer I/O errors in MS-DOS 5.x');
-      WriteLn;
-      WriteLn('This TSR (Terminate Stay Resident) program fixes false I/O errors');
-      WriteLn('on parallel printer ports that occur on some systems with MS-DOS 5.0+');
-      WriteLn;
-      WriteLn('Usage: PRINTFIX');
-      WriteLn;
-      WriteLn('The program installs itself as a TSR and intercepts BIOS interrupt 17h');
-      WriteLn('to mask bit 3 (I/O error) from printer status reports.');
-      WriteLn;
-      WriteLn('Parameters:');
-      WriteLn('  /?     Show this help');
-      WriteLn('  /U     Uninstall TSR (if supported by system)');
-    End;
+   _English: WriteLn('PRINTFIX is already installed.');
+   _Germany: WriteLn('PRINTFIX ist bereits installiert.');
+   Else WriteLn('PRINTFIX est dÇjÖ installÇ.');
+  End;
+  Halt(1);
+ End;
+  { Sauvegarder l'ancien vecteur d'interruption }
+ GetIntVec($17, OldInt17);
+  { Installer le nouveau gestionnaire }
+ SetIntVec($17, @NewInt17Handler);
+  { Afficher le message d'installation }
+ Case Language Of
+  _English: Begin
+   WriteLn('PRINTFIX installed successfully.');
+   WriteLn('TSR now active - parallel printer I/O errors will be masked.');
+  End;
+  _Germany: Begin
+   WriteLn('PRINTFIX erfolgreich installiert.');
+   WriteLn('TSR jetzt aktiv - Paralleldrucker-E/A-Fehler werden maskiert.');
+  End
+  Else Begin
+   WriteLn('PRINTFIX installÇ avec succäs.');
+   WriteLn('TSR maintenant actif - les erreurs d''entrÇe/sortie d''imprimante paralläle seront masquÇes.');
+  End;
+ End;
+ Installed := True;
+ {$IFDEF FPC}
+   { Free Pascal: TSR non supportÇ nativement, juste terminer }
+  Case Language of
+   _English:WriteLn('Note: TSR functionality not fully supported in modern systems.');
+   Else WriteLn('TSR non supportÇ nativement, juste terminer');
+  End;
+  Halt(0);
+ {$ELSE}
+  { Turbo Pascal: Calculer la taille du programme rÇsident et installer TSR }
+  TSRSize := (Ofs(InstallTSR) - Ofs(NewInt17Handler) + 256 + 15) shr 4;
+  Keep(0, TSRSize);
+ {$ENDIF}
+End;
+
+ { Tentative de dÇsinstallation du TSR }
+Procedure UninstallTSR;
+Var
+ CurrentVec: Pointer;
+Begin
+ GetIntVec($17,CurrentVec);
+ If CurrentVec<>@NewInt17Handler Then Begin
+  Case Language Of
+   _English: WriteLn('PRINTFIX is not currently installed.');
+   _Germany: WriteLn('PRINTFIX ist derzeit nicht installiert.');
+   Else WriteLn('PRINTFIX n''est pas actuellement installÇ.');
+  End;
+  Halt(1);
+ End;
+  { Restaurer l'ancien vecteur }
+ SetIntVec($17, OldInt17);
+ Case Language Of
+   _English: WriteLn('PRINTFIX uninstalled successfully.');
+   _Germany: WriteLn('PRINTFIX erfolgreich deinstalliert.');
+   Else WriteLn('PRINTFIX dÇsinstallÇ avec succäs.');
+ End;
+End;
+
+{ Programme principal }
+Var
+ I: Integer;
+ Param: String;
+
+BEGIN
+  { Initialiser variables }
+ Language := _French;
+ TmpLanguage := GetEnv('LANGUAGE');
+ If TmpLanguage <> '' Then Begin
+  If TmpLanguage[1] = '"' Then TmpLanguage := Copy(TmpLanguage, 2, 255);
+  If StrToUpper(Copy(TmpLanguage, 1, 2)) = 'EN' Then Language := _English Else
+  If StrToUpper(Copy(TmpLanguage, 1, 2)) = 'GR' Then Language := _Germany Else
+  If StrToUpper(Copy(TmpLanguage, 1, 2)) = 'IT' Then Language := _Italian Else
+  If StrToUpper(Copy(TmpLanguage, 1, 2)) = 'SP' Then Language := _Spain Else
+  If (StrToUpper(Copy(TmpLanguage, 1, 2)) = 'SQ') or
+     (StrToUpper(Copy(TmpLanguage, 1, 3)) = 'ALB') Then Language := _Albanian Else
+  If (StrToUpper(Copy(TmpLanguage, 1, 2)) = 'PT') or
+     (StrToUpper(Copy(TmpLanguage, 1, 3)) = 'PRT') Then Language := _Portuguese Else
+  If (StrToUpper(Copy(TmpLanguage, 1, 2)) = 'SE') or
+     (StrToUpper(Copy(TmpLanguage, 1, 3)) = 'SWE') Then Language := _Swedish Else
+  If (StrToUpper(Copy(TmpLanguage, 1, 2)) = 'DK') or
+     (StrToUpper(Copy(TmpLanguage, 1, 3)) = 'DNK') Then Language := _Danish Else
+  If (StrToUpper(Copy(TmpLanguage, 1, 2)) = 'JP') or
+     (StrToUpper(Copy(TmpLanguage, 1, 3)) = 'JPN') Then Language := _Japanese;
+ End;
+ Installed := False;
+  { Traitement des paramätres de ligne de commande }
+ For I := 1 To ParamCount Do Begin
+  Param := StrToUpper(ParamStr(I));
+  If (Param = '/?') or (Param = '-H') or (Param = '--HELP') or (Param = '/H') Then Begin
+  Case Language Of
+   _English: Begin
+    WriteLn('PRINTFIX - Fix parallel printer I/O errors in MS-DOS 5.x');
+     WriteLn;
+     WriteLn('This TSR (Terminate Stay Resident) program fixes false I/O errors');
+     WriteLn('on parallel printer ports that occur on some systems with MS-DOS 5.0+');
+     WriteLn;
+     WriteLn('Usage: PRINTFIX');
+     WriteLn;
+     WriteLn('The program installs itself as a TSR and intercepts BIOS interrupt 17h');
+     WriteLn('to mask bit 3 (I/O error) from printer status reports.');
+     WriteLn;
+     WriteLn('Parameters:');
+     WriteLn('  /?     Show this help');
+     WriteLn('  /U     Uninstall TSR (if supported by system)');
+   End;
     _Germany: Begin
       WriteLn('PRINTFIX - Reparatur von Paralleldruckerproblemen in MS-DOS 5.x');
       WriteLn;
@@ -174,206 +238,48 @@ Begin
       WriteLn;
       WriteLn('Verwendung: PRINTFIX');
       WriteLn;
-      WriteLn('Das Programm installiert sich als TSR und f√§ngt BIOS-Interrupt 17h ab,');
+      WriteLn('Das Programm installiert sich als TSR und fÑngt BIOS-Interrupt 17h ab,');
       WriteLn('um Bit 3 (E/A-Fehler) aus Druckerstatus-Meldungen zu maskieren.');
       WriteLn;
       WriteLn('Parameter:');
       WriteLn('  /?     Diese Hilfe anzeigen');
       WriteLn('  /U     TSR deinstallieren (falls vom System unterst√ºtzt)');
     End
-    Else Begin  { Fran√ßais par d√©faut }
-      WriteLn('PRINTFIX - Correction des erreurs d''imprimante parall√®le sous MS-DOS 5.x');
+    Else Begin  { Franáais par dÇfaut }
+      WriteLn('PRINTFIX - Cette commande permet d''installer la correction des erreurs d''imprimante paralläle ',
+              'sous MS-DOS 5.x.');
       WriteLn;
-      WriteLn('Ce programme TSR (Terminate Stay Resident) corrige les fausses erreurs E/S');
-      WriteLn('sur les ports d''imprimante parall√®le qui se produisent sur certains');
-      WriteLn('syst√®mes avec MS-DOS 5.0+');
+      WriteLn('Ce programme TSR (Terminate Stay Resident) corrige les fausses erreurs d''entrÇe/sortie');
+      WriteLn('sur les ports d''imprimante paralläle qui se produisent sur certains');
+      WriteLn('systämes avec MS-DOS 5.0+');
       WriteLn;
       WriteLn('Syntaxe: PRINTFIX');
       WriteLn;
       WriteLn('Le programme s''installe en TSR et intercepte l''interruption BIOS 17h');
-      WriteLn('pour masquer le bit 3 (erreur E/S) des rapports de statut d''imprimante.');
+      WriteLn('pour masquer le bit 3 (erreur d''entrÇe/sortie) des rapports de statut d''imprimante.');
       WriteLn;
-      WriteLn('Param√®tres:');
+      WriteLn('Paramätres:');
       WriteLn('  /?     Afficher cette aide');
-      WriteLn('  /U     D√©sinstaller le TSR (si support√© par le syst√®me)');
+      WriteLn('  /U     DÇsinstaller le TSR (si supportÇ par le systäme)');
     End;
-  End;
-End;
-
-{ Nouveau gestionnaire d'interruption 17h }
-Procedure NewInt17Handler; assembler;
-asm
-  { Sauvegarder les registres }
-  push ax
-  push bx
-  push cx
-  push dx
-  push si
-  push di
-  push ds
-  push es
-  pushf
-  
-  { V√©rifier si c'est la fonction Get Printer Status (AH=02h) }
-  cmp ah, 02h
-  jne @CallOldHandler
-  
-  { Pour la fonction Get Printer Status, retourner un statut fixe }
-  { Bit 4 = Printer selected, Bit 7 = Printer not busy }
-  mov ah, 90h
-  popf
-  pop es
-  pop ds
-  pop di
-  pop si
-  pop dx
-  pop cx
-  pop bx
-  pop ax
-  iret
-  
-@CallOldHandler:
-  { Restaurer les drapeaux }
-  popf
-  
-  { Restaurer les registres }
-  pop es
-  pop ds
-  pop di
-  pop si
-  pop dx
-  pop cx
-  pop bx
-  pop ax
-  
-  { Appeler l'ancien gestionnaire INT 17h }
-  pushf
-  call [OldInt17]
-  
-  { Masquer le bit 3 (I/O error) du statut retourn√© dans AH }
-  and ah, 0F7h  { Bit 3 = 0 (pas d'erreur E/S) }
-  
-  iret
-end;
-
-{ V√©rifier si le TSR est d√©j√† install√© }
-Function IsAlreadyInstalled: Boolean;
-Var
-  IntVec: Pointer;
-Begin
-  GetIntVec($17, IntVec);
-  IsAlreadyInstalled := (IntVec = @NewInt17Handler);
-End;
-
-{ Installer le TSR }
-Procedure InstallTSR;
-{$IFNDEF FPC}
-Var
-  TSRSize: Word;
-{$ENDIF}
-Begin
-  If IsAlreadyInstalled Then Begin
+   End;
+   Halt(0);
+  End
+   Else
+  If Param = '/U' Then Begin
+   UninstallTSR;
+   Halt(0);
+  End
+   Else
+  Begin
     Case Language Of
-      _English: WriteLn('PRINTFIX is already installed.');
-      _Germany: WriteLn('PRINTFIX ist bereits installiert.');
-      Else WriteLn('PRINTFIX est d√©j√† install√©.');
+     _English: WriteLn('Invalid parameter: ', ParamStr(I));
+     _Germany: WriteLn('UngÅltiger Parameter: ', ParamStr(I));
+     Else WriteLn('Paramätre invalide: ', ParamStr(I));
     End;
     Halt(1);
+   End;
   End;
-  
-  { Sauvegarder l'ancien vecteur d'interruption }
-  GetIntVec($17, OldInt17);
-  
-  { Installer le nouveau gestionnaire }
-  SetIntVec($17, @NewInt17Handler);
-  
-  { Afficher le message d'installation }
-  Case Language Of
-    _English: Begin
-      WriteLn('PRINTFIX installed successfully.');
-      WriteLn('TSR now active - parallel printer I/O errors will be masked.');
-    End;
-    _Germany: Begin
-      WriteLn('PRINTFIX erfolgreich installiert.');
-      WriteLn('TSR jetzt aktiv - Paralleldrucker-E/A-Fehler werden maskiert.');
-    End
-    Else Begin
-      WriteLn('PRINTFIX install√© avec succ√®s.');
-      WriteLn('TSR maintenant actif - les erreurs E/S d''imprimante parall√®le seront masqu√©es.');
-    End;
-  End;
-  
-  Installed := True;
-  
-{$IFDEF FPC}
-  { Free Pascal: TSR non support√© nativement, juste terminer }
-  WriteLn('Note: TSR functionality not fully supported in modern systems.');
-  Halt(0);
-{$ELSE}
-  { Turbo Pascal: Calculer la taille du programme r√©sident et installer TSR }
-  TSRSize := (Ofs(InstallTSR) - Ofs(NewInt17Handler) + 256 + 15) shr 4;
-  Keep(0, TSRSize);
-{$ENDIF}
-End;
-
-{ Tentative de d√©sinstallation du TSR }
-Procedure UninstallTSR;
-Var
-  CurrentVec: Pointer;
-Begin
-  GetIntVec($17, CurrentVec);
-  
-  If CurrentVec <> @NewInt17Handler Then Begin
-    Case Language Of
-      _English: WriteLn('PRINTFIX is not currently installed.');
-      _Germany: WriteLn('PRINTFIX ist derzeit nicht installiert.');
-      Else WriteLn('PRINTFIX n''est pas actuellement install√©.');
-    End;
-    Halt(1);
-  End;
-  
-  { Restaurer l'ancien vecteur }
-  SetIntVec($17, OldInt17);
-  
-  Case Language Of
-    _English: WriteLn('PRINTFIX uninstalled successfully.');
-    _Germany: WriteLn('PRINTFIX erfolgreich deinstalliert.');
-    Else WriteLn('PRINTFIX d√©sinstall√© avec succ√®s.');
-  End;
-End;
-
-{ Programme principal }
-Var
-  I: Integer;
-  Param: String;
-  
-BEGIN
-  DetectLanguage;
-  
-  { Traitement des param√®tres de ligne de commande }
-  For I := 1 To ParamCount Do Begin
-    Param := StrToUpper(ParamStr(I));
-    
-    If (Param = '/?') or (Param = '-H') or (Param = '--HELP') or (Param = '/H') Then Begin
-      ShowHelp;
-      Halt(0);
-    End
-    Else If Param = '/U' Then Begin
-      UninstallTSR;
-      Halt(0);
-    End
-    Else Begin
-      Case Language Of
-        _English: WriteLn('Invalid parameter: ', ParamStr(I));
-        _Germany: WriteLn('Ung√ºltiger Parameter: ', ParamStr(I));
-        Else WriteLn('Param√®tre invalide: ', ParamStr(I));
-      End;
-      WriteLn;
-      ShowHelp;
-      Halt(1);
-    End;
-  End;
-  
-  { Si aucun param√®tre, installer le TSR }
-  InstallTSR;
+  { Si aucun paramätre, installer le TSR }
+ InstallTSR;
 END.
