@@ -184,6 +184,10 @@ Voici la liste des différents fichiers proposés dans MSDOS-0 :
 			<td>Cette commande permet d'effectuer la gestion des traitements d'impressions du système d'exploitation.</td>
 		</tr>
 		<tr>
+			<td><b>PRINTFIX.PAS</td>
+			<td>Cette commande permet d'installer la correction des erreurs d'imprimantes parallèle sous MS-DOS 5.x.</td>
+		</tr>
+		<tr>
 			<td><b>RECOVER.PAS</b></td>
 			<td>Cette commande permet de récupérer des fichiers d'un disque endommagé.</td>
 		</tr>
