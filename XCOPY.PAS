@@ -9,7 +9,7 @@ Program XCopy;
 Uses Crt,DOS;
 
 Var
- Language:(_French,_English,_Germany,_Italian,_Spain);
+ Language:(_French,_English,_Germany,_Italian,_Spain,_Albanian,_Portuguese,_Swedish,_Danish,_Japanese);
  TmpLanguage:String;
  Option:Set Of (_A,_P,_W);
  I:Integer;
@@ -243,19 +243,24 @@ BEGIN
   If StrToUpper(Copy(TmpLanguage,1,2))='EN'Then Language:=_English Else
   If StrToUpper(Copy(TmpLanguage,1,2))='GR'Then Language:=_Germany Else
   If StrToUpper(Copy(TmpLanguage,1,2))='IT'Then Language:=_Italian Else
-  If StrToUpper(Copy(TmpLanguage,1,2))='SP'Then Language:=_Spain;
+  If StrToUpper(Copy(TmpLanguage,1,2))='SP'Then Language:=_Spain Else
+  If StrToUpper(Copy(TmpLanguage,1,2))='AL'Then Language:=_Albanian Else
+  If StrToUpper(Copy(TmpLanguage,1,2))='PT'Then Language:=_Portuguese Else
+  If StrToUpper(Copy(TmpLanguage,1,2))='SV'Then Language:=_Swedish Else
+  If StrToUpper(Copy(TmpLanguage,1,2))='DA'Then Language:=_Danish Else
+  If StrToUpper(Copy(TmpLanguage,1,2))='JA'Then Language:=_Japanese;
  End;
  If(ParamStr(1)='/?')or(ParamStr(1)='--help')or(ParamStr(1)='-h')Then Begin
   Case Language of
    _Germany:Begin
-    WriteLn('Kopiert Dataien (au�er versteckten u. Systemdateien) und Verzeichnisstrukturen.');
+    WriteLn('Kopiert Dataien (au�er versteckten u. Systemdateien) und Verzeichnisstrukturen.');
     WriteLn;
     WriteLn('XCOPY Quelle [Ziel] [/A] [/P] [/W]');
     WriteLn;
     WriteLn('Quelle      Zu kopierende Dateien.');
     WriteLn('Ziel        Position und/oder Name der neuen Dateien.');
     WriteLn('/A          Kopiert Dateien mit gesetztem Archivattribut, ');
-    WriteLn('            �ndert das Attribut nicht.');
+    WriteLn('            �ndert das Attribut nicht.');
     WriteLn('/P          Fragt vor dem Erstellen jeder Zeildatei nach.');
     WriteLn('/W          Fordert vor dem Beginn des Kopierens zu einum Tastendruck auf.');
    End;
@@ -270,6 +275,90 @@ BEGIN
     WriteLn('             doesn''t change the attribute.');
     WriteLn('/P           Prompts you before creating each destination file.');
     WriteLn('/W           Prompts you to press a key before copying.');
+   End;
+   _Italian:Begin
+    WriteLn('Copia file (eccetto file nascosti e di sistema) e strutture di directory.');
+    WriteLn;
+    WriteLn('XCOPY origine [destinazione] [/A] [/P] [/W]');
+    WriteLn;
+    WriteLn('origine      Specifica i file da copiare.');
+    WriteLn('destinazione Specifica la posizione e/o nome dei nuovi file.');
+    WriteLn('/A           Copia file con attributo archivio impostato,');
+    WriteLn('             non cambia l''attributo.');
+    WriteLn('/P           Chiede conferma prima di creare ogni file di destinazione.');
+    WriteLn('/W           Chiede di premere un tasto prima di copiare.');
+   End;
+   _Spain:Begin
+    WriteLn('Copia archivos (excepto archivos ocultos y del sistema) y árboles de directorios.');
+    WriteLn;
+    WriteLn('XCOPY origen [destino] [/A] [/P] [/W]');
+    WriteLn;
+    WriteLn('origen       Especifica los archivos a copiar.');
+    WriteLn('destino      Especifica la ubicación y/o nombre de los nuevos archivos.');
+    WriteLn('/A           Copia archivos con el atributo de archivo establecido,');
+    WriteLn('             no cambia el atributo.');
+    WriteLn('/P           Pide confirmación antes de crear cada archivo de destino.');
+    WriteLn('/W           Pide presionar una tecla antes de copiar.');
+   End;
+   _Albanian:Begin
+    WriteLn('Kopjon skedarë (përveç skedarëve të fshehur dhe sistemit) dhe pemët e drejtorive.');
+    WriteLn;
+    WriteLn('XCOPY burimi [destinacioni] [/A] [/P] [/W]');
+    WriteLn;
+    WriteLn('burimi       Specifikon skedarët për të kopjuar.');
+    WriteLn('destinacioni Specifikon vendndodhjen dhe/ose emrin e skedarëve të rinj.');
+    WriteLn('/A           Kopjon skedarë me atributin e arkivit të vendosur,');
+    WriteLn('             nuk ndryshon atributin.');
+    WriteLn('/P           Kërkon konfirmim para se të krijojë çdo skedar destinacion.');
+    WriteLn('/W           Kërkon të shtypni një çelës para se të kopjoni.');
+   End;
+   _Portuguese:Begin
+    WriteLn('Copia arquivos (exceto arquivos ocultos e do sistema) e árvores de diretórios.');
+    WriteLn;
+    WriteLn('XCOPY origem [destino] [/A] [/P] [/W]');
+    WriteLn;
+    WriteLn('origem       Especifica os arquivos a serem copiados.');
+    WriteLn('destino      Especifica a localização e/ou nome dos novos arquivos.');
+    WriteLn('/A           Copia arquivos com o atributo de arquivo definido,');
+    WriteLn('             não altera o atributo.');
+    WriteLn('/P           Solicita confirmação antes de criar cada arquivo de destino.');
+    WriteLn('/W           Solicita pressionar uma tecla antes de copiar.');
+   End;
+   _Swedish:Begin
+    WriteLn('Kopierar filer (utom dolda och systemfiler) och katalogträd.');
+    WriteLn;
+    WriteLn('XCOPY källa [mål] [/A] [/P] [/W]');
+    WriteLn;
+    WriteLn('källa        Anger filerna som ska kopieras.');
+    WriteLn('mål          Anger platsen och/eller namnet på nya filer.');
+    WriteLn('/A           Kopierar filer med arkivattributet inställt,');
+    WriteLn('             ändrar inte attributet.');
+    WriteLn('/P           Frågar innan varje målfil skapas.');
+    WriteLn('/W           Frågar att trycka på en tangent innan kopiering.');
+   End;
+   _Danish:Begin
+    WriteLn('Kopierer filer (undtagen skjulte og systemfiler) og mappestrukturer.');
+    WriteLn;
+    WriteLn('XCOPY kilde [destination] [/A] [/P] [/W]');
+    WriteLn;
+    WriteLn('kilde        Angiver filerne der skal kopieres.');
+    WriteLn('destination  Angiver placeringen og/eller navnet på nye filer.');
+    WriteLn('/A           Kopierer filer med arkivattributten sat,');
+    WriteLn('             ændrer ikke attributten.');
+    WriteLn('/P           Spørger før hver destinationsfil oprettes.');
+    WriteLn('/W           Spørger om at trykke på en tast før kopiering.');
+   End;
+   _Japanese:Begin
+    WriteLn('Fairu (kakureta fairu to shisutemu fairu ijo) to direkutori tsuri wo kopi shimasu.');
+    WriteLn;
+    WriteLn('XCOPY gensen [mokutekichi] [/A] [/P] [/W]');
+    WriteLn;
+    WriteLn('gensen       Kopi suru fairu wo shitei shimasu.');
+    WriteLn('mokutekichi  Atarashi fairu no basho oyobi/mata wa namae wo shitei shimasu.');
+    WriteLn('/A           Akaibu zokusei ga setto sareta fairu wo kopi shimasu,');
+    WriteLn('             zokusei wa kaemasen.');
+    WriteLn('/P           Kakaku mokuteki fairu wo sakusei suru mae ni kakunin wo motomemasu.');
+    WriteLn('/W           Kopi mae ni kii wo osu you ni motomemasu.');
    End;
    Else Begin
     WriteLn('XCOPY : Cette commande permet de copier des fichiers.');

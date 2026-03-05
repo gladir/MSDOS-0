@@ -9,7 +9,7 @@ Program Tree;
 Uses DOS;
 
 Var
- Language:(_French,_English,_Germany,_Italian,_Spain);
+ Language:(_French,_English,_Germany,_Italian,_Spain,_Albanian,_Portuguese,_Swedish,_Danish,_Japanese);
  TmpLanguage:String;
  LevelState:Array[0..255]of Boolean;
  I:Byte;
@@ -99,7 +99,12 @@ BEGIN
   If StrToUpper(Copy(TmpLanguage,1,2))='EN'Then Language:=_English Else
   If StrToUpper(Copy(TmpLanguage,1,2))='GR'Then Language:=_Germany Else
   If StrToUpper(Copy(TmpLanguage,1,2))='IT'Then Language:=_Italian Else
-  If StrToUpper(Copy(TmpLanguage,1,2))='SP'Then Language:=_Spain;
+  If StrToUpper(Copy(TmpLanguage,1,2))='SP'Then Language:=_Spain Else
+  If StrToUpper(Copy(TmpLanguage,1,2))='AL'Then Language:=_Albanian Else
+  If StrToUpper(Copy(TmpLanguage,1,2))='PT'Then Language:=_Portuguese Else
+  If StrToUpper(Copy(TmpLanguage,1,2))='SV'Then Language:=_Swedish Else
+  If StrToUpper(Copy(TmpLanguage,1,2))='DA'Then Language:=_Danish Else
+  If StrToUpper(Copy(TmpLanguage,1,2))='JA'Then Language:=_Japanese;
  End;
  If(ParamStr(1)='/?')or(ParamStr(1)='--help')or(ParamStr(1)='-h')Then Begin
   Case Language of
@@ -112,6 +117,41 @@ BEGIN
     WriteLn('Grahpically displays the directory structure of a drive or path.');
     WriteLn;
     WriteLn('TREE [drive:][path]');
+   End;
+   _Italian:Begin
+    WriteLn('Visualizza graficamente la struttura delle directory di un''unità o percorso.');
+    WriteLn;
+    WriteLn('TREE [unità:][percorso]');
+   End;
+   _Spain:Begin
+    WriteLn('Muestra gráficamente la estructura de directorios de una unidad o ruta.');
+    WriteLn;
+    WriteLn('TREE [unidad:][ruta]');
+   End;
+   _Albanian:Begin
+    WriteLn('Shfaq në mënyrë grafike strukturën e drejtorive të një disku ose shtegu.');
+    WriteLn;
+    WriteLn('TREE [disku:][shtegu]');
+   End;
+   _Portuguese:Begin
+    WriteLn('Exibe graficamente a estrutura de diretórios de uma unidade ou caminho.');
+    WriteLn;
+    WriteLn('TREE [unidade:][caminho]');
+   End;
+   _Swedish:Begin
+    WriteLn('Visar grafiskt katalogstrukturen för en enhet eller sökväg.');
+    WriteLn;
+    WriteLn('TREE [enhet:][sökväg]');
+   End;
+   _Danish:Begin
+    WriteLn('Viser grafisk mappestrukturen for et drev eller sti.');
+    WriteLn;
+    WriteLn('TREE [drev:][sti]');
+   End;
+   _Japanese:Begin
+    WriteLn('Doraibu ya pasuuei no direkutori kouzou wo gurafiku hyouji shimasu.');
+    WriteLn;
+    WriteLn('TREE [doraibu:][pasuuei]');
    End;
    Else Begin
     WriteLn('TREE : Cette commande permet d''afficher un arbre de repertoire.');
