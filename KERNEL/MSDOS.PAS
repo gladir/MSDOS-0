@@ -738,6 +738,11 @@ Procedure SetCurrentPSP(PSP: Word);Near;Forward;
 Function GetVerifyFlag: Byte;Near;Forward;
 Procedure SetVerifyFlag(Flag: Byte);Near;Forward;
 
+Function CSeg: Word;Assembler;
+ASM
+ MOV AX,CS
+END;
+
 Procedure BEGIN_KERNEL;
 Var 
  I:Byte;
@@ -1141,8 +1146,8 @@ Procedure Intr1Ah;Assembler;ASM
  POP BP
  IRET
  
-@TimeHigh DW 0    { Partie haute du compteur de ticks }
-@TimeLow  DW 0    { Partie basse du compteur de ticks }
+@TimeHigh: DW 0    { Partie haute du compteur de ticks }
+@TimeLow:  DW 0    { Partie basse du compteur de ticks }
 END;
 
 Procedure Intr20h;
