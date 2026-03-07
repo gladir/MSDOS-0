@@ -467,15 +467,15 @@ End;
 {$ENDIF}
 
 { Déclarations Forward }
-Procedure Intr1Ah;Forward;
-Procedure Intr20h;Forward;
-Procedure Intr21h;Forward;
-Procedure Intr25h;Forward;
-Procedure Intr26h;Forward;
-Procedure Intr28h;Forward;
-Procedure Intr2Ah;Forward;
-Procedure Intr2Fh;Forward;
-Procedure Intr33h;Forward;
+Procedure Intr1Ah;{$IFNDEF FPC}Interrupt;{$ENDIF}Forward;
+Procedure Intr20h;{$IFNDEF FPC}Interrupt;{$ENDIF}Forward;
+Procedure Intr21h;{$IFNDEF FPC}Interrupt;{$ENDIF}Forward;
+Procedure Intr25h;{$IFNDEF FPC}Interrupt;{$ENDIF}Forward;
+Procedure Intr26h;{$IFNDEF FPC}Interrupt;{$ENDIF}Forward;
+Procedure Intr28h;{$IFNDEF FPC}Interrupt;{$ENDIF}Forward;
+Procedure Intr2Ah;{$IFNDEF FPC}Interrupt;{$ENDIF}Forward;
+Procedure Intr2Fh;{$IFNDEF FPC}Interrupt;{$ENDIF}Forward;
+Procedure Intr33h;{$IFNDEF FPC}Interrupt;{$ENDIF}Forward;
 
 { Déclarations des fonctions DOS }
 Function DOS4Eh_FindFirstFile(Path:String;Attr:Byte;var DTA:DTAStruct):Word;Forward;
@@ -738,13 +738,10 @@ Procedure SetCurrentPSP(PSP: Word);Near;Forward;
 Function GetVerifyFlag: Byte;Near;Forward;
 Procedure SetVerifyFlag(Flag: Byte);Near;Forward;
 
-Function CSeg: Word;Assembler;
-ASM
- MOV AX,CS
-END;
+Function CSeg: Word;Near;Forward;
 
 Procedure BEGIN_KERNEL;
-Var 
+Var
  I:Byte;
  IntSeg, IntOfs: Word;
 Begin
@@ -1071,72 +1068,72 @@ END;
 
 Procedure Intr1Ah;Assembler;ASM
  { INT 1Ah - Time of Day Services (Services d'horloge temps réel) }
- { 
+ {
    AH = 00h : Read System Time (lire l'heure système)
          Retour : CX:DX = nombre de ticks depuis minuit
                  AL = 1 si passage à minuit depuis dernier appel
    AH = 01h : Set System Time (fixer l'heure système)
          Entrée : CX:DX = nombre de ticks depuis minuit
-   
+
    1 tick = 1/18.2 seconde (environ 55ms)
    1440 minutes * 60 secondes * 18.2 ticks = 1573040 ticks par jour
  }
- 
+
  PUSH BP
  MOV BP,SP
  PUSH DS
  PUSH ES
- 
+
  { Sauvegarder les registres modifiés }
  PUSH BX
  PUSH SI
  PUSH DI
- 
+
  MOV AX,CS
  MOV DS,AX
- 
+
  CMP AH,00h
  JE @ReadTime
- CMP AH,01h 
+ CMP AH,01h
  JE @SetTime
  JMP @Exit
- 
+
 @ReadTime:
  { Lire l'heure système - simulation basée sur un compteur }
  { Pour simplicité, on retourne une valeur incrémentée }
  MOV CX,WORD PTR CS:[@TimeHigh]
  MOV DX,WORD PTR CS:[@TimeLow]
- 
+
  { Incrémenter le compteur pour simulation }
  ADD DX,1
  ADC CX,0
- 
+
  { Vérifier si on dépasse 24h (1573040 ticks) }
  CMP CX,18h      { 1573040 = 0x180070 }
  JB @NoMidnight
  CMP DX,0070h
  JB @NoMidnight
- 
+
  { Passage à minuit - reset à 0 }
  MOV CX,0
  MOV DX,0
  MOV AL,1        { Indiquer passage à minuit }
  JMP @SaveAndExit
- 
+
 @NoMidnight:
  MOV AL,0        { Pas de passage à minuit }
- 
+
 @SaveAndExit:
  MOV WORD PTR CS:[@TimeHigh],CX
  MOV WORD PTR CS:[@TimeLow],DX
  JMP @Exit
- 
+
 @SetTime:
  { Fixer l'heure système }
  MOV WORD PTR CS:[@TimeHigh],CX
  MOV WORD PTR CS:[@TimeLow],DX
  JMP @Exit
- 
+
 @Exit:
  POP DI
  POP SI
@@ -1145,7 +1142,7 @@ Procedure Intr1Ah;Assembler;ASM
  POP DS
  POP BP
  IRET
- 
+
 @TimeHigh: DW 0    { Partie haute du compteur de ticks }
 @TimeLow:  DW 0    { Partie basse du compteur de ticks }
 END;
@@ -11478,6 +11475,11 @@ Procedure GetIntVec(_AL:Byte;Var _DS,_DX:Word);Assembler;ASM
   LES DI,_DS               { Adresse de _DS }
   MOV ES:[DI],AX
  POP ES
+END;
+
+Function CSeg: Word;Assembler;
+ASM
+ MOV AX,CS
 END;
 
 Procedure END_KERNEL;Begin
