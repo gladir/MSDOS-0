@@ -259,6 +259,7 @@ SET LANGUAGE=SQ
 <ul>
 	<li>Les commandes DISKCOMP, DISKCOPY, FDISK, RECOVER, SCANDISK et FORMAT on été amélioré par rapport à la version originale de Microsoft en proposant d'appliquer les changements sur un fichier d'image disque plutôt que directement sur un unité de disque.</li>
 	<li>Une commande externe TYPE (mais pas la commande dans COMMAND.COM) a été bonifié du paramètre /GWBASIC afin de permettre l'affichage des fichiers compressés sauvegarder par le GWBASIC.</li>
+	<li>La commande "SYS" a été bonifié des paramètres /DOS:famille et /IMG:fichier afin d'etre compatibilité à la plupart des DOS et offre la possibilité d'installer les fichiers de démarrage directement sur une image disque.</li>
 </ul>
 
 <h2>Compilation</h2>
