@@ -92,6 +92,10 @@ Voici la liste des différents fichiers proposés dans MSDOS-0 :
 			<td>Cette commande permet de lancer l'éditeur en ligne de commande.</td>
 		</tr>
 		<tr>
+			<td><b>EMM386.PAS</b></td>
+			<td>Cette commande permet de gérer la mémoire paginée (EMS 4.0), de fournir des blocs de mémoire haute (UMB) et le support VCPI à partir de la mémoire étendue (XMS), en basculant le processeur en mode virtuel 8086. Cette commande est inspirée de <i>EMM386.EXE</i> de MS-DOS 6.0.</td>
+		</tr>
+		<tr>
 			<td><b>EXE2BIN.PAS</b></td>
 			<td>Cette commande permet de convertir un fichier EXE en binaire (COM).</td>
 		</tr>
