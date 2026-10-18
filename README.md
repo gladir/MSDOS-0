@@ -132,6 +132,10 @@ Voici la liste des différents fichiers proposés dans MSDOS-0 :
 			<td>Cette commande permet de lancer un interpréteur BASIC étant un clone du GWBASIC.</td>
 		</tr>
 		<tr>
+			<td><b>INTERLNK.PAS</b></td>
+			<td>Cette commande permet de relier deux ordinateurs par un câble série ou parallèle afin de rediriger les lecteurs de disque et les imprimantes de l'autre ordinateur (serveur). Cette commande est inspirée de <i>INTERLNK.EXE</i> de MS-DOS 6.0.</td>
+		</tr>
+		<tr>
 			<td><b>JOIN.PAS</b></td>
 			<td>Cette commande permet de créer un disque virtuel à partir d'un répertoire.</td>
 		</tr>
