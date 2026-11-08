@@ -82,10 +82,10 @@ Lancement des programmes de MSDOS-0 sous le noyau (emulateur DEVENV, sans argume
 -----------------------------------------------------------------------------------------------
 49 programmes sur 60 compilent avec TPC ; les 11 autres (FASTOPEN, FDISK, FORMAT, GWBASIC, INTERLNK, INTERSVR, LINK,
 MSAV, SCANDISK, TYPE, UNDELETE) sont refuses par TPC (limites du compilateur, pas du noyau).
-Sur les 49 : aucun plantage du noyau, aucune erreur d'execution ; 32 rendent la main au prompt, 15 attendent une saisie
-(BASIC, DEBUG, EDLIN, EDIT, DOSSHELL, MORE, SORT, CHOICE, MSD, EXPAND... lecture du clavier / de l'entree standard),
-MSMOUSE sonde un materiel souris absent de l'emulateur.
-Exception : SHARE s'installe en accrochant INT 21h avec une procedure ordinaire qui ne se termine pas par IRET
+Sur les 49 : 36 rendent la main au prompt, 11 attendent une saisie (BASIC, DEBUG, EDLIN, EDIT, DOSSHELL, MORE, SORT,
+CHOICE, MSD, EXPAND, RESTORE : lecture du clavier / de l'entree standard), MSMOUSE sonde un materiel souris absent de
+l'emulateur, aucune erreur d'execution.
+Seul plantage : SHARE s'installe en accrochant INT 21h avec une procedure ordinaire qui ne se termine pas par IRET
 (bogue du programme SHARE.PAS, pas du noyau) : le premier appel INT 21h suivant s'echappe en memoire.
 Bogues de programmes corriges : CHKDSK (numero de lecteur INT 25h decale), BACKUP (Reset en lecture/ecriture sur IO.SYS
 en lecture seule : FileMode:=0).
