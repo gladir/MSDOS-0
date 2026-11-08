@@ -9076,6 +9076,11 @@ Var
  First,Cur,Off,CSize,N:Word;
 Begin
  DOS42h_SeekFile:=$FFFFFFFF;
+ { peripheriques (CON, AUX, PRN...) : le positionnement reussit et rend 0, comme sous MS-DOS }
+ If Handle<5 Then Begin
+  DOS42h_SeekFile:=0;
+  Exit;
+ End;
  If (Handle>=20) Or Not GetFileTableInUse(Handle) Then Begin
   SetStandardError(6);
   Exit;

@@ -77,3 +77,17 @@ Corrections de TPC (resume)
 interrupt, assembler sans cadre, ABI TP7 (pas de lien statique), @Proc/Ofs/Seg, assembleur integre etendu, references
 en avant, edition de liens intelligente, segment noyau avec recopie du runtime, donnees en ligne, appel du hook Crt,
 optimisations de taille (DOC/TPC_OPTIMISATIONS.txt), Write/WriteLn d'une chaine globale sans push/pop ds.
+
+Lancement des programmes de MSDOS-0 sous le noyau (emulateur DEVENV, sans argument puis avec /?)
+-----------------------------------------------------------------------------------------------
+49 programmes sur 60 compilent avec TPC ; les 11 autres (FASTOPEN, FDISK, FORMAT, GWBASIC, INTERLNK, INTERSVR, LINK,
+MSAV, SCANDISK, TYPE, UNDELETE) sont refuses par TPC (limites du compilateur, pas du noyau).
+Sur les 49 : aucun plantage du noyau, aucune erreur d'execution ; 32 rendent la main au prompt, 15 attendent une saisie
+(BASIC, DEBUG, EDLIN, EDIT, DOSSHELL, MORE, SORT, CHOICE, MSD, EXPAND... lecture du clavier / de l'entree standard),
+MSMOUSE sonde un materiel souris absent de l'emulateur.
+Exception : SHARE s'installe en accrochant INT 21h avec une procedure ordinaire qui ne se termine pas par IRET
+(bogue du programme SHARE.PAS, pas du noyau) : le premier appel INT 21h suivant s'echappe en memoire.
+Bogues de programmes corriges : CHKDSK (numero de lecteur INT 25h decale), BACKUP (Reset en lecture/ecriture sur IO.SYS
+en lecture seule : FileMode:=0).
+Noyau : INT 25h/26h reecrits (passent par les fonctions internes F2h/F3h de INT 21h), 31h (TSR), 42h sur les
+peripheriques (CON, AUX...) rend 0 comme MS-DOS, EXEC .EXE avec MaxAlloc.
