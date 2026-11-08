@@ -33,6 +33,17 @@ de repertoire de chaque handle est memorise dans Data.DataMOS (FxBase = 2486, 20
 Verification : python3 KERNEL/FATLS.py /tmp/kerneltest.img [FICHIER1 FICHIER2] liste l'image FAT12 ecrite par
 l'emulateur et compare deux fichiers.
 
+Demarrage reel (MBR -> VBR -> IO.SYS -> COMMAND.EXE) : VALIDE
+---------------------------------------------------------------
+* DEVENV /KERNELTEST,dossier /KTBOOT : image FAT16 256 Mo (MBR + VBR, 63 secteurs caches), le secteur 0 est
+  execute en 0000:7C00. Le VBR ne charge que 3 secteurs d'IO.SYS ; le chargeur (debut de BEGIN_KERNEL)
+  relit le reste depuis la racine. IO.SYS (~50 Ko) recouvre la pile du VBR (0000:7C00) et le BPB : le chargeur
+  copie les champs du BPB en local puis passe sur une pile privee 9000:FFF0 ou le noyau continue.
+* Meme resultat dans un onglet emulateur de DEVENV : Start-KernelDos -Path dossier [-ImagePath img] (teste sous
+  Linux/Xvfb, frappes injectees par XTEST) : ver, dir, md, copy vers sous-repertoire, cd, dir . et .. fonctionnent.
+* DEVENV.PAS : Kdos_ScanRecursive utilise DirectorySeparator (Start-KernelDos echouait sous Linux).
+* COMMAND.PAS : DIR d'un repertoire sans caractere generique liste son contenu.
+
 Ce qui ne marche pas encore
 ---------------------------
 * Redirection ">" de COMMAND (ECHO ... > fichier cree le fichier mais ecrit a l'ecran) : il faut 45h (DUP) et

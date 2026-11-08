@@ -802,6 +802,14 @@ Begin
  Until CurrParam='';
  CurrDrive:=Path2Drive(ShowDir);
  CurrLabel:=GetDiskLabel(Byte(CurrDrive)-64);
+ { Un repertoire sans caractere generique : lister son contenu }
+ If(Pos('*',ShowDir)=0)and(Pos('?',ShowDir)=0)Then Begin
+  If ShowDir[Length(ShowDir)]='\'Then ShowDir:=ShowDir+'*.*'
+  Else Begin
+   FindFirst(ShowDir,AnyFile,Info);
+   If(DosError=0)and(Info.Attr and Directory=Directory)Then ShowDir:=ShowDir+'\*.*';
+  End;
+ End;
  P:=0;
  FindFirst(ShowDir,AnyFile,Info);
  If(Width)in(Column)Then While DOSError=0 do Begin
