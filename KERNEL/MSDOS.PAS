@@ -496,6 +496,8 @@ Procedure SetFindState(Var State:FindFileState);Near;Forward;
 { Fonctions FAT pour Find File }
 Function GetRootDirectorySector:Word;Near;Forward;
 Function GetRootDirectorySize:Word;Near;Forward;
+Function RootSectorOf(Drive:Byte):Word;Near;Forward;
+Function RootSizeOf(Drive:Byte):Word;Near;Forward;
 Function ReadSectorSimple(Sector:Word;Var Buffer):Boolean;Near;Forward;
 Function WriteSectorSimple(Sector:Word;Var Buffer):Boolean;Near;Forward;
 
@@ -9129,7 +9131,6 @@ Begin
   Exit;
  End;
  BufParts(Buf,S,O);
-{$IFDEF KDEBUG}DbgW('w',S);DbgW('o',O);DbgW('m',Mem[S:O]);DbgW('n',Count);{$ENDIF}
  For I:=0 To Count-1 Do ConPutChar(Mem[S:O+I]);
  Got:=Count;
  WriteInt21:=0;
@@ -9318,143 +9319,81 @@ End;
 { Convertit un nom de fichier DOS 8.3 en chaîne }
 Function DOS83ToString(DOS83:Array of Char):String;
 Var
- Result: String;
- I: Byte;
+ S: String;
+ I, N: Byte;
 Begin
- Result:='';
-
- { Nom principal (8 caractères max) }
+ N:=0;
  For I:=0 To 7 Do Begin
-  If DOS83[I] <> ' ' Then Result:=Result + DOS83[I]
-  Else Break;
+  If DOS83[I] = ' ' Then Break;
+  Inc(N);
+  S[N]:=DOS83[I];
  End;
-
- { Extension (3 caractères max) }
  If DOS83[8] <> ' ' Then Begin
-  Result:=Result + '.';
+  Inc(N);
+  S[N]:='.';
   For I:=8 To 10 Do Begin
-   If DOS83[I] <> ' ' Then Result:=Result + DOS83[I]
-   Else Break;
+   If DOS83[I] = ' ' Then Break;
+   Inc(N);
+   S[N]:=DOS83[I];
   End;
  End;
-
- DOS83ToString:=Result;
+ S[0]:=Chr(N);
+ DOS83ToString:=S;
 End;
 
 { Fonctions FAT pour accès au répertoire racine }
 
 { Obtient le secteur de début du répertoire racine }
-Function GetRootDirectorySector:Word;
+Function RootSectorOf(Drive:Byte):Word;
 Var
  BootSec: BootSectorRec;
- Drive: Byte;
 Begin
- GetRootDirectorySector:=0;
-
- { Utiliser le lecteur courant }
- ASM
-  MOV AL,Data.DataMOS.CurrDisk
-  MOV Drive,AL
- END;
-
- { Lire le boot sector - implémentation simplifiée }
- { Pour l'instant, retourner des valeurs par défaut pour FAT12 }
- If Drive <= 1 Then Begin { A: ou B: - disquettes }
-  GetRootDirectorySector:=19; { Secteur typique pour disquette 1.44MB }
- End Else Begin { C: et plus - disques durs }
-  GetRootDirectorySector:=33; { Secteur typique pour disque dur FAT16 }
- End;
+ RootSectorOf:=0;
+ If ReadBootSector(Drive,BootSec) Then
+  RootSectorOf:=BootSec.ReservedSectors+BootSec.NumberOfFATs*BootSec.SectorsPerFAT;
 End;
 
-{ Obtient la taille du répertoire racine en secteurs }
-Function GetRootDirectorySize:Word;
+Function RootSizeOf(Drive:Byte):Word;
 Var
  BootSec: BootSectorRec;
+Begin
+ RootSizeOf:=0;
+ If ReadBootSector(Drive,BootSec) Then
+  RootSizeOf:=(BootSec.RootDirEntries*32+511) Div 512;
+End;
+
+Function GetRootDirectorySector:Word;
+Var
  Drive: Byte;
 Begin
- GetRootDirectorySize:=0;
-
- { Utiliser le lecteur courant }
  ASM
   MOV AL,Data.DataMOS.CurrDisk
   MOV Drive,AL
  END;
+ GetRootDirectorySector:=RootSectorOf(Drive);
+End;
 
- { Retourner des valeurs par défaut selon le type de lecteur }
- If Drive <= 1 Then Begin { A: ou B: - disquettes }
-  GetRootDirectorySize:=14; { 224 entrées * 32 bytes / 512 = 14 secteurs }
- End Else Begin { C: et plus - disques durs }
-  GetRootDirectorySize:=32; { 512 entrées * 32 bytes / 512 = 32 secteurs }
- End;
+Function GetRootDirectorySize:Word;
+Var
+ Drive: Byte;
+Begin
+ ASM
+  MOV AL,Data.DataMOS.CurrDisk
+  MOV Drive,AL
+ END;
+ GetRootDirectorySize:=RootSizeOf(Drive);
 End;
 
 { Lecture simplifiée d'un secteur pour Find File }
 Function ReadSectorSimple(Sector:Word;Var Buffer):Boolean;
 Var
- DriveNum: Byte;
- Head, Track, SectorNum: Byte;
- ReadSuccess: Byte;
- Result: Boolean;
+ Drive: Byte;
 Begin
- Result := False;
- ReadSuccess := 0;
-
- { Calculer les paramètres CHS pour le lecteur C: (disque dur) }
- DriveNum := $80;  { Premier disque dur }
-
- { Conversion LBA vers CHS (supposons géométrie standard 63 secteurs/piste, 16 têtes) }
- Head := (Sector DIV 63) MOD 16;
- Track := Sector DIV (63 * 16);
- SectorNum := (Sector MOD 63) + 1;  { Les secteurs commencent à 1 }
-
- { Préparer les registres pour INT 13h, fonction 02h (lecture secteur) }
  ASM
-  { Sauvegarder les registres importants }
-  PUSH AX
-  PUSH BX
-  PUSH CX
-  PUSH DX
-  PUSH ES
-
-  { Paramètres pour INT 13h fonction 02h }
-  MOV AH, 02h           { Fonction lecture secteur }
-  MOV AL, 1             { Nombre de secteurs à lire }
-  MOV DL, DriveNum      { Lecteur }
-  MOV DH, Head          { Tête }
-  MOV CH, Track         { Piste (cylindre) }
-  MOV CL, SectorNum     { Secteur }
-
-  { Pointer ES:BX vers le buffer }
-  LES BX, Buffer
-
-  { Appeler l'interruption BIOS }
-  INT 13h
-
-  { Vérifier le résultat (CF=0 si succès) }
-  JC @ReadError
-
-  { Succès }
-  MOV ReadSuccess, 1
-  JMP @ReadDone
-
-@ReadError:
-  { Erreur }
-  MOV ReadSuccess, 0
-
-@ReadDone:
-  { Restaurer les registres }
-  POP ES
-  POP DX
-  POP CX
-  POP BX
-  POP AX
+  MOV AL,Data.DataMOS.CurrDisk
+  MOV Drive,AL
  END;
-
- { Assigner le résultat }
- Result := (ReadSuccess <> 0);
-
- { Retourner le résultat final }
- ReadSectorSimple := Result;
+ ReadSectorSimple:=ReadSector(Drive,Sector,@Buffer);
 End;
 
 { Écriture simplifiée d'un secteur avec vérification optionnelle }
@@ -9689,7 +9628,8 @@ Begin
    End;
 
    { Vérifier les attributs }
-   If (DirEntry.Attributes And $08) <> 0 Then Begin { Volume Label }
+   { masque d'attributs DOS : fichiers normaux + ceux demandes (cache 02, systeme 04, volume 08, repertoire 10) }
+   If (DirEntry.Attributes And $1E And (Not Attr)) <> 0 Then Begin
     Inc(EntryIndex);
     Continue;
    End;
@@ -9699,18 +9639,6 @@ Begin
 
    { Vérifier si le nom correspond au masque }
    If MatchFileName(FileName,FindState.SearchMask) Then Begin
-    { Vérifier les attributs }
-    If (Attr And $10) <> 0 Then Begin { Chercher répertoires }
-     If (DirEntry.Attributes And $10) = 0 Then Begin
-      Inc(EntryIndex);
-      Continue; { Pas un répertoire }
-     End;
-    End Else Begin { Chercher fichiers }
-     If (DirEntry.Attributes And $10) <> 0 Then Begin
-      Inc(EntryIndex);
-      Continue; { Pas un fichier }
-     End;
-    End;
 
     { Fichier trouvé ! Remplir la DTA }
     FillChar(DTA.Reserved,21,0);
@@ -9787,7 +9715,8 @@ Begin
    End;
 
    { Vérifier les attributs }
-   If (DirEntry.Attributes And $08) <> 0 Then Begin { Volume Label }
+   { masque d'attributs DOS : fichiers normaux + ceux demandes (cache 02, systeme 04, volume 08, repertoire 10) }
+   If (DirEntry.Attributes And $1E And (Not FindState.SearchAttr)) <> 0 Then Begin
     Inc(EntryIndex);
     Continue;
    End;
@@ -9797,18 +9726,6 @@ Begin
 
    { Vérifier si le nom correspond au masque }
    If MatchFileName(FileName,FindState.SearchMask) Then Begin
-    { Vérifier les attributs }
-    If (FindState.SearchAttr And $10) <> 0 Then Begin { Chercher répertoires }
-     If (DirEntry.Attributes And $10) = 0 Then Begin
-      Inc(EntryIndex);
-      Continue; { Pas un répertoire }
-     End;
-    End Else Begin { Chercher fichiers }
-     If (DirEntry.Attributes And $10) <> 0 Then Begin
-      Inc(EntryIndex);
-      Continue; { Pas un fichier }
-     End;
-    End;
 
     { Fichier trouvé ! Remplir la DTA }
     FillChar(DTA.Reserved,21,0);
@@ -10451,10 +10368,7 @@ Begin
  { Dans un système complet, on suivrait la chaîne de clusters }
 
  { Calculer le secteur de début du répertoire racine }
- If Drive <= 1 Then
-  RootSector := 19  { Disquettes }
- Else
-  RootSector := 33; { Disques durs }
+ RootSector := RootSectorOf(Drive);
 
  { Parcourir les secteurs du répertoire racine }
  For Sector := RootSector To RootSector + 31 Do Begin { Max 32 secteurs }
@@ -10498,10 +10412,7 @@ Begin
  UpdateDirectoryEntryName := False;
 
  { Calculer le secteur et l'index de l'entrée }
- If Drive <= 1 Then
-  RootSector := 19
- Else
-  RootSector := 33;
+ RootSector := RootSectorOf(Drive);
 
  TargetSector := RootSector + (EntryOffset DIV 16);
  EntryIndex := EntryOffset MOD 16;
