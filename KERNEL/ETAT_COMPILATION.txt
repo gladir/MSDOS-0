@@ -30,7 +30,8 @@ manipulees dans le tampon du secteur. Fonctions : 39h MD, 3Ah RD, 3Bh CD, 3Ch cr
 3Eh fermer (met a jour taille et premier cluster), 40h ecrire, 41h supprimer, 47h repertoire courant,
 4Eh/4Fh recherche, 56h renommer, 5Bh creer (echec si existe), 36h espace libre. L'emplacement de l'entree
 de repertoire de chaque handle est memorise dans Data.DataMOS (FxBase = 2486, 20 x 5 octets).
-Verifie avec un lecteur FAT12 externe (KERNEL/../fatls.py n'est pas fourni : comparer l'image du disque).
+Verification : python3 KERNEL/FATLS.py /tmp/kerneltest.img [FICHIER1 FICHIER2] liste l'image FAT12 ecrite par
+l'emulateur et compare deux fichiers.
 
 Ce qui ne marche pas encore
 ---------------------------
