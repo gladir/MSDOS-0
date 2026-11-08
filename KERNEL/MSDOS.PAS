@@ -10918,8 +10918,9 @@ Begin
    Else If C=8 Then Begin
     If N>0 Then Begin Dec(N); ConPutChar(8); ConPutChar(32); ConPutChar(8); End;
    End
-   Else If (C>=32) And (N<Count-2) Then Begin
-    Mem[S:O+N]:=C; Inc(N); ConPutChar(C);
+   Else If ((C>=32) Or (C=26)) And (N<Count-2) Then Begin
+    Mem[S:O+N]:=C; Inc(N);
+    If C=26 Then Begin ConPutChar(94); ConPutChar(90) End Else ConPutChar(C);
    End;
   Until False;
  End;
