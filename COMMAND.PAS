@@ -23,6 +23,8 @@ Var
  TmpLanguage:String;
  Pipe,PipeToCommand:Boolean;
  PipeFile:Text;
+ RedirOut,RedirIn:String;
+ RedirAppend,OutRedir,InRedir:Boolean;
  InCmd:Byte;
  Option:(optNone,optCommand);
  Echo:Boolean;
@@ -256,37 +258,6 @@ Begin
   If Not(CmdStr[I]in['A'..'Z','a'..'z','_','-','0'..'9'])Then Begin
    CurrCommand:=StrToUpper(Copy(CmdStr,1,I-1));
    ParamList:=TrimL(Copy(CmdStr,I,255));
-   For J:=1 to Length(ParamList)do Begin
-    Case ParamList[J]of
-     '|':Begin
-      If Not(Pipe)Then Begin
-       {$I-}Assign(PipeFile,'COMMAND.TMP');
-       Rewrite(PipeFile);{$I-}
-       If IoResult<>0 Then Begin
-        WriteLn('Tuyau invalide !');
-       End;
-       Pipe:=True;
-      End;
-      PipeToCommand:=True;
-      PipeCommand:=TrimL(Copy(ParamList,J+1,255));
-      If J=1 Then ParamList:=''
-             Else ParamList:=Copy(ParamList,1,J-1);
-     End;
-     '>':Begin
-      If Not(Pipe)Then Begin
-       {$I-}Assign(PipeFile,TrimL(Copy(ParamList,J+1,255)));
-       Rewrite(PipeFile);{$I-}
-       If IoResult<>0 Then Begin
-        WriteLn('Tuyau invalide !');
-       End
-        Else
-       Pipe:=True;
-      End;
-      If J=1 Then ParamList:=''
-             Else ParamList:=Copy(ParamList,1,J-1);
-     End;
-    End;
-   End;
    Exit;
   End;
  End;
@@ -324,9 +295,6 @@ Begin
 End;
 
 Procedure HomeMessage;Begin
- WriteLn;
- WriteLn('MSDOS-0 COMMAND.COM');
- WriteLn('gladir.com 2021. Tous droits reserves.');
  WriteLn;
 End;
 
@@ -1791,12 +1759,118 @@ Begin
  End;
 End;
 
+{ Ouvre un fichier par INT 21h : Mode 0 = lecture, 1 = creation, 2 = ajout ; $FFFF si erreur }
+Function DosOpenFile(Const FileName:String;Mode:Byte):Word;
+Var
+ R:Registers;
+ Z:Array[0..127] of Char;
+ I,H:Word;
+Begin
+ DosOpenFile:=$FFFF;
+ For I:=1 to Length(FileName)do Z[I-1]:=FileName[I];
+ Z[Length(FileName)]:=#0;
+ R.DS:=Seg(Z);R.DX:=Ofs(Z);
+ If Mode=0 Then R.AX:=$3D00 Else
+ If Mode=1 Then Begin R.AH:=$3C;R.CX:=0;End
+           Else R.AX:=$3D01;
+ MsDos(R);
+ If(R.Flags and FCarry)<>0 Then Begin
+  If Mode<>2 Then Exit;
+  R.AH:=$3C;R.CX:=0;R.DS:=Seg(Z);R.DX:=Ofs(Z);
+  MsDos(R);
+  If(R.Flags and FCarry)<>0 Then Exit;
+  DosOpenFile:=R.AX;
+  Exit;
+ End;
+ H:=R.AX;
+ If Mode=2 Then Begin
+  R.AX:=$4202;R.BX:=H;R.CX:=0;R.DX:=0;
+  MsDos(R);
+ End;
+ DosOpenFile:=H;
+End;
+
+Procedure DosCloseFile(H:Word);
+Var
+ R:Registers;
+Begin
+ R.AH:=$3E;R.BX:=H;
+ MsDos(R);
+End;
+
+{ Redirection au niveau DOS (INT 21h 45h/46h) d'un handle standard, pour un programme externe.
+  Saved recoit une copie du handle d'origine. }
+Function DosRedirect(Handle:Word;Const FileName:String;Mode:Byte;Var Saved:Word):Boolean;
+Var
+ R:Registers;
+ H:Word;
+Begin
+ DosRedirect:=False;
+ R.AH:=$45;R.BX:=Handle;
+ MsDos(R);
+ If(R.Flags and FCarry)<>0 Then Exit;
+ Saved:=R.AX;
+ H:=DosOpenFile(FileName,Mode);
+ If H=$FFFF Then Begin
+  DosCloseFile(Saved);
+  Exit;
+ End;
+ R.AH:=$46;R.BX:=H;R.CX:=Handle;
+ MsDos(R);
+ DosCloseFile(H);
+ DosRedirect:=True;
+End;
+
+Procedure DosRestore(Handle,Saved:Word);
+Var
+ R:Registers;
+Begin
+ R.AH:=$46;R.BX:=Saved;R.CX:=Handle;
+ MsDos(R);
+ R.AH:=$3E;R.BX:=Saved;
+ MsDos(R);
+End;
+
+{ Recherche d'un programme : nom tel quel s'il a une extension, sinon .COM puis .EXE, dans le
+  repertoire courant puis dans PATH }
+Function FindProgram(Const Name:String):String;
+Var
+ Dirs,R:String;
+Begin
+ Dirs:='.;'+GetEnv('PATH');
+ FindProgram:='';
+ If Pos('.',Name)>0 Then Begin
+  FindProgram:=FSearch(Name,Dirs);
+  Exit;
+ End;
+ R:=FSearch(Name+'.COM',Dirs);
+ If R='' Then R:=FSearch(Name+'.EXE',Dirs);
+ FindProgram:=R;
+End;
+
 Procedure UnknownCommand;
 Var
  Err:Word;
+ Prog:String;
+ SavedIn,SavedOut:Word;
+ InOk,OutOk:Boolean;
 Begin
- Exec(CurrCommand,ParamList);
+ Prog:=FindProgram(CurrCommand);
+ If Prog=''Then Begin
+  WriteLn('Commande ou nom de fichier non reconnu');
+  WriteLn;
+  Exit;
+ End;
+ InOk:=False;OutOk:=False;
+ If RedirIn<>''Then InOk:=DosRedirect(0,RedirIn,0,SavedIn);
+ If RedirOut<>''Then Begin
+  If RedirAppend Then OutOk:=DosRedirect(1,RedirOut,2,SavedOut)
+                 Else OutOk:=DosRedirect(1,RedirOut,1,SavedOut);
+ End;
+ Exec(Prog,ParamList);
  Err:=DosError;
+ If OutOk Then DosRestore(1,SavedOut);
+ If InOk Then DosRestore(0,SavedIn);
  Case Err of
   0:;
   2:WriteLn('Commande ou nom de fichier non reconnu');
@@ -1805,7 +1879,44 @@ Begin
  WriteLn;
 End;
 
-Procedure RunCommand;
+{ Redirection des commandes internes : le handle du Text Output est remplace par celui du fichier
+  (le Output de CRT n'ecrit directement a l'ecran que pour le handle 1) }
+Var
+ OutHandle:Word;
+ OutHandlePtr:^Word;
+
+Procedure BeginRedirect;
+Var
+ H:Word;
+Begin
+ OutRedir:=False;
+ If RedirOut<>''Then Begin
+  If RedirAppend Then H:=DosOpenFile(RedirOut,2)
+                 Else H:=DosOpenFile(RedirOut,1);
+  If H=$FFFF Then WriteLn('Redirection invalide : ',RedirOut)
+   Else
+  Begin
+   Flush(Output);
+   OutHandlePtr:=@Output;
+   OutHandlePtr^:=H;
+   OutHandle:=H;
+   OutRedir:=True;
+  End;
+ End;
+End;
+
+Procedure EndRedirect;
+Begin
+ If OutRedir Then Begin
+  Flush(Output);
+  OutHandlePtr:=@Output;
+  OutHandlePtr^:=1;
+  DosCloseFile(OutHandle);
+  OutRedir:=False;
+ End;
+End;
+
+Procedure RunSimple;
 Label
  Restart;
 Var
@@ -1829,30 +1940,8 @@ Restart:
  ExtractCommand;
  CommandFound:=False;
  For J:=Low(CommandList) to High(CommandList) do Begin
-  If(PipeToCommand)and(StrToUpper(CurrCommand)='MORE')Then Begin
-   Reset(PipeFile);
-   OY:=1;
-   While Not EOF(PipeFile)do Begin
-    ReadLn(PipeFile,PipeS);
-    WriteLn(PipeS);
-    Inc(OY);
-    If OY=25 Then Begin
-     Write('Presse ESC pour quitter ou une autre touche pour continuer...');
-     If ReadKey=#27 Then Begin
-      WriteLn;
-      Break;
-     End;
-     OY:=1;
-    End;
-   End;
-   Close(PipeFile);
-   Pipe:=False;
-   PipeToCommand:=False;
-   CommandFound:=True;
-   Exit;
-  End
-   Else
   If CurrCommand=CommandList[J]Then Begin
+   BeginRedirect;
    Case(J)of
     0:BreakCommand;
     1:CallCommand;
@@ -1892,29 +1981,13 @@ Restart:
     35:VolCommand;
     36:DateCommand;
    End;
+   EndRedirect;
    If J<=High(CommandList)Then Begin
     CommandFound:=True;
     WriteLn;
     Break;
    End;
   End;
- End;
- If(PipeToCommand)Then Begin
-  If Not(CommandFound)Then Begin
-   WriteLn('Commande non support‚ dans un contexte du tuyau');
-   Exit;
-  End;
-  CmdStr:=PipeCommand;
-  PipeCommand:='';
-  Goto Restart;
- End;
- If(Pipe)Then Begin
-  If Not(CommandFound)Then Begin
-   WriteLn('Redirection non support‚ dans un contexte du tuyau');
-   Exit;
-  End;
-  Pipe:=False;
-  Close(PipeFile);
  End;
  If Not(CommandFound)Then Begin
   If CmdStr='?'Then Begin
@@ -1948,6 +2021,87 @@ Restart:
    Else
   UnknownCommand;
  End;
+End;
+
+{ Retire les redirections > >> < de CmdStr }
+Procedure ParseRedirect;
+Var
+ I,J,Start:Byte;
+ Quote,Ap:Boolean;
+ C:Char;
+ Name:String;
+Begin
+ I:=1;Quote:=False;
+ While I<=Length(CmdStr)Do Begin
+  C:=CmdStr[I];
+  If C='"'Then Begin
+   Quote:=Not Quote;
+   Inc(I);
+  End
+   Else
+  If Not(Quote)and((C='>')or(C='<'))Then Begin
+   Start:=I;Ap:=False;J:=I+1;
+   If(C='>')and(J<=Length(CmdStr))and(CmdStr[J]='>')Then Begin
+    Ap:=True;
+    Inc(J);
+   End;
+   While(J<=Length(CmdStr))and(CmdStr[J]=' ')do Inc(J);
+   Name:='';
+   While(J<=Length(CmdStr))and Not(CmdStr[J]in[' ','<','>'])do Begin
+    Name:=Name+CmdStr[J];
+    Inc(J);
+   End;
+   Delete(CmdStr,Start,J-Start);
+   If C='>'Then Begin
+    RedirOut:=Name;
+    RedirAppend:=Ap;
+   End
+    Else
+   RedirIn:=Name;
+  End
+   Else
+  Inc(I);
+ End;
+End;
+
+Function PipeName(N:Byte):String;
+Begin
+ PipeName:='PIPE'+Chr(48+N)+'.TMP';
+End;
+
+{ Commande complete : tuyaux (|) et redirections (> >> <) }
+Procedure RunCommand;
+Var
+ Segs:Array[1..6]of String;
+ N,I,K:Byte;
+ Q:Boolean;
+ Whole:String;
+ F:File;
+Begin
+ Whole:=CmdStr;
+ N:=1;Segs[1]:='';Q:=False;
+ For K:=1 to Length(Whole)do Begin
+  If Whole[K]='"'Then Q:=Not Q;
+  If(Whole[K]='|')and Not(Q)and(N<6)Then Begin
+   Inc(N);
+   Segs[N]:='';
+  End
+   Else
+  Segs[N]:=Segs[N]+Whole[K];
+ End;
+ For I:=1 to N do Begin
+  CmdStr:=TrimL(Segs[I]);
+  RedirIn:='';RedirOut:='';RedirAppend:=False;
+  If I>1 Then RedirIn:=PipeName(I-1);
+  If I<N Then RedirOut:=PipeName(I);
+  ParseRedirect;
+  RunSimple;
+  If I>1 Then Begin
+   {$I-}Assign(F,PipeName(I-1));Erase(F);{$I+}
+   If IoResult<>0 Then;
+  End;
+ End;
+ RedirIn:='';RedirOut:='';RedirAppend:=False;
 End;
 
 BEGIN
