@@ -100,7 +100,7 @@ Unit MSDOS;
 
 INTERFACE
 
-{$A-}
+{$A-,S-,R-,Q-,I-}
 
 { Constantes pour les codes d'erreur étendus DOS }
 Const
@@ -1089,8 +1089,10 @@ Procedure Intr1Ah;Assembler;ASM
  PUSH SI
  PUSH DI
 
+ PUSH AX                    { AH = fonction : MOV AX,CS la detruirait }
  MOV AX,CS
  MOV DS,AX
+ POP AX
 
  CMP AH,00h
  JE @ReadTime
@@ -4049,7 +4051,7 @@ Procedure Intr21h;Assembler;ASM
  PUSH AX
  PUSH BX
  PUSH SI
- MOV SI,OFFSET DataMOS
+ MOV SI,OFFSET Data
  MOV AL,[SI].DataMOS.ErrorLocus
  MOV CH,AL                  { CH = Locus }
  POP SI
@@ -9187,7 +9189,7 @@ Begin
 
   { Pointer vers la structure Data.DataMOS.FindState }
   MOV SI,OFFSET Data.DataMOS
-  ADD SI,TYPE DataMOS - TYPE FindFileState  { Offset vers FindState }
+  ADD SI,OFFSET DataMOS.FindState  { Offset vers FindState }
 
   { Copier FindState depuis le Code Segment vers la variable paramètre }
   LES DI,State
@@ -9212,7 +9214,7 @@ Begin
   PUSH CS
   POP ES
   MOV DI,OFFSET Data.DataMOS
-  ADD DI,TYPE DataMOS - TYPE FindFileState  { Offset vers FindState }
+  ADD DI,OFFSET DataMOS.FindState  { Offset vers FindState }
 
   { Copier State vers le Code Segment }
   LDS SI,State
@@ -11251,7 +11253,7 @@ Begin
  For I := 0 To 19 Do Begin
   If Not Found Then Begin
    ASM
-    MOV SI,OFFSET DataMOS
+    MOV SI,OFFSET Data
     MOV AX,I
     MOV BX,FileLockEntrySize
     MUL BX
@@ -11284,7 +11286,7 @@ Begin
   { Copier l'entrée depuis le Code Segment }
   ASM
    PUSH DS
-   MOV SI,OFFSET DataMOS
+   MOV SI,OFFSET Data
    MOV AX,I
    MOV BX,FileLockEntrySize
    MUL BX
@@ -11361,7 +11363,7 @@ Begin
 
   { Copier vers le Code Segment }
   ASM
-   MOV SI,OFFSET DataMOS
+   MOV SI,OFFSET Data
    MOV AX,FreeSlot
    MOV BX,FileLockEntrySize
    MUL BX
@@ -11387,7 +11389,7 @@ Begin
    { Copier l'entrée depuis le Code Segment }
    ASM
     PUSH DS
-    MOV SI,OFFSET DataMOS
+    MOV SI,OFFSET Data
     MOV AX,I
     MOV BX,FileLockEntrySize
     MUL BX
@@ -11411,7 +11413,7 @@ Begin
 
     { Libérer le verrou }
     ASM
-     MOV SI,OFFSET DataMOS
+     MOV SI,OFFSET Data
      MOV AX,I
      MOV BX,FileLockEntrySize
      MUL BX

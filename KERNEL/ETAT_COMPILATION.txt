@@ -1,0 +1,83 @@
+ETAT DE LA COMPILATION DU NOYAU PAR TPC (dev-cools/TPC.PAS)
+============================================================
+
+Ce document decrit ou en est KERNEL/MSDOS.PAS avec le clone TPC.PAS du depot
+dev-cools, ce qui a ete corrige, ce qui bloque encore, et le banc d'essai
+pour tester un noyau (DEVENV /KERNELTEST, voir dev-cools/DOC/KERNELTEST.txt).
+
+1. Resultat actuel
+------------------
+* TPC analyse maintenant TOUT MSDOS.PAS (11 491 lignes) sans erreur de syntaxe
+  ni d'identificateur. Plus aucun bogue de "fonctionnalite manquante".
+* La compilation normale s'arrete pourtant sur
+      MSDOS.PAS(10212,23): Erreur 48: Segment de code trop grand
+  car le code genere depasse 64 Ko (limite d'un segment de code 8086).
+  Mesure (compilation avec debordement tolere, TPC_SIZES=1) :
+      code total         : ~78 Ko  (dont ~6 Ko de runtime TPC et ~8 Ko de
+                                     donnees a zero : bloc Data, FileTable...)
+      code du noyau seul : ~72 Ko
+  Avant les optimisations de TPC de cette session : ~92 Ko.
+* Le noyau doit tenir dans UN segment (IO.SYS charge a 0070:0000, appels
+  proches). Il faut donc encore ~10-15 % de reduction, voir section 4.
+
+2. Corrections faites dans TPC.PAS (depot dev-cools, commit 6b65f9a)
+--------------------------------------------------------------------
+* Source > 256 Ko : limite portee a 1 Mo.
+* Directive INTERRUPT ; procedures ASSEMBLER sans parametre ni variable locale
+  sans cadre de pile (comme TP) ; epilogue IRET pour une routine interrupt.
+* ABI Turbo Pascal 7 pour les routines globales (plus de "lien statique"
+  factice) : les appels PUSH args / CALL proc ecrits dans l'assembleur du noyau
+  sont enfin conformes a la convention (l'appelee depile les parametres).
+* Plus de JMP +0 devant chaque routine ; references en avant resolues a la
+  compilation du corps ; @Procedure, Ofs/Seg/Addr(Procedure).
+* Assembleur integre : etiquettes @01Nom, references en avant en operande
+  memoire, DW @Etiq, OFFSET @Etiq, Proc.Type.Champ, [SI].Type.Champ,
+  [Proc + BX], TYPE nom, CS: automatique pour les operandes en segment de
+  code, limites d'etiquettes/references augmentees.
+* Compacite du code genere (-14 %).
+* Verifie sous DOSBox : memes sorties qu'avant sur des programmes de test
+  (recursivite, imbrication, chaines, var, tableaux ouverts, unites, records).
+
+3. Corrections faites dans MSDOS.PAS
+------------------------------------
+* {$A-,S-,R-,Q-,I-} : pas de controle de pile/bornes/debordement (ils
+  appellent le runtime SYSTEM, qui n'existe pas dans IO.SYS).
+* OFFSET DataMOS (type !) -> OFFSET Data (adresse du bloc de donnees).
+* ADD SI,TYPE DataMOS - TYPE FindFileState -> OFFSET DataMOS.FindState.
+* Intr1Ah : MOV AX,CS detruisait AH (numero de fonction) avant CMP AH,00h.
+
+4. Ce qui reste a faire pour demarrer COMMAND.EXE
+-------------------------------------------------
+A. Taille (>64 Ko). Pistes : (1) plus de peepholes dans TPC (resultat de
+   fonction stocke puis recharge, index constant des tableaux/chaines replie
+   dans DI, saut des declarations paresseux) ~ -4 Ko ; (2) alleger le noyau :
+   CurrentDir (26 x 131 octets), FileTable/FileLocks a zero, DataCountry
+   (2 Ko), fonctions rarement utilisees ; (3) deplacer certaines fonctions
+   dans un second segment (mais le noyau actuel suppose un segment unique).
+B. Independance du runtime SYSTEM. Le noyau genere ~480 appels vers ~20
+   routines du runtime (copie des chaines passees par valeur, Move de blocs,
+   comparaisons de chaines, division par zero...). Dans IO.SYS ces appels
+   "pointent dans le beurre". Il faut que TPC place le noyau dans son propre
+   segment virtuel (offset 0 = BEGIN_KERNEL, comme MAKER.PAS le suppose) et
+   en recopie les quelques routines de runtime necessaires (ou qu'on les
+   reecrive dans le noyau).
+C. Donnees : les chaines litterales/constantes typees vont dans DS ; le noyau
+   n'a pas de segment de donnees. Prevoir DS=CS a chaque point d'entree
+   (BEGIN_KERNEL, INT 21h...) et des constantes dans le segment du noyau.
+D. Bogues de logique du noyau deja reperes (a corriger apres A-C) :
+   * Intr21h appelle les fonctions Pascal avec PUSH DX / PUSH DS (offset puis
+     segment) : l'ordre Pascal est segment PUIS offset ; et ajoute "ADD SP,n"
+     alors que l'appelee depile deja les parametres.
+   * Intr20h empile les parametres de SetIntVec(_AL,_DS,_DX) a l'envers.
+   * Les acces a Data par [SI].DataMOS.xxx / MOV DS,Data.DataMOS.xxx
+     utilisent DS : il faut CS:.
+   * @Xit : CF positionne par les gestionnaires est perdu par l'IRET (il faut
+     le recopier dans les FLAGS empiles).
+
+5. Outils
+---------
+* Compilation :   tpc -M MAKER.PAS      (compile MSDOS.PAS puis MAKER.PAS)
+* TPC_SIZES=1 tpc ... : taille de code de chaque routine sur stderr.
+* Banc d'essai : voir dev-cools/DOC/KERNELTEST.txt
+      xvfb-run -a devenv /KERNELTEST,dossier /KTSTEPS:3000000 /KTSCRIPT:s.txt
+  (dossier contenant IO.SYS et COMMAND.EXE ; IO.SYS charge a 0070:0000).
