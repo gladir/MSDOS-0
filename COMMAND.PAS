@@ -6,7 +6,7 @@
 
 Program COMMAND;
 
-{$M 8192,0,0}
+{$M 12288,0,0}
 
 Uses Crt,DOS;
 
@@ -166,6 +166,11 @@ Begin
    End;
    Scan:=Scan+Length(Test);
   End;
+  If Value=''Then Begin
+   { SET VAR= supprime la variable }
+   If Where<>-1 Then Move(mem[EnvirP:Where+Length(OldVar)],mem[EnvirP:Where],Size-Where-Length(OldVar));
+   Exit;
+  End;
   If Where=-1 Then Begin
    Where:=Scan;
    NewVar:=NewVar+#0#0#0;
@@ -185,11 +190,126 @@ Begin
  {$ENDIF}
 End;
 
+{ Ouvre un fichier par INT 21h : Mode 0 = lecture, 1 = creation, 2 = ajout ; $FFFF si erreur }
+Function DosOpenFile(Const FileName:String;Mode:Byte):Word;
+Var
+ R:Registers;
+ Z:Array[0..127] of Char;
+ I,H:Word;
+Begin
+ DosOpenFile:=$FFFF;
+ For I:=1 to Length(FileName)do Z[I-1]:=FileName[I];
+ Z[Length(FileName)]:=#0;
+ R.DS:=Seg(Z);R.DX:=Ofs(Z);
+ If Mode=0 Then R.AX:=$3D00 Else
+ If Mode=1 Then Begin R.AH:=$3C;R.CX:=0;End
+           Else R.AX:=$3D01;
+ MsDos(R);
+ If(R.Flags and FCarry)<>0 Then Begin
+  If Mode<>2 Then Exit;
+  R.AH:=$3C;R.CX:=0;R.DS:=Seg(Z);R.DX:=Ofs(Z);
+  MsDos(R);
+  If(R.Flags and FCarry)<>0 Then Exit;
+  DosOpenFile:=R.AX;
+  Exit;
+ End;
+ H:=R.AX;
+ If Mode=2 Then Begin
+  R.AX:=$4202;R.BX:=H;R.CX:=0;R.DX:=0;
+  MsDos(R);
+ End;
+ DosOpenFile:=H;
+End;
+
+Procedure DosCloseFile(H:Word);
+Var
+ R:Registers;
+Begin
+ R.AH:=$3E;R.BX:=H;
+ MsDos(R);
+End;
+
+Function HasWild(Const S:String):Boolean;Begin
+ HasWild:=(Pos('*',S)>0)or(Pos('?',S)>0);
+End;
+
+{ Separe un chemin en repertoire (avec son \ ou son :) et nom }
+Procedure SplitPathName(Const P:String;Var Dir,Name:String);
+Var
+ I,L:Byte;
+Begin
+ L:=0;
+ For I:=1 to Length(P)do If(P[I]='\')or(P[I]=':')Then L:=I;
+ Dir:=Copy(P,1,L);
+ Name:=Copy(P,L+1,255);
+End;
+
+{ Un repertoire existant ? }
+Function IsDirectory(Const P:String):Boolean;
+Var
+ Info:SearchRec;
+ D,N:String;
+Begin
+ IsDirectory:=False;
+ If(P='')or(Pos('*',P)>0)or(Pos('?',P)>0)Then Exit;
+ If(P[Length(P)]='\')or(P[Length(P)]=':')or(P='.')or(P='..')Then Begin
+  IsDirectory:=True;
+  Exit;
+ End;
+ FindFirst(P,Directory or Archive,Info);
+ If DosError=0 Then IsDirectory:=(Info.Attr and Directory)<>0;
+End;
+
+{ Fusionne un nom de fichier avec un modele contenant * et ? }
+Function MergePart(Const O,Pat:String):String;
+Var
+ I:Byte;
+ R:String;
+Begin
+ R:='';
+ I:=1;
+ While I<=Length(Pat)do Begin
+  If Pat[I]='*'Then Begin
+   R:=R+Copy(O,I,255);
+   Break;
+  End
+   Else
+  If Pat[I]='?'Then Begin
+   If I<=Length(O)Then R:=R+O[I];
+  End
+   Else
+  R:=R+Pat[I];
+  Inc(I);
+ End;
+ MergePart:=R;
+End;
+
+Function MergeName(Const Old,Pat:String):String;
+Var
+ PO,PP:Byte;
+ R:String;
+Begin
+ PO:=Pos('.',Old);
+ PP:=Pos('.',Pat);
+ If PO=0 Then R:=MergePart(Old,Copy(Pat,1,PP-1+Ord(PP=0)*255))
+         Else R:=MergePart(Copy(Old,1,PO-1),Copy(Pat,1,PP-1+Ord(PP=0)*255));
+ If PP>0 Then Begin
+  If PO=0 Then R:=R+'.'+MergePart('',Copy(Pat,PP+1,255))
+          Else R:=R+'.'+MergePart(Copy(Old,PO+1,255),Copy(Pat,PP+1,255));
+ End;
+ If(Length(R)>0)and(R[Length(R)]='.')Then Delete(R,Length(R),1);
+ MergeName:=R;
+End;
+
+Var
+ Buffer:Array[1..4096]of Byte;
+
 Function CopyFile(Source,Target:String;ShowProgression:Boolean):Boolean;
 Var
  SourceFile,TargetFile:File;
- RecordsRead:Integer;
- Buffer:Array[1..1000]of Byte;
+ RecordsRead,RecordsWritten:Word;
+ Tm:LongInt;
+ Ok:Boolean;
 Begin
  CopyFile:=False;
  Assign(SourceFile,Source);
@@ -199,18 +319,36 @@ Begin
   Exit;
  End;
  Assign(TargetFile,Target);
- {$I-}Rewrite(TargetFile,1);
- If(ShowProgression)Then WriteLn('. = 1000 octets de copies');
+ {$I-}Rewrite(TargetFile,1);{$I+}
+ If IOResult<>0Then Begin
+  WriteLn('Impossible de creer ',Target);
+  {$I-}Close(SourceFile);{$I+}
+  Exit;
+ End;
+ Ok:=True;
+ If(ShowProgression)Then WriteLn('. = ',SizeOf(Buffer),' octets de copies');
+ {$I-}
  BlockRead(SourceFile,Buffer,SizeOf(Buffer),RecordsRead);
- While RecordsRead>0 do Begin
+ While(RecordsRead>0)and(Ok)do Begin
   If(ShowProgression)Then Write('.');
-  BlockWrite(TargetFile,Buffer,RecordsRead);
+  BlockWrite(TargetFile,Buffer,RecordsRead,RecordsWritten);
+  If(IOResult<>0)or(RecordsWritten<>RecordsRead)Then Ok:=False
+   Else
   BlockRead(SourceFile,Buffer,SizeOf(Buffer),RecordsRead);
  End;
- If(ShowProgression)Then WriteLn;
+ GetFTime(SourceFile,Tm);
+ SetFTime(TargetFile,Tm);
  Close(SourceFile);
  Close(TargetFile);
  {$I+}
+ If IOResult<>0 Then;
+ If(ShowProgression)Then WriteLn;
+ If Not(Ok)Then Begin
+  WriteLn('Disque plein ou erreur d''ecriture');
+  {$I-}Erase(TargetFile);{$I+}
+  If IOResult<>0 Then;
+  Exit;
+ End;
  CopyFile:=True;
 End;
 
@@ -553,7 +691,9 @@ Var
  P:Byte;
  ShowProgression:Boolean;
  F:File;
- CurrParam,Source,Target:String;
+ CurrParam,Source,Target,SDir,SName,TDir,TName,Dest:String;
+ Info:SearchRec;
+ Count:Word;
 Begin
  P:=0;
  ShowProgression:=False;
@@ -611,8 +751,36 @@ Begin
  End
   Else
  Begin
-  If CopyFile(Source,Target,ShowProgression)Then WriteLn('1 fichier copie')
-                                            Else WriteLn('Echec de copie de fichier');
+  SplitPathName(Source,SDir,SName);
+  If Not(HasWild(Source))and Not(IsDirectory(Target))Then Begin
+   If HasWild(Target)Then Begin
+    SplitPathName(Target,TDir,TName);
+    Target:=TDir+MergeName(SName,TName);
+   End;
+   If CopyFile(Source,Target,ShowProgression)Then WriteLn('1 fichier copie')
+                                             Else WriteLn('Echec de copie de fichier');
+  End
+   Else
+  Begin
+   Count:=0;
+   FindFirst(Source,Archive or ReadOnly,Info);
+   While DosError=0 do Begin
+    If IsDirectory(Target)Then Begin
+     If(Target[Length(Target)]='\')or(Target[Length(Target)]=':')Then Dest:=Target+Info.Name
+                                                                Else Dest:=Target+'\'+Info.Name;
+    End
+     Else
+    Begin
+     SplitPathName(Target,TDir,TName);
+     Dest:=TDir+MergeName(Info.Name,TName);
+    End;
+    WriteLn(SDir+Info.Name);
+    If CopyFile(SDir+Info.Name,Dest,ShowProgression)Then Inc(Count);
+    FindNext(Info);
+   End;
+   If Count=0 Then WriteLn('Fichier introuvable')
+              Else WriteLn(Count,' fichier(s) copie(s)');
+  End;
  End;
 End;
 
@@ -657,12 +825,36 @@ Begin
  End;
 End;
 
+{ Une touche : depuis l'entree redirigee (tuyau ou <) si elle existe, sinon le clavier }
+Function AskKey:Char;
+Var
+ H:Word;
+ R:Registers;
+ C:Byte;
+Begin
+ If RedirIn=''Then Begin
+  AskKey:=ReadKey;
+  Exit;
+ End;
+ AskKey:='N';
+ H:=DosOpenFile(RedirIn,0);
+ If H=$FFFF Then Exit;
+ R.AH:=$3F;R.BX:=H;R.CX:=1;R.DS:=Seg(C);R.DX:=Ofs(C);
+ MsDos(R);
+ If((R.Flags and FCarry)=0)and(R.AX=1)Then AskKey:=Chr(C);
+ DosCloseFile(H);
+End;
+
 Procedure DeleteCommand;
 Var
  P:Byte;
  Err:Word;
  F:File;
- CurrParam:String;
+ CurrParam,SDir,SName:String;
+ Info:SearchRec;
+ Count:Word;
+ Sure:Boolean;
+ Key:Char;
 Begin
  P:=0;
  Repeat
@@ -701,12 +893,38 @@ Begin
     End;
    End;
   End;
-  {$I-}Assign(F,CurrParam);
-  Erase(F);
-  {$I+}
-  Err:=IoResult;
-  If Err=0Then WriteLn('1 fichier de supprime')
-          Else WriteLn(GetErrorMessage(Err));
+  If(CurrParam[1]<>'/')Then Begin
+   SplitPathName(CurrParam,SDir,SName);
+   If IsDirectory(CurrParam)Then Begin
+    SDir:=CurrParam;
+    If(SDir[Length(SDir)]<>'\')Then SDir:=SDir+'\';
+    CurrParam:=SDir+'*.*';
+    SName:='*.*';
+   End;
+   Sure:=True;
+   If(SName='*.*')or(SName='*')Then Begin
+    Write('Tous les fichiers du repertoire vont etre supprimes. Etes-vous sur (O/N) ? ');
+    Key:=AskKey;
+    WriteLn(Key);
+    Sure:=Key in['O','o','Y','y'];
+   End;
+   If Sure Then Begin
+    Count:=0;
+    FindFirst(CurrParam,Archive or ReadOnly,Info);
+    While DosError=0 do Begin
+     {$I-}Assign(F,SDir+Info.Name);
+     If(Info.Attr and ReadOnly)<>0 Then SetFAttr(F,Archive);
+     Erase(F);
+     {$I+}
+     Err:=IoResult;
+     If Err=0 Then Inc(Count)
+              Else WriteLn(SDir+Info.Name,' : ',GetErrorMessage(Err));
+     FindNext(Info);
+    End;
+    If Count=0 Then WriteLn('Fichier introuvable')
+               Else WriteLn(Count,' fichier(s) supprime(s)');
+   End;
+  End;
   If P>9Then Break;
  Until CurrParam='';
 End;
@@ -934,57 +1152,8 @@ Begin
   End;
 End;
 
-Procedure EraseCommand;
-Var
- P:Byte;
- Err:Word;
- F:File;
- CurrParam:String;
-Begin
- P:=0;
- Repeat
-  Inc(P);
-  CurrParam:=ExtractParam(P);
-  If CurrParam=''Then Begin
-   If P=1Then Begin
-    WriteLn('ParamŠtre requis');
-   End;
-   Break;
-  End
-   Else
-  If CurrParam='/?'Then Begin
-   Case Language of
-    _Germany:Begin
-     WriteLn('L”scht eine oder mehrere Dateien.');
-     WriteLn;
-     WriteLn('ERASE Dateiname [/P]');
-    End;
-    _English:Begin
-     WriteLn('Purpose:  Erase one file');
-     WriteLn;
-     WriteLn('Format:   ERASE [/?] file');
-    End;
-    Else Begin
-     WriteLn('ERASE   Cette commande permet d''effectuer la suppression de fichier sur un unit‚ de disque.');
-     WriteLn;
-     WriteLn('Syntaxe:');
-     WriteLn;
-     WriteLn('ERASE [/?] fichier');
-     WriteLn;
-     WriteLn('      /?    Ce parametre permet d''afficher l''aide sur cette commande');
-     WriteLn('  fichier   Ce parametre permet d''indiquer le nom du fichier a supprimer.');
-    End;
-   End;
-   Exit;
-  End;
-  {$I-}Assign(F,CurrParam);
-  Erase(F);
-  {$I+}
-  Err:=IoResult;
-  If Err=0Then WriteLn('1 fichier de supprime')
-          Else WriteLn(GetErrorMessage(Err));
-  If P>9Then Break;
- Until CurrParam='';
+Procedure EraseCommand;Begin
+ DeleteCommand;
 End;
 
 Function ExitCommand:Boolean;
@@ -1357,7 +1526,9 @@ Var
  P:Byte;
  Err:Word;
  F:File;
- CurrParam,Source,Target:String;
+ CurrParam,Source,Target,SDir,SName,TDir,TName:String;
+ Info:SearchRec;
+ Count:Word;
 Begin
  P:=0;
  Source:='';
@@ -1412,12 +1583,28 @@ Begin
  End
   Else
  Begin
-  {$I-}Assign(F,Source);
-  Rename(F,Target);
-  {$I+}
-  Err:=IoResult;
-  If Err=0Then WriteLn('1 fichier de renomme')
-          Else WriteLn(GetErrorMessage(Err));
+  SplitPathName(Source,SDir,SName);
+  SplitPathName(Target,TDir,TName);
+  If(TDir<>'')Then Begin
+   WriteLn('Le nom de destination ne doit pas contenir de chemin');
+   Exit;
+  End;
+  Count:=0;
+  FindFirst(Source,Archive or ReadOnly,Info);
+  If DosError<>0 Then Begin
+   WriteLn('Fichier introuvable');
+   Exit;
+  End;
+  While DosError=0 do Begin
+   {$I-}Assign(F,SDir+Info.Name);
+   Rename(F,SDir+MergeName(Info.Name,TName));
+   {$I+}
+   Err:=IoResult;
+   If Err=0 Then Inc(Count)
+            Else WriteLn(SDir+Info.Name,' : ',GetErrorMessage(Err));
+   FindNext(Info);
+  End;
+  If Count>0 Then WriteLn(Count,' fichier(s) renomme(s)');
  End;
 End;
 
@@ -1757,45 +1944,6 @@ Begin
    If Length(Volume)=0Then WriteLn(' n''a pas d''etiquette')
                       Else WriteLn(Volume);
  End;
-End;
-
-{ Ouvre un fichier par INT 21h : Mode 0 = lecture, 1 = creation, 2 = ajout ; $FFFF si erreur }
-Function DosOpenFile(Const FileName:String;Mode:Byte):Word;
-Var
- R:Registers;
- Z:Array[0..127] of Char;
- I,H:Word;
-Begin
- DosOpenFile:=$FFFF;
- For I:=1 to Length(FileName)do Z[I-1]:=FileName[I];
- Z[Length(FileName)]:=#0;
- R.DS:=Seg(Z);R.DX:=Ofs(Z);
- If Mode=0 Then R.AX:=$3D00 Else
- If Mode=1 Then Begin R.AH:=$3C;R.CX:=0;End
-           Else R.AX:=$3D01;
- MsDos(R);
- If(R.Flags and FCarry)<>0 Then Begin
-  If Mode<>2 Then Exit;
-  R.AH:=$3C;R.CX:=0;R.DS:=Seg(Z);R.DX:=Ofs(Z);
-  MsDos(R);
-  If(R.Flags and FCarry)<>0 Then Exit;
-  DosOpenFile:=R.AX;
-  Exit;
- End;
- H:=R.AX;
- If Mode=2 Then Begin
-  R.AX:=$4202;R.BX:=H;R.CX:=0;R.DX:=0;
-  MsDos(R);
- End;
- DosOpenFile:=H;
-End;
-
-Procedure DosCloseFile(H:Word);
-Var
- R:Registers;
-Begin
- R.AH:=$3E;R.BX:=H;
- MsDos(R);
 End;
 
 { Redirection au niveau DOS (INT 21h 45h/46h) d'un handle standard, pour un programme externe.

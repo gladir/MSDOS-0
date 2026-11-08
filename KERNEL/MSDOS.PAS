@@ -6874,6 +6874,23 @@ Begin
  FxOpenPath:=True;
 End;
 
+{ Nom 8.3 (11 caracteres) invalide pour une creation : vide, joker, caracteres interdits }
+Function InList(C:Byte;Const L:String):Boolean;
+Var K:Byte;
+Begin
+ InList:=False;
+ For K:=1 To Length(L) Do
+  If Ord(L[K])=C Then InList:=True;
+End;
+
+Function FxBadName(Var Nm:String):Boolean;
+Var K:Byte;
+Begin
+ FxBadName:=Nm[1]=' ';
+ For K:=1 To 11 Do
+  If (Nm[K]<' ') Or InList(Ord(Nm[K]),'*?"/\[]:|<>+=;,') Then FxBadName:=True;
+End;
+
 Function FxOpen(PathPtr:Pointer;Mode:Byte):Word;
 Var
  V:TFxVol;
@@ -6908,6 +6925,7 @@ Var
 Begin
  FxCreate:=$FFFF;
  If Not FxOpenPath(PathPtr,V,Dir,Nm) Then Begin SetStandardError(3); Exit End;
+ If FxBadName(Nm) Then Begin SetStandardError(3); Exit End;
  If FxScan(V,Dir,Nm,Sec,Idx,FS,FI,E) Then Begin
   If FailIfExists Then Begin SetStandardError(80); Exit End;
   If (E.Attr And $11)<>0 Then Begin SetStandardError(5); Exit End;
@@ -7060,6 +7078,7 @@ Begin
  FxRename:=3;
  If Not FxOpenPath(OldPtr,V,Dir,Nm) Then Begin SetStandardError(3); Exit End;
  If Not FxOpenPath(NewPtr,V2,Dir2,Nm2) Then Begin SetStandardError(3); Exit End;
+ If FxBadName(Nm2) Then Begin SetStandardError(3); Exit End;
  FxRename:=2;
  If Not FxScan(V,Dir,Nm,Sec,Idx,FS,FI,E) Then Begin SetStandardError(2); Exit End;
  FxRename:=5;
@@ -7096,6 +7115,7 @@ Var
 Begin
  FxMkDir:=3;
  If Not FxOpenPath(PathPtr,V,Dir,Nm) Then Begin SetStandardError(3); Exit End;
+ If FxBadName(Nm) Then Begin SetStandardError(3); Exit End;
  FxMkDir:=5;
  If FxScan(V,Dir,Nm,Sec,Idx,FS,FI,E) Then Begin SetStandardError(5); Exit End;
  If FI<0 Then Begin SetStandardError(5); Exit End;
@@ -7222,6 +7242,40 @@ Begin
  FxChDir:=0;
 End;
 
+{ Etat d'une recherche 4Eh/4Fh : conserve dans les 21 octets reserves de la DTA (comme MS-DOS), ce qui
+  permet plusieurs recherches imbriquees : [0]=lecteur+1, [1..12]=masque, [13]=attributs, [14..15]=entree,
+  [16..17]=repertoire, [18]=actif }
+Procedure FindSaveDta(Var St:FindFileState;Var DTA:DTAStruct);
+Var K:Byte;
+Begin
+ DTA.Reserved[0]:=Ord(St.SearchPath[1])-64;
+ For K:=1 To 12 Do
+  If K<=Length(St.SearchMask) Then DTA.Reserved[K]:=Ord(St.SearchMask[K]) Else DTA.Reserved[K]:=0;
+ DTA.Reserved[13]:=St.SearchAttr;
+ DTA.Reserved[14]:=Lo(St.CurrentEntry);
+ DTA.Reserved[15]:=Hi(St.CurrentEntry);
+ DTA.Reserved[16]:=Lo(St.CurrentDir);
+ DTA.Reserved[17]:=Hi(St.CurrentDir);
+ If St.Active Then DTA.Reserved[18]:=1 Else DTA.Reserved[18]:=0;
+End;
+
+Procedure FindLoadDta(Var DTA:DTAStruct;Var St:FindFileState);
+Var K:Byte;
+Begin
+ St.Active:=DTA.Reserved[18]=1;
+ St.SearchPath:='A';
+ St.SearchPath[1]:=Chr(DTA.Reserved[0]+64);
+ K:=0;
+ While (K<12) And (DTA.Reserved[K+1]<>0) Do Begin
+  Inc(K);
+  St.SearchMask[K]:=Chr(DTA.Reserved[K]);
+ End;
+ St.SearchMask[0]:=Chr(K);
+ St.SearchAttr:=DTA.Reserved[13];
+ St.CurrentEntry:=Word(DTA.Reserved[14])+Word(DTA.Reserved[15])*256;
+ St.CurrentDir:=Word(DTA.Reserved[16])+Word(DTA.Reserved[17])*256;
+End;
+
 { Recherche de fichiers (4Eh/4Fh) : repertoire courant ou sous-repertoire, entrees de toute taille de repertoire }
 Function FxFindFrom(Var DTA:DTAStruct):Word;
 Var
@@ -7234,8 +7288,9 @@ Var
  S:LongInt;
 Begin
  FxFindFrom:=18;
- GetFindState(St);
+ FindLoadDta(DTA,St);
  If Not St.Active Then Exit;
+ If (St.SearchPath[1]<'A') Or (St.SearchPath[1]>'Z') Then Exit;
  If Not FxVol(Ord(St.SearchPath[1])-65,V) Then Exit;
  N:=St.CurrentEntry Div 16;
  I0:=Byte(St.CurrentEntry Mod 16);
@@ -7245,7 +7300,7 @@ Begin
    P:=I*32;
    If Buf[P]=0 Then Begin
     St.Active:=False;
-    SetFindState(St);
+    FindSaveDta(St,DTA);
     Exit;
    End;
    If (Buf[P]<>$E5) And ((Buf[P+11] And $1E And (Not St.SearchAttr))=0) Then Begin
@@ -7268,7 +7323,7 @@ Begin
      Move(Nm[1],DTA.Name[0],L);
      DTA.Name[L]:=#0;
      St.CurrentEntry:=N*16+I+1;
-     SetFindState(St);
+     FindSaveDta(St,DTA);
      FxFindFrom:=0;
      Exit;
     End;
@@ -7278,7 +7333,7 @@ Begin
   Inc(N);
  End;
  St.Active:=False;
- SetFindState(St);
+ FindSaveDta(St,DTA);
 End;
 
 Function FxFindFirst(Path:String;Attr:Byte;Var DTA:DTAStruct):Word;
@@ -7311,7 +7366,6 @@ Begin
  If Not FxVol(Dr,V) Then Begin FxFindFirst:=3; Exit End;
  If (Q<=Length(Path)) And ((Path[Q]='\') Or (Path[Q]='/')) Then Start:=0 Else Start:=GetCurrentDirCluster(Dr);
  If Not FxWalk(V,DirP,Start,Dir) Then Begin FxFindFirst:=3; Exit End;
- GetFindState(St);
  If Mask='*.*' Then Mask:='*';
  St.SearchMask:=UpperCase(Mask);
  St.SearchPath:=Chr(Dr+65);
@@ -7319,7 +7373,7 @@ Begin
  St.CurrentDir:=Dir;
  St.CurrentEntry:=0;
  St.Active:=True;
- SetFindState(St);
+ FindSaveDta(St,DTA);
  FxFindFirst:=FxFindFrom(DTA);
 End;
 
@@ -8154,31 +8208,39 @@ Begin
 End;
 
 { Nom du FCB (offset Off) sous la forme "[X:]NOM[.EXT]" ; False si le nom est vide }
-Function FcbName(S,O,Off:Word;Var Path:String):Boolean;
-Var I,L:Byte;
- C:Char;
+Procedure FcbField(S,O,Off,Len:Word;Wild:Boolean;Var Path:String);
+Var I,L,T:Byte;
 Begin
+ L:=0;
+ For I:=1 To Len Do
+  If Mem[S:O+Off+I-1]<>32 Then L:=I;
+ T:=L;
+ If Wild Then
+  While (T>0) And (Mem[S:O+Off+T-1]=Ord('?')) Do Dec(T);
+ For I:=1 To T Do Path:=Path+Chr(Mem[S:O+Off+I-1]);
+ If T<L Then Path:=Path+'*';
+End;
+
+{ Off >= $100 : un '?' final d'un champ couvre aussi les caracteres absents ('*') }
+Function FcbName(S,O,Off:Word;Var Path:String):Boolean;
+Var Wild:Boolean;
+ N:Byte;
+Begin
+ Wild:=Off>=$100;
+ Off:=Off And $FF;
  Path:='';
  If Mem[S:O]<>0 Then Begin
   Path:='A:';
   Path[1]:=Chr(64+Mem[S:O]);
  End;
- L:=0;
- For I:=1 To 8 Do
-  If Mem[S:O+Off+I-1]<>32 Then L:=I;
- For I:=1 To L Do Path:=Path+Chr(Mem[S:O+Off+I-1]);
- If L=0 Then Begin
-  FcbName:=False;
-  Exit;
- End;
- L:=0;
- For I:=1 To 3 Do
-  If Mem[S:O+Off+8+I-1]<>32 Then L:=I;
- If L>0 Then Begin
-  Path:=Path+'.';
-  For I:=1 To L Do Path:=Path+Chr(Mem[S:O+Off+8+I-1]);
- End;
- FcbName:=True;
+ N:=Length(Path);
+ FcbField(S,O,Off,8,Wild,Path);
+ FcbName:=Length(Path)>N;
+ If Length(Path)=N Then Exit;
+ N:=Length(Path);
+ Path:=Path+'.';
+ FcbField(S,O,Off+8,3,Wild,Path);
+ If Length(Path)=N+1 Then Path[0]:=Chr(N);
 End;
 
 Procedure PathToZ(Var Path:String;Var Z:TFcbZ);
@@ -8227,7 +8289,7 @@ Var S,O,T:Word;
 Begin
  FcbOpen:=$FF;
  FcbSegOfs(P,S,O);
- If Not FcbName(S,O,1,Path) Then Exit;
+ If Not FcbName(S,O,$101,Path) Then Exit;
  PathToZ(Path,Z);
  T:=DOS3Dh_OpenFile(@Z,2);
  If T=$FFFF Then T:=DOS3Dh_OpenFile(@Z,0);
@@ -8243,7 +8305,7 @@ Var S,O,T:Word;
 Begin
  FcbCreate:=$FF;
  FcbSegOfs(P,S,O);
- If Not FcbName(S,O,1,Path) Then Exit;
+ If Not FcbName(S,O,$101,Path) Then Exit;
  PathToZ(Path,Z);
  T:=DOS3Ch_CreateOpenFile(@Z);
  If T=$FFFF Then Exit;
@@ -8300,36 +8362,12 @@ Begin
  MemW[DS_:DO_+31]:=Word(T.Size Shr 16);
 End;
 
-{ Un '?' final d'un champ du FCB couvre aussi les caracteres absents : le transformer en '*' }
-Procedure FcbWild(Var Path:String);
-Var I,Q,L:Byte;
- Out,Part:String;
-Begin
- Q:=1;
- If (Length(Path)>=2) And (Path[2]=':') Then Q:=3;
- Out:=Copy(Path,1,Q-1);
- Part:='';
- For I:=Q To Length(Path)+1 Do Begin
-  If (I>Length(Path)) Or (Path[I]='.') Then Begin
-   L:=Length(Part);
-   If (L>0) And (Part[L]='?') Then Begin
-    While (L>0) And (Part[L]='?') Do Dec(L);
-    Part:=Copy(Part,1,L)+'*';
-   End;
-   Out:=Out+Part;
-   If I<=Length(Path) Then Out:=Out+'.';
-   Part:='';
-  End Else Part:=Part+Path[I];
- End;
- Path:=Out;
-End;
-
 Function FcbFindFirst(P:Pointer):Byte;
 Var S,O:Word;
  Path:String;
  T:DTAStruct;
  Attr:Byte;
- Dr:Byte;
+ Dr,K:Byte;
 Begin
  FcbFindFirst:=$FF;
  FcbSegOfs(P,S,O);
@@ -8342,9 +8380,9 @@ Begin
   Dr:=Mem[S:O];
  End;
  If Dr=0 Then Dr:=GetCurrentDrive+1;
- If Not FcbName(S,O,1,Path) Then Path:='*.*';
- FcbWild(Path);
+ If Not FcbName(S,O,$101,Path) Then Path:='*.*';
  If DOS4Eh_FindFirstFile(Path,Attr,T)<>0 Then Exit;
+ For K:=0 To 18 Do Mem[S:O+12+K]:=T.Reserved[K];
  FcbFill(T,Dr);
  FcbFindFirst:=0;
 End;
@@ -8352,13 +8390,16 @@ End;
 Function FcbFindNext(P:Pointer):Byte;
 Var S,O:Word;
  T:DTAStruct;
- Dr:Byte;
+ Dr,K:Byte;
 Begin
  FcbFindNext:=$FF;
  FcbSegOfs(P,S,O);
  Dr:=Mem[S:O];
  If Dr=0 Then Dr:=GetCurrentDrive+1;
+ FillChar(T,SizeOf(T),0);
+ For K:=0 To 18 Do T.Reserved[K]:=Mem[S:O+12+K];
  If DOS4Fh_FindNextFile(T)<>0 Then Exit;
+ For K:=0 To 18 Do Mem[S:O+12+K]:=T.Reserved[K];
  FcbFill(T,Dr);
  FcbFindNext:=0;
 End;
@@ -8390,8 +8431,7 @@ Var S,O:Word;
 Begin
  FcbDelete:=$FF;
  FcbSegOfs(P,S,O);
- If Not FcbName(S,O,1,Path) Then Exit;
- FcbWild(Path);
+ If Not FcbName(S,O,$101,Path) Then Exit;
  Any:=False;
  R:=DOS4Eh_FindFirstFile(Path,0,T);
  While R=0 Do Begin
@@ -8425,8 +8465,7 @@ Var S,O:Word;
 Begin
  FcbRename:=$FF;
  FcbSegOfs(P,S,O);
- If Not FcbName(S,O,1,Path) Then Exit;
- FcbWild(Path);
+ If Not FcbName(S,O,$101,Path) Then Exit;
  For I:=0 To 10 Do Pat[I]:=Mem[S:O+$11+I];
  Pre:='';
  If Mem[S:O]<>0 Then Begin
@@ -8668,7 +8707,7 @@ Var S,O:Word;
 Begin
  FcbFileSize:=$FF;
  FcbSegOfs(P,S,O);
- If Not FcbName(S,O,1,Path) Then Exit;
+ If Not FcbName(S,O,$101,Path) Then Exit;
  If DOS4Eh_FindFirstFile(Path,0,T)<>0 Then Exit;
  Rs:=FcbRecSize(S,O);
  N:=(T.Size+Rs-1) Div Rs;
@@ -8688,9 +8727,7 @@ End;
 { 29h : analyse d'un nom de fichier (chaine en StrPtr) dans le FCB Fcb ; NewOfs = offset apres l'analyse }
 Function FcbIsSep(C:Byte):Boolean;
 Begin
- FcbIsSep:=(C<=32) Or (C=Ord('.')) Or (C=Ord(':')) Or (C=Ord(';')) Or (C=Ord(',')) Or (C=Ord('=')) Or
-  (C=Ord('+')) Or (C=Ord('/')) Or (C=Ord('"')) Or (C=Ord('[')) Or (C=Ord(']')) Or (C=Ord('<')) Or
-  (C=Ord('>')) Or (C=Ord('|')) Or (C=Ord('\'));
+ FcbIsSep:=(C<=32) Or InList(C,'.:;,=+/"[]<>|\');
 End;
 
 Function FcbParse(StrPtr:Pointer;Fcb:Pointer;Flags:Word;Var NewOfs:Word):Byte;
@@ -10425,6 +10462,8 @@ Begin
  MemW[P:2]:=Top;
  Mem[P:5]:=$9A;
  MemW[P:$16]:=Parent;
+ { le premier processus (parent sans PSP valide) est son propre parent, comme sous MS-DOS }
+ If (Parent=0) Or (MemW[Parent:0]<>$20CD) Then MemW[P:$16]:=P;
  JftInherit(P,Parent);
  MemW[P:$2C]:=EnvSeg;
  MemW[P:$32]:=20;
