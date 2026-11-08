@@ -1,7 +1,19 @@
 # MSDOS-0
 Clone de MS-DOS en langage de programmation Pascal (Turbo Pascal ou Free Pascal) avec un support de la langue française, allemande et anglaise.
 
-Le MSDOS-0 est vraiment démarrable à partir d'une disquette et son noyau n'est pas ecrit en assembleur mais en Pascal :
+MSDOS-0 est un projet de développement d'un système d'exploitation inspiré de MS-DOS, entièrement conçu autour du langage de programmation Pascal, principalement à l'aide de Turbo Pascal et Free Pascal. Son objectif est de recréer et de réinterpréter les fonctionnalités des systèmes d'exploitation DOS traditionnels, tout en explorant les mécanismes fondamentaux de leur fonctionnement. Le projet s'inscrit dans une démarche à la fois technique, éducative et historique, visant à démontrer les possibilités du langage Pascal dans le développement de logiciels système de bas niveau.
+
+Contrairement à une simple collection d'utilitaires reproduisant les commandes de MS-DOS, MSDOS-0 possède son propre noyau développé en Pascal et peut être véritablement démarré à partir d'une disquette ou d'une image disque amorçable. Cette particularité constitue l'un des aspects les plus importants du projet, puisqu'elle permet d'aborder directement des concepts fondamentaux tels que le démarrage d'un ordinateur, les interactions avec le matériel, la gestion des disques, les fichiers et l'exécution des commandes du système d'exploitation.
+
+Le projet comprend également une vaste collection de commandes et d'utilitaires inspirés de différentes générations de MS-DOS et de PC-DOS. On y retrouve notamment des outils de manipulation de fichiers, de gestion des répertoires, de formatage, de partitionnement, de récupération de données, de diagnostic du matériel et de gestion de la mémoire. Plusieurs applications historiques sont également revisitées, notamment les éditeurs de texte, les interpréteurs BASIC, les outils de débogage et l'environnement graphique DOS Shell. Certaines commandes proposent des fonctionnalités supplémentaires par rapport à leurs équivalents historiques, particulièrement en matière de manipulation et de traitement des images de disques.
+
+MSDOS-0 accorde également une place importante à l'internationalisation, en proposant une prise en charge de plusieurs langues, notamment le français, l'anglais et l'allemand. Cette approche vise à rendre l'environnement DOS plus accessible tout en conservant la philosophie des systèmes d'exploitation classiques : simplicité, légèreté, fonctionnement en ligne de commande et maîtrise directe des ressources informatiques.
+
+Au-delà de la reproduction des fonctionnalités de MS-DOS, MSDOS-0 constitue un laboratoire de programmation système et d'expérimentation informatique. Il permet d'étudier les principes de fonctionnement des systèmes d'exploitation compatibles avec l'architecture PC, les interfaces logicielles historiques, les structures des fichiers exécutables, les systèmes de fichiers et les mécanismes d'amorçage. Chaque composant représente une occasion d'explorer les technologies qui ont marqué les débuts de l'informatique personnelle et de les réinterpréter au moyen du langage Pascal.
+
+Le projet est en constante évolution et ne prétend pas reproduire intégralement toutes les fonctionnalités ou garantir une compatibilité parfaite avec les différentes versions de MS-DOS. Il s'adresse principalement aux passionnés d'informatique rétro, aux développeurs Pascal et aux personnes souhaitant comprendre les mécanismes internes des systèmes d'exploitation historiques.
+
+MSDOS-0 : _faire revivre l'univers du DOS, du secteur d'amorçage jusqu'à la ligne de commande, une ligne de Pascal à la fois._
 
 <img width="640" height="370" alt="image" src="https://github.com/user-attachments/assets/be0125ce-fbab-4cf0-9392-d8d4a0315b33" />
 
