@@ -6339,8 +6339,8 @@ Begin
  AllocateFileHandle:=False;
  Handle:=0;
 
- { Chercher une entrée libre dans la table des fichiers }
- For I:=0 To 19 Do Begin
+ { Chercher une entrée libre dans la table des fichiers (poignées 0..4 = périphériques standard) }
+ For I:=5 To 19 Do Begin
   If Not GetFileTableInUse(I) Then Begin
    { Initialiser l'entrée via fonctions d'accès Code Segment }
    SetFileTableInUse(I, True);
