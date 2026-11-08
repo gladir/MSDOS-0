@@ -1,20 +1,24 @@
 IMAGE - Images disque amorcables de MSDOS-0
 ===========================================
 
-DOS144A.IMG   Disquette 1,44 Mo (FAT12, 2880 secteurs) amorcable contenant :
-              - IO.SYS, MSDOS.SYS, COMMAND.COM (dossier SYSTEM, noyau
-                KERNEL\MSDOS.PAS fabrique par KERNEL\MAKER.PAS) ;
-              - toutes les commandes de BIN16 (APPEND.EXE ... XCOPY.EXE).
+DOS144A.IMG   Disquette 1,44 Mo (FAT12) AMORCABLE : IO.SYS, MSDOS.SYS,
+              COMMAND.COM (dossier SYSTEM) et une partie des commandes.
               Secteur de boot : celui de MS-DOS 6.22 (ecrit par SYS.PAS) ;
               IO.SYS et MSDOS.SYS sont les deux premieres entrees de la
               racine et sont contigus, comme sur une vraie disquette systeme.
+DOS144B.IMG   Disquette 1,44 Mo de donnees : le reste des commandes.
+              (Les 62 commandes compilees avec TPC occupent 1,8 Mo : elles ne
+              tiennent pas sur une seule disquette, MAKEDISK les repartit.)
+DOSCD.ISO     CD-ROM ISO 9660 amorcable (El Torito, emulation de disquette
+              1,44 Mo : le boot se fait sur DOS144A.IMG, qui est aussi dans
+              l'ISO) contenant tous les fichiers du systeme et des commandes
+              a la racine.
 
-SYSTEM\       Fichiers systeme utilises pour fabriquer l'image.
+SYSTEM\       Fichiers systeme utilises pour fabriquer les images.
+MAKEIMG.BAT   Reconstruit les images avec TOOLS\MAKEDISK.EXE.
 
-MAKEIMG.BAT   Reconstruit DOS144A.IMG avec TOOLS\MAKEDISK.EXE.
-
-Comment l'image est fabriquee
------------------------------
+Comment les images sont fabriquees
+----------------------------------
 TOOLS\MAKEDISK.PAS orchestre les commandes du depot :
 
   FORMAT.PAS     cree et formate le fichier d'image  (FORMAT fich 1440 /CREATE)
@@ -26,25 +30,36 @@ TOOLS\MAKEDISK.PAS orchestre les commandes du depot :
 
   MAKEDISK image.img [/FLOPPY[:taille]] [/HD[:Mo]] [/FS:FAT12|FAT16]
                      [/KERNEL:dossier] [/CMDS:dossier] [/MASK:masque,...]
-                     [/ADD:fichier] [/TOOLS:dossier] [/EXTRACT:dossier]
-                     [/NOBUILD] [/V]
+                     [/ADD:fichier] [/TOOLS:dossier] [/ISO:fichier.iso]
+                     [/LABEL:nom] [/EXTRACT:dossier] [/NOBUILD] [/V]
 
-Exemples :
-  MAKEDISK DOS144A.IMG /KERNEL:IMAGE\SYSTEM /CMDS:BIN16
-  MAKEDISK DISQUE.IMG /HD:64 /KERNEL:IMAGE\SYSTEM /CMDS:BIN16
-  MAKEDISK DOS144A.IMG /NOBUILD /EXTRACT:CONTENU
+- Si les fichiers ne tiennent pas sur une disquette, MAKEDISK en cree
+  plusieurs : DOS144A.IMG (amorcable), DOS144B.IMG, DOS144C.IMG... (la lettre
+  finale du nom est incrementee ; premier ajustement par taille de grappe et
+  nombre d'entrees de la racine).
+- /ISO ecrit lui-meme le CD-ROM (ISO 9660 niveau 1 + El Torito).
+- /HD cree une image de disque dur (MBR + partition FAT16 active).
+
+Exemples (dossier IMAGE, commandes compilees dans CMDS) :
+  ..\TOOLS\MAKEDISK DOS144A.IMG /KERNEL:SYSTEM /CMDS:CMDS /ISO:DOSCD.ISO
+  ..\TOOLS\MAKEDISK DISQUE.IMG /HD:64 /KERNEL:SYSTEM /CMDS:CMDS
+  ..\TOOLS\MAKEDISK DOS144A.IMG /NOBUILD /EXTRACT:CONTENU
 
 Compilation des outils (TPC ou Turbo Pascal 7) : FORMAT.PAS, SYS.PAS,
 TOOLS\MAKEDISK.PAS, TOOLS\DISKPC.PAS et TOOLS\UNDISKPC.PAS ; MAKEDISK lance
 les autres outils (dossier de MAKEDISK, /TOOLS:, courant ou PATH).
+Les images livrees utilisent les commandes compilees avec TPC (dossier
+CMDS : tous les .PAS de la racine) et le noyau KERNEL\MAKER.PAS.
 
-Demarrage de l'image
---------------------
-- Sur PC / VM : monter DOS144A.IMG comme disquette A: et demarrer dessus.
-  Le noyau detecte le lecteur d'amorcage (DL du BIOS) : A: pour une
-  disquette, C: pour un disque dur ; CONFIG.SYS, COMMAND.COM et COMSPEC sont
-  cherches sur ce lecteur.
+Demarrage
+---------
+- Sur PC / VM : monter DOS144A.IMG comme disquette A: (ou booter sur
+  DOSCD.ISO). Le noyau detecte le lecteur d'amorcage (DL du BIOS) : A: pour
+  une disquette, C: pour un disque dur ; CONFIG.SYS, COMMAND.COM et COMSPEC
+  sont cherches sur ce lecteur.
 - Banc d'essai headless de l'emulateur DEVENV (dev-cools\DEVENV.PAS) :
     devenv /KERNELTEST,dossier /KTBOOTIMG:IMAGE\DOS144A.IMG /KTSCRIPT:t.txt
   (image <= 2,88 Mo : disquette 00h ; sinon disque dur 80h). Le secteur de
   boot est execute en 0000:7C00 : VBR -> IO.SYS -> COMMAND.COM (invite A:\>).
+  Pour tester l'ISO, demarrer sur l'image de boot qu'elle contient
+  (DOS144A.IMG).

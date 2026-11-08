@@ -12,7 +12,7 @@ Clone de MS-DOS en langage de programmation Pascal (Turbo Pascal ou Free Pascal)
 
 <h2>Images disque amorcables</h2>
 
-Le dossier [IMAGE](IMAGE/LISEZMOI.TXT) contient `DOS144A.IMG`, une disquette 1,44 Mo amorcable (noyau + commandes). Le programme `TOOLS\MAKEDISK.PAS` permet de créer des images de disquette ou de disque dur à l'aide de `FORMAT`, `SYS`, `DISKPC` et `UNDISKPC`.
+Le dossier [IMAGE](IMAGE/LISEZMOI.TXT) contient `DOS144A.IMG` (disquette 1,44 Mo amorcable : noyau + commandes), `DOS144B.IMG` (suite des commandes) et `DOSCD.ISO` (CD-ROM amorcable). Le programme `TOOLS\MAKEDISK.PAS` permet de créer des images de disquette (réparties sur plusieurs disquettes si nécessaire), de disque dur ou de CD-ROM à l'aide de `FORMAT`, `SYS`, `DISKPC` et `UNDISKPC`.
 
 <h2>Liste des fichiers</h2>
 

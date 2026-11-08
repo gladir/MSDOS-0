@@ -144,7 +144,8 @@ Le noyau memorise l'unite d'amorcage (DL transmis a IO.SYS) : lecteur courant au
 CONFIG.SYS, DEVLOAD.EXE, COMMAND.COM / COMMAND.EXE et COMSPEC/PATH sont cherches sur ce lecteur.
 SYS.PAS ecrit le vrai secteur de boot MS-DOS 6.22 (BPB conserve) et, pour un disque dur, un chargeur MBR minimal ;
 FORMAT.PAS : correction du depassement 16 bits de la taille finale des images (Seek KS*1024) et {$M} pour la pile/tas.
-IMAGE\DOS144A.IMG (1 474 560 octets) : IO.SYS + MSDOS.SYS + COMMAND.COM + commandes de BIN16 ; demarre dans l'emulateur
+IMAGE\DOS144A.IMG + DOS144B.IMG (1 474 560 octets chacune ; les 62 commandes TPC occupent 1,8 Mo, MAKEDISK les repartit) et
+IMAGE\DOSCD.ISO (ISO 9660 + El Torito, ecrit par MAKEDISK /ISO) ; DOS144A.IMG = IO.SYS + MSDOS.SYS + COMMAND.COM + commandes ; demarre dans l'emulateur
 DEVENV (/KERNELTEST,... /KTBOOTIMG:IMAGE\DOS144A.IMG) jusqu'a l'invite A:\>, VER et DIR fonctionnent. Image disque dur
 (MAKEDISK /HD:64) : MBR -> VBR -> IO.SYS -> invite C:\>.
 Limite : SYS ne traite que des FAT <= 64 Ko ; MAKEDISK choisit donc des unites d'allocation assez grandes (/HD 1..1000 Mo).
