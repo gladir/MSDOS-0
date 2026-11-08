@@ -9592,6 +9592,7 @@ Procedure SetFindState(Var State:FindFileState);
 Begin
  { Sauvegarder dans le Code Segment dans la structure Data }
  ASM
+  PUSH DS
   PUSH ES
   PUSH DI
 
@@ -9609,6 +9610,7 @@ Begin
 
   POP DI
   POP ES
+  POP DS
  END;
 End;
 
@@ -9930,8 +9932,8 @@ Begin
   MOV CX,TYPE BIOSParameterBlock
   CLD
   REP MOVSB
-  POP DS
   POP ES
+  POP DS
  END;
 
  { Convertir BPB vers DPB }
