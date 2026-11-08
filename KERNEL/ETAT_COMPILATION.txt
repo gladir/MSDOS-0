@@ -12,11 +12,13 @@ pour tester un noyau (DEVENV /KERNELTEST, voir dev-cools/DOC/KERNELTEST.txt).
 * La compilation normale s'arrete pourtant sur
       MSDOS.PAS(10212,23): Erreur 48: Segment de code trop grand
   car le code genere depasse 64 Ko (limite d'un segment de code 8086).
-  Mesure (compilation avec debordement tolere, TPC_SIZES=1) :
-      code total         : ~78 Ko  (dont ~6 Ko de runtime TPC et ~8 Ko de
+  Mesure (TPC_NOLIMIT=1 TPC_SIZES=1 tpc -M T3.PAS, T3 utilisant MSDOS) :
+      code total         : ~72 Ko  (dont ~6 Ko de runtime TPC et ~8 Ko de
                                      donnees a zero : bloc Data, FileTable...)
-      code du noyau seul : ~72 Ko
+      code du noyau seul : ~66 Ko (apres edition de liens intelligente)
   Avant les optimisations de TPC de cette session : ~92 Ko.
+  Il manque donc encore ~6 Ko pour un segment unique de 64 Ko qui contienne
+  aussi les routines de runtime recopiees et les constantes (section 4).
 * Le noyau doit tenir dans UN segment (IO.SYS charge a 0070:0000, appels
   proches). Il faut donc encore ~10-15 % de reduction, voir section 4.
 
