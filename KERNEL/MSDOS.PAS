@@ -682,8 +682,10 @@ Function DOS49h_FreeMemory(BlockSegment:Word):Word;Near;Forward;
 Function DOS4Ah_ModifyMemory(BlockSegment:Word;NewSize:Word):Word;Near;Forward;
 Function DOS4Bh_ExecProgram(ExecType:Byte;ProgramPath:String;ParamBlock:ExecParameterBlock):Word;Near;Forward;
 Function DOS4Ch_TerminateProgram(ExitCode:Byte):Word;Near;Forward;
+Function DOS31h_Keep(ExitCode:Byte;Paras:Word):Word;Near;Forward;
 Function ExecFromInt21(Mode:Word;NamePtr:Pointer;BlockPtr:Pointer):Word;Near;Forward;
 Function ReadInt21(Handle:Word;Buf:Pointer;Count:Word;Var Got:Word):Word;Near;Forward;
+Function AbsDiskInt21(Wr,Drive,Count,SecHi,SecLo,BufSeg,BufOfs:Word):Word;Near;Forward;
 Function WriteInt21(Handle:Word;Buf:Pointer;Count:Word;Var Got:Word):Word;Near;Forward;
 Function AllocInt21(Size:Word):Word;Near;Forward;
 Function FindFirstInt21(NamePtr:Pointer;Attr:Word):Word;Near;Forward;
@@ -1716,8 +1718,8 @@ Procedure Intr21hCore;Assembler;ASM
  DW @Xit { Fonction EFh - a d�velopper }
  DW @Xit { Fonction F0h - a d�velopper }
  DW @Xit { Fonction F1h - a d�velopper }
- DW @Xit { Fonction F2h - a d�velopper }
- DW @Xit { Fonction F3h - a d�velopper }
+ DW @F2h { Fonction F2h - interne : lecture absolue (INT 25h) }
+ DW @F3h { Fonction F3h - interne : ecriture absolue (INT 26h) }
  DW @Xit { Fonction F4h - a d�velopper }
  DW @Xit { Fonction F5h - a d�velopper }
  DW @Xit { Fonction F6h - a d�velopper }
@@ -2900,65 +2902,27 @@ Procedure Intr21hCore;Assembler;ASM
  { Interruption 21h - Fonction 31h: Terminate Stay Resident (TSR)              }
  {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
 @31h:
- { Terminer le programme en gardant une partie en mémoire (TSR) }
- { Entrée : AL = code de retour, DX = nombre de paragraphes à garder en mémoire }
- { Cette fonction est utilisée par les programmes résidents (TSR) }
- PUSH AX                    { Sauver registres }
  PUSH BX
  PUSH CX
  PUSH DX
-
- { Vérifier que DX n'est pas trop grand (limite raisonnable) }
- CMP DX,1000h               { Maximum ~64KB en paragraphes }
- JA @31hError
-
- { Dans un DOS complet, cette fonction devrait :
-   1. Marquer les blocs mémoire comme résidents
-   2. Ajuster la table des blocs mémoire (MCB - Memory Control Block)
-   3. Libérer la mémoire non utilisée
-   4. Sauvegarder le code de retour
-   5. Retourner au programme parent sans libérer complètement le programme }
-
- { Version simplifiée pour cette implémentation de base :
-   On simule un TSR en gardant le programme en mémoire mais sans
-   implémenter la gestion complète des MCB }
-
- { Sauvegarder le code de retour (AL) dans une variable système }
- MOV BL,AL                  { Code de retour dans BL }
-
- { Calculer la taille mémoire à conserver }
- { DX contient le nombre de paragraphes (16 octets chacun) }
- MOV CX,DX                  { Nombre de paragraphes à garder }
-
- { Pour cette implémentation, on fait un appel à la fonction 4Ch }
- { avec le code de retour mais sans libérer complètement le programme }
- { Dans un vrai DOS, le programme resterait résident }
-
- { Simulation : marquer comme résident et retourner succès }
- { En réalité, le programme devrait rester en mémoire et actif }
- MOV AL,BL                  { Récupérer le code de retour }
-
- POP DX                     { Restaurer registres }
+ PUSH SI
+ PUSH DI
+ PUSH ES
+ PUSH DS
+ XOR AH,AH
+ PUSH AX
+ PUSH DX
+ PUSH CS
+ POP DS
+ CALL DOS31h_Keep
+ POP DS
+ POP ES
+ POP DI
+ POP SI
+ POP DX
  POP CX
  POP BX
- POP AX
-
- { Pour l'instant, on fait comme une terminaison normale }
- { Dans un DOS complet, le programme continuerait à s'exécuter en arrière-plan }
- MOV AH,4Ch                 { Fonction 4Ch - Terminaison avec code de retour }
- INT 21h                    { Terminer (mais en gardant résident) }
- JMP @Xit
-
-@31hError:
- { Erreur : trop de mémoire demandée }
- POP DX                     { Restaurer registres }
- POP CX
- POP BX
- POP AX
- { Retourner une erreur - dans ce cas on termine normalement }
- MOV AH,4Ch                 { Fonction 4Ch - Terminaison avec code d'erreur }
- MOV AL,1                   { Code d'erreur = 1 }
- INT 21h
+ STC
  JMP @Xit
 
  {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
@@ -4416,6 +4380,48 @@ Procedure Intr21hCore;Assembler;ASM
  POP BX
  JMP @Xit
 
+@F2h:
+@F3h:
+ PUSH BX
+ PUSH CX
+ PUSH SI
+ PUSH DI
+ PUSH ES
+ PUSH DX
+ PUSH DS
+ MOV SI,AX
+ XOR AH,AH
+ MOV DI,AX
+ MOV AX,SI
+ MOV AL,AH
+ AND AX,0001h
+ PUSH AX
+ PUSH DI
+ PUSH CX
+ XOR AX,AX
+ PUSH AX
+ PUSH DX
+ PUSH DS
+ PUSH BX
+ PUSH CS
+ POP DS
+ CALL AbsDiskInt21
+ POP DS
+ OR AX,AX
+ JZ @F2hOk
+ STC
+ JMP @F2hEnd
+@F2hOk:
+ CLC
+@F2hEnd:
+ POP DX
+ POP ES
+ POP DI
+ POP SI
+ POP CX
+ POP BX
+ JMP @Xit
+
 @68h:
  CLC
  JMP @Xit
@@ -4524,293 +4530,19 @@ Procedure Intr20hEntry;Assembler;ASM
  JMP Intr21h
 END;
 
+{ INT 25h / INT 26h : lecture / ecriture absolue de secteurs. Passent par INT 21h (fonctions internes
+  F2h/F3h) pour profiter de la pile privee ; retour FAR en laissant les FLAGS de l'INT sur la pile de
+  l'appelant (comportement DOS), CF = erreur. }
 Procedure Intr25h;Assembler;ASM
- { INT 25h - Lecture secteur disque absolue }
- { Entrée:                                  }
- {   AL = numéro lecteur (0=A:, 1=B:, etc.) }
- {   CX = nombre de secteurs à lire          }
- {   DX = secteur de départ (pour petits disques) }
- {   DS:BX = pointeur buffer                 }
- { Sortie:                                  }
- {   CF = 0 si succès, 1 si erreur          }
- {   AX = code d'erreur si erreur           }
-
- PUSH BP                    { Sauver registres }
- PUSH DI
- PUSH SI
- PUSH ES
-
- { Vérifier validité du lecteur }
- CMP AL,26                  { Maximum 26 lecteurs (A-Z) }
- JA @25hInvalidDrive
-
- { Déterminer si c'est un disque dur ou disquette }
- CMP AL,2                   { 0=A:, 1=B:, 2=C:, etc. }
- JAE @25hHardDisk
-
- {--- Disquette (A: ou B:) ---}
-@25hFloppy:
- { Pour les disquettes, utiliser l'approche CHS classique }
- MOV AH,02h                 { BIOS read sectors }
- MOV AL,CL                  { Nombre de secteurs }
-
- { Convertir numéro secteur logique en CHS }
- PUSH AX                    { Sauver AX }
- MOV AX,DX                  { AX = secteur logique }
- MOV BL,18                  { 18 secteurs par piste (standard 1.44MB) }
- DIV BL                     { AL = piste, AH = secteur dans piste }
- MOV CL,AH                  { CL = secteur (0-based) }
- INC CL                     { Secteur BIOS est 1-based }
-
- XOR AH,AH                  { AH = 0, AL = piste }
- MOV BL,2                   { 2 têtes }
- DIV BL                     { AL = cylindre, AH = tête }
- MOV CH,AL                  { CH = cylindre }
- MOV DH,AH                  { DH = tête }
-
- POP AX                     { Restaurer AX }
- PUSH AX                    { Sauver AX }
- MOV AX,[BP+8]              { Récupérer registres originaux depuis pile }
- MOV DL,AL                  { DL = numéro lecteur original }
- POP AX                     { Restaurer AX }
-
- INT 13h                    { Appel BIOS }
- JMP @25hEnd
-
- {--- Disque dur ---}
-@25hHardDisk:
- { Pour les disques durs, utiliser LBA si possible }
- MOV AH,42h                 { BIOS Extended Read }
- PUSH AX                    { Sauver AX }
- MOV AX,[BP+8]              { Récupérer registres originaux }
- MOV DL,AL                  { DL = numéro lecteur }
- POP AX                     { Restaurer AX }
- ADD DL,80h                 { Convertir en numéro BIOS (80h=C:, 81h=D:, etc.) }
-
- { Préparer structure LBA sur la pile }
-{$IFDEF CPU86}
- { 8088/8086 : Utiliser registres pour les constantes }
- XOR AX,AX                  { AX = 0 }
- PUSH AX                    { LBA étendu partie haute (high word) }
- PUSH AX                    { LBA étendu partie haute (low word) }
- PUSH DX                    { LBA secteur de départ (partie basse) }
- PUSH DS                    { Segment buffer }
- PUSH BX                    { Offset buffer }
- PUSH CX                    { Nombre de secteurs }
- MOV AX,10h                 { Taille structure }
- PUSH AX
-{$ELSE}
- { 80286+ : PUSH immediate supporté }
- PUSH DWord Ptr 0           { LBA étendu (partie haute) }
- PUSH DX                    { LBA secteur de départ (partie basse) }
- PUSH DS                    { Segment buffer }
- PUSH BX                    { Offset buffer }
- PUSH CX                    { Nombre de secteurs }
- PUSH 10h                   { Taille structure }
-{$ENDIF}
-
- MOV SI,SP                  { DS:SI pointe sur structure }
- INT 13h                    { Appel BIOS étendu }
- ADD SP,16                  { Nettoyer pile }
-
- JNC @25hSuccess            { Si succès, terminer }
-
- { Si LBA échoue, essayer CHS classique }
- MOV AH,02h                 { BIOS read sectors classique }
- MOV AL,CL                  { Nombre de secteurs }
-
- { Conversion LBA vers CHS approximative }
- MOV AX,DX                  { AX = LBA }
- MOV BL,63                  { 63 secteurs par piste (standard) }
- DIV BL                     { AL = piste/tête, AH = secteur }
- MOV CL,AH                  { CL = secteur }
- INC CL                     { Secteur BIOS 1-based }
-
- XOR AH,AH                  { AX = piste/tête }
- MOV BL,255                 { 255 têtes maximum }
- DIV BL                     { AL = cylindre, AH = tête }
- MOV CH,AL                  { CH = cylindre }
- MOV DH,AH                  { DH = tête }
-
- PUSH AX                    { Sauver AX }
- MOV AX,[BP+8]              { Récupérer registres originaux }
- MOV DL,AL                  { DL = numéro lecteur }
- POP AX                     { Restaurer AX }
- ADD DL,80h                 { Convertir BIOS }
-
- INT 13h                    { Appel BIOS }
- JMP @25hEnd
-
-@25hInvalidDrive:
- MOV AX,0001h               { Code erreur : lecteur invalide }
- STC                        { Set Carry Flag }
- JMP @25hEnd
-
-@25hSuccess:
- XOR AX,AX                  { Succès }
- CLC                        { Clear Carry Flag }
-
-@25hEnd:
- POP ES                     { Restaurer registres }
- POP SI
- POP DI
- POP BP
-
- { COMPORTEMENT SPÉCIAL INT 25h: }
- { INT 25h laisse les FLAGS sur la pile pour l'appelant }
- { L'appelant doit faire POPF ou ADD SP,2 pour nettoyer }
-
- { Récupérer l'adresse de retour et les flags depuis la pile }
- POP DX                     { DX = adresse de retour (offset) }
- POP CX                     { CX = adresse de retour (segment) }
- PUSHF                      { Pousser les flags actuels }
- PUSH CX                    { Repousser segment de retour }
- PUSH DX                    { Repousser offset de retour }
-
- { Retour normal - les flags restent sur la pile pour l'appelant }
+ MOV AH,0F2h
+ INT 21h
+ DB 0CBh
 END;
 
 Procedure Intr26h;Assembler;ASM
- { INT 26h - Écriture secteur disque absolue }
- { Entrée:                                   }
- {   AL = numéro lecteur (0=A:, 1=B:, etc.)  }
- {   CX = nombre de secteurs à écrire        }
- {   DX = secteur de départ                  }
- {   DS:BX = pointeur buffer                 }
- { Sortie:                                   }
- {   CF = 0 si succès, 1 si erreur           }
- {   AX = code d'erreur si erreur            }
-
- PUSH BP                    { Sauver registres }
- PUSH DI
- PUSH SI
- PUSH ES
-
- { Vérifier validité du lecteur }
- CMP AL,26                  { Maximum 26 lecteurs }
- JA @26hInvalidDrive
-
- { Déterminer type de lecteur }
- CMP AL,2
- JAE @26hHardDisk
-
- {--- Disquette ---}
-@26hFloppy:
- MOV AH,03h                 { BIOS write sectors }
- MOV AL,CL                  { Nombre de secteurs }
-
- { Convertir secteur logique en CHS }
- PUSH AX
- MOV AX,DX                  { AX = secteur logique }
- MOV BL,18                  { Secteurs par piste }
- DIV BL                     { AL = piste, AH = secteur }
- MOV CL,AH
- INC CL                     { Secteur 1-based }
-
- XOR AH,AH
- MOV BL,2                   { Têtes }
- DIV BL                     { AL = cylindre, AH = tête }
- MOV CH,AL
- MOV DH,AH
-
- POP AX
- PUSH AX                    { Sauver AX }
- MOV AX,[BP+8]              { Récupérer registres originaux }
- MOV DL,AL                  { Numéro lecteur }
- POP AX                     { Restaurer AX }
-
- INT 13h
- JMP @26hEnd
-
- {--- Disque dur ---}
-@26hHardDisk:
- MOV AH,43h                 { BIOS Extended Write }
- PUSH AX                    { Sauver AX }
- MOV AX,[BP+8]              { Récupérer registres originaux }
- MOV DL,AL                  { DL = numéro lecteur }
- POP AX                     { Restaurer AX }
- ADD DL,80h                 { Numéro BIOS }
-
- { Structure LBA }
-{$IFDEF CPU86}
- { 8088/8086 : Utiliser registres pour les constantes }
- XOR AX,AX                  { AX = 0 }
- PUSH AX                    { LBA étendu partie haute (high word) }
- PUSH AX                    { LBA étendu partie haute (low word) }
- PUSH DX                    { LBA secteur }
- PUSH DS                    { Segment buffer }
- PUSH BX                    { Offset buffer }
- PUSH CX                    { Nombre secteurs }
- MOV AX,10h                 { Taille structure }
- PUSH AX
-{$ELSE}
- { 80286+ : PUSH immediate supporté }
- PUSH DWord Ptr 0           { LBA étendu }
- PUSH DX                    { LBA secteur }
- PUSH DS                    { Segment buffer }
- PUSH BX                    { Offset buffer }
- PUSH CX                    { Nombre secteurs }
- PUSH 10h                   { Taille structure }
-{$ENDIF}
-
- MOV SI,SP
- INT 13h
- ADD SP,16
-
- JNC @26hSuccess
-
- { Fallback CHS }
- MOV AH,03h                 { BIOS write sectors }
- MOV AL,CL
-
- MOV AX,DX
- MOV BL,63
- DIV BL
- MOV CL,AH
- INC CL
-
- XOR AH,AH
- MOV BL,255
- DIV BL
- MOV CH,AL
- MOV DH,AH
-
- PUSH AX                    { Sauver AX }
- MOV AX,[BP+8]              { Récupérer registres originaux }
- MOV DL,AL                  { DL = numéro lecteur }
- POP AX                     { Restaurer AX }
- ADD DL,80h
-
- INT 13h
- JMP @26hEnd
-
-@26hInvalidDrive:
- MOV AX,0001h
- STC
- JMP @26hEnd
-
-@26hSuccess:
- XOR AX,AX
- CLC
-
-@26hEnd:
- POP ES
- POP SI
- POP DI
- POP BP
-
- { COMPORTEMENT SPÉCIAL INT 26h: }
- { INT 26h laisse les FLAGS sur la pile pour l'appelant }
- { L'appelant doit faire POPF ou ADD SP,2 pour nettoyer }
-
- { Récupérer l'adresse de retour et les flags depuis la pile }
- POP DX                     { DX = adresse de retour (offset) }
- POP CX                     { CX = adresse de retour (segment) }
- PUSHF                      { Pousser les flags actuels }
- PUSH CX                    { Repousser segment de retour }
- PUSH DX                    { Repousser offset de retour }
-
- { Retour normal - les flags restent sur la pile pour l'appelant }
+ MOV AH,0F3h
+ INT 21h
+ DB 0CBh
 END;
 
 Procedure Intr28h;Assembler;ASM
@@ -10532,7 +10264,7 @@ Var
  Hdr: ExeHeader;
  Path: Array[0..127] of Char;
  Handle,Got,I,Block,ImgSeg,Need,Avail,EnvSeg,Parent,Chunk,Reloc,FixSeg,FixOfs: Word;
- FileLen,ImgBytes: LongInt;
+ FileLen,ImgBytes,WantL: LongInt;
  Pairs: Array[0..63] of Word;
  Left,Todo: Word;
 Begin
@@ -10571,8 +10303,10 @@ Begin
  End;
  { donner au programme tout ce qui est possible jusqu'au maximum demande }
  If (Hdr.MaxExtraParagraphs>=Hdr.MinExtraParagraphs) And (Hdr.MaxExtraParagraphs<>$FFFF) Then Begin
-  If Longint(Need)-Hdr.MinExtraParagraphs+Hdr.MaxExtraParagraphs<Avail Then
-   Need:=Need-Hdr.MinExtraParagraphs+Hdr.MaxExtraParagraphs
+  WantL:=Need;
+  WantL:=WantL-Hdr.MinExtraParagraphs;
+  WantL:=WantL+Hdr.MaxExtraParagraphs;
+  If WantL<Avail Then Need:=Word(WantL)
   Else Need:=Avail;
  End
  Else Need:=Avail;
@@ -10869,6 +10603,41 @@ Begin
 End;
 
 { Lecture : poignees 0..4 = console (ligne editee, terminee par CR LF) }
+{ Lecture / ecriture absolue de secteurs logiques (INT 25h / 26h). CX=FFFFh : paquet DS:BX
+  (secteur LongInt, nombre Word, tampon Pointer). Rend 0 ou un code d'erreur DOS. }
+Function AbsDiskInt21(Wr,Drive,Count,SecHi,SecLo,BufSeg,BufOfs:Word):Word;
+Var
+ Sec: LongInt;
+ I,PS,PO,BS,BO: Word;
+ Ok: Boolean;
+Begin
+ AbsDiskInt21:=0;
+ If Drive>25 Then Begin AbsDiskInt21:=1; Exit; End;
+ BS:=BufSeg;
+ BO:=BufOfs;
+ Sec:=SecHi;
+ Sec:=Sec*65536;
+ Sec:=Sec+SecLo;
+ If Count=$FFFF Then Begin
+  PS:=BufSeg;
+  PO:=BufOfs;
+  Sec:=MemW[PS:PO+2];
+  Sec:=Sec*65536;
+  Sec:=Sec+MemW[PS:PO];
+  Count:=MemW[PS:PO+4];
+  BO:=MemW[PS:PO+6];
+  BS:=MemW[PS:PO+8];
+ End;
+ I:=0;
+ While I<Count Do Begin
+  If Wr<>0 Then Ok:=WriteSector(Drive,Sec,Ptr(BS+I*32,BO))
+  Else Ok:=ReadSector(Drive,Sec,Ptr(BS+I*32,BO));
+  If Not Ok Then Begin AbsDiskInt21:=$0C; Exit; End;
+  Sec:=Sec+1;
+  Inc(I);
+ End;
+End;
+
 Function ReadInt21(Handle:Word;Buf:Pointer;Count:Word;Var Got:Word):Word;
 Var
  S,O,N,K: Word;
@@ -11364,6 +11133,32 @@ Begin
   SetDTA(Parent,$80);
  End;
  FreeProcessMemory(Cur);
+ ASM
+  DEC Data.DataMOS.InDos
+ END;
+ ExecReturn(Cur);
+End;
+
+{ Fonction 31h - Terminate and Stay Resident : le bloc du programme est reduit a Paras paragraphes
+  (6 au minimum) et reste alloue ; ne revient pas si le programme a ete lance par EXEC }
+Function DOS31h_Keep(ExitCode:Byte;Paras:Word):Word;
+Var
+ Cur,Parent: Word;
+Begin
+ DOS31h_Keep:=1;
+ Cur:=GetCurrentPSP;
+ If (Cur=0) Or (MemW[Cur:$2E]=0) Then Exit;
+ If Paras<6 Then Paras:=6;
+ DOS4Ah_ModifyMemory(Cur,Paras);
+ Parent:=MemW[Cur:$16];
+ SetLastReturnCode(ExitCode);
+ If Parent=Cur Then Begin
+  SetCurrentPSP(0);
+  SetDTA($9000,0);
+ End Else Begin
+  SetCurrentPSP(Parent);
+  SetDTA(Parent,$80);
+ End;
  ASM
   DEC Data.DataMOS.InDos
  END;

@@ -347,11 +347,11 @@ Begin
     End
     Else
    If CurrDisk=0 Then Begin
-    Int25h(Ord(UpCase(GetCurrentDisk))-(Ord('A')-1),FatPOS+J,1,Buffer,Erreur);
+    Int25h(Ord(UpCase(GetCurrentDisk))-Ord('A'),FatPOS+J,1,Buffer,Erreur);
    End
      Else
    Begin
-    Int25h(CurrDisk+1,FatPOS+J,1,Buffer,Erreur);
+    Int25h(CurrDisk-1,FatPOS+J,1,Buffer,Erreur);
    End;
    For I:=0 to 255 do Begin
     If BufWord[I]=0 Then Inc(FreeSize,GetClusterSize);
@@ -458,14 +458,14 @@ BEGIN
   End
    Else
   If CurrDisk=0 Then Begin
-   Int25h(Ord(UpCase(GetCurrentDisk))-(Ord('A')-1),0,1,BufferSector0,Erreur);
+   Int25h(Ord(UpCase(GetCurrentDisk))-Ord('A'),0,1,BufferSector0,Erreur);
    {$IFNDEF Windows}
     BufferLoaded:=True;
    {$ENDIF}
   End
    Else
   Begin
-   Int25h(CurrDisk+1,0,1,BufferSector0,Erreur);
+   Int25h(CurrDisk-1,0,1,BufferSector0,Erreur);
    {$IFNDEF Windows}
     BufferLoaded:=True;
    {$ENDIF}
