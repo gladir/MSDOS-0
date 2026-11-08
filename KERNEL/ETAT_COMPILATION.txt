@@ -3,7 +3,7 @@ ETAT DE LA COMPILATION ET DU DEMARRAGE DU NOYAU (TPC + DEVENV /KERNELTEST)
 
 Resume
 ------
-* TPC compile MSDOS.PAS en un IO.SYS de ~54 Ko (MAKER.PAS l'ecrit comme prevu :
+* TPC compile MSDOS.PAS en un IO.SYS de ~50 Ko (MAKER.PAS l'ecrit comme prevu :
   BEGIN_KERNEL a l'offset 0). Une unite qui declare "Procedure BEGIN_KERNEL" est
   compilee dans son propre segment : donnees (chaines, constantes) et routines du
   runtime SYSTEM utilisees sont recopiees dans le segment (DS=CS), l'edition de
@@ -19,29 +19,31 @@ Resume
 
 Ce qui est valide dans l'emulateur (BOOTTEST.sh, script "type ...")
 ------------------------------------------------------------------
-COMMAND.EXE (compile par TPC) tourne sur le noyau et execute : VER, ECHO, DIR
-(fichiers et masque d'attributs DOS), TYPE, COPY (lecture + creation), CD \, DATE/TIME
-(lecture de l'horloge BIOS). La saisie clavier est editee (retour arriere) et
-l'echo passe par le curseur BIOS (0040:0050) comme Crt.
+COMMAND.EXE (compile par TPC) tourne sur le noyau et execute : VER, ECHO, DIR (repertoire courant et
+sous-repertoires, totaux, espace libre reel), TYPE, COPY (lecture ET ecriture persistantes, fichiers de
+plusieurs clusters, fichiers de COMMAND vers sous-repertoire), REN, DEL, MD, RD, CD (repertoire courant memorise,
+".." et chemins relatifs), DATE/TIME (lecture de l'horloge BIOS). La saisie clavier est editee.
+
+Couche FAT en ecriture (Fx*, dans MSDOS.PAS) : FAT12/FAT16 (entree FAT12 a cheval sur deux secteurs geree),
+volume compact (TFxVol) au lieu du secteur de boot de 512 octets passe par valeur, entrees de repertoire
+manipulees dans le tampon du secteur. Fonctions : 39h MD, 3Ah RD, 3Bh CD, 3Ch creer/tronquer, 3Dh ouvrir,
+3Eh fermer (met a jour taille et premier cluster), 40h ecrire, 41h supprimer, 47h repertoire courant,
+4Eh/4Fh recherche, 56h renommer, 5Bh creer (echec si existe), 36h espace libre. L'emplacement de l'entree
+de repertoire de chaque handle est memorise dans Data.DataMOS (FxBase = 2486, 20 x 5 octets).
+Verifie avec un lecteur FAT12 externe (KERNEL/../fatls.py n'est pas fourni : comparer l'image du disque).
 
 Ce qui ne marche pas encore
 ---------------------------
-* Ecriture FAT : la creation de fichier (3Ch/5Bh), l'ecriture (40h) et la mise a
-  jour du repertoire ne sont pas persistees sur le disque (COPY affiche
-  "1 fichier copie" mais l'entree n'apparait pas dans la racine), MD est simule
-  (39h), REN (56h) et DEL (41h) non valides.
-* Les ~60 autres passerelles INT 21h (FCB 0F-17/21-24/27-29, 43h, 45h, 46h, 57h, 5Ah...)
-  ont encore les defauts d'ordre de parametres / DS / ADD SP : meme methode de
-  correction que pour 3A-4F (voir @3Dh..@4Fh dans MSDOS.PAS).
-* INT 1Ah de l'emulateur ne fournit pas l'horloge temps reel : DATE/TIME affichent 0.
-* La concatenation "Result := Result + caractere" donne un resultat faux quand elle
-  est compilee dans le segment noyau (contournee dans DOS83ToString) : a corriger dans
-  TPC (mode noyau) car beaucoup de code du noyau concatene des chaines.
-* IO.SYS fait 54 116 octets (65 285 avant les optimisations de TPC, voir DEV-COOLS/DOC/TPC_OPTIMISATIONS.txt) :
-  il reste ~11 Ko de marge dans le segment de 64 Ko.
-* Pile : le noyau s'execute sur la pile du programme appelant (COMMAND.EXE : {$M 8192}) ; FindFirst/FindNext
-  (MatchFileName recursif, chaines de 256 octets passees par valeur) consomment ~6 Ko. A terme : pile privee du
-  noyau (comme MS-DOS) pour ne plus dependre de la pile de l'appelant.
+* Redirection ">" de COMMAND (ECHO ... > fichier cree le fichier mais ecrit a l'ecran) : il faut 45h (DUP) et
+  46h (FORCEDUP) et une table de handles par processus (JFT) ; les handles 0-4 sont codes en dur (console).
+* Date/heure des fichiers crees : fixees au 1980-01-01 00:00 (INT 1Ah de l'emulateur sans horloge temps reel).
+* Les autres passerelles INT 21h (FCB 0F-17/21-24/27-29, 43h, 45h, 46h, 57h, 5Ah...) ont encore les defauts
+  d'ordre de parametres / DS / ADD SP : meme methode de correction que pour 3A-4F (voir @3Dh..@4Fh, @36h,
+  @39h, @56h dans MSDOS.PAS).
+* Le noyau s'execute sur la pile du programme appelant (COMMAND.EXE : {$M 8192}) ; MatchFileName recursif et les
+  chaines de 256 octets passees par valeur consomment ~6 Ko (pile privee du noyau a prevoir).
+* IO.SYS fait 50 174 octets (65 285 avant les optimisations de TPC, voir DEV-COOLS/DOC/TPC_OPTIMISATIONS.txt) :
+  il reste ~14 Ko de marge dans le segment de 64 Ko.
 
 Corrections de TPC (resume)
 ---------------------------
