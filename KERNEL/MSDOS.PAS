@@ -1,7 +1,8 @@
 { @author: Sylvain Maltais
   @created: 2026
   @website(https://www.gladir.com/msdos0)
-  @description: Le MS Operating System est un systeme d'exploitation remplacant le DOS traditionnel.
+  @description: Le MS Operating System est un systeme d'exploitation remplacant
+    le DOS traditionnel.
 
   Directives de compilation pour compatibilite processeur :
   - CPU86  : Cible 8088/8086 (pas de PUSH immediate)
@@ -242,7 +243,8 @@ Const
  CDSize=67;          { Drive(1) + Cluster(2) + Path(1+63) }
  NDrv=6;            { unites A: a F: (LASTDRIVE ne peut pas depasser F:) }
  FTBase=516;         { CDBase + NDrv*CDSize : debut de FileTable dans DataMOS }
- FxBase=1146;        { FTBase + 20*17 + 9 + 280 + 1 : apres PendingLF ; 20 x (secteur LongInt + index Byte) }
+ FxBase=1146;        { FTBase + 20*17 + 9 + 280 + 1 : apres PendingLF ;
+   20 x (secteur LongInt + index Byte) }
  ArenaBase=$1080;
  ArenaEnd=$9000;
  VerDos=7;          { Version de DOS }
@@ -332,7 +334,8 @@ Type
   DTASegment:Word;    { Segment de la DTA }
   DTAOffset:Word;     { Offset de la DTA }
   CurrentCountry:Word; { Code pays actuel }
-  LastReturnCode:Word; { Code de retour du dernier programme (AH=raison, AL=code) }
+  LastReturnCode:Word; { Code de retour du dernier programme (AH=raison,
+    AL=code) }
   CurrentPSP:Word;     { Segment du PSP courant }
   VerifyFlag:Byte;     { Flag de vérification en écriture (0=off, 1=on) }
   FindState: FindFileState; { État de la recherche de fichiers }
@@ -351,7 +354,8 @@ Type
   UMBLinkState:Word;        { État de liaison des UMB }
   { Table des verrous de fichiers }
   FileLocks: Array[0..19] of FileLockEntry; { Max 20 verrous simultanés }
-  PendingLF: Byte;          { console : LF a rendre apres un CR lu caractere par caractere }
+  PendingLF: Byte;
+    { console : LF a rendre apres un CR lu caractere par caractere }
  End;
 
  { Structure pour les informations pays }
@@ -512,7 +516,8 @@ Procedure Intr2Fh;{$IFNDEF FPC}Interrupt;{$ENDIF}Forward;
 Procedure Intr33h;{$IFNDEF FPC}Interrupt;{$ENDIF}Forward;
 
 { Déclarations des fonctions DOS }
-Function DOS4Eh_FindFirstFile(Path:String;Attr:Byte;var DTA:DTAStruct):Word;Forward;
+Function DOS4Eh_FindFirstFile(Path:String;Attr:Byte;var DTA:DTAStruct):Word;
+  Forward;
 Function DOS4Fh_FindNextFile(var DTA:DTAStruct):Word;Forward;
 
 { Fonctions d'accès aux données du kernel }
@@ -541,23 +546,34 @@ Procedure Delete(Var S:String;Index,Count:Byte);Near;Forward;
 Function Handle38hSetCountryInfo(NewCountryCode:Word):Word;Near;Forward;
 
 { Procédures pour gestion FAT et répertoires - Fonctions 39h/3Ah }
-Function ReadBootSector(Drive:Byte;Var BootSec:BootSectorRec):Boolean;Near;Forward;
-Function ReadSector(Drive:Byte;Sector:LongInt;Buffer:Pointer):Boolean;Near;Forward;
-Function WriteSector(Drive:Byte;Sector:LongInt;Buffer:Pointer):Boolean;Near;Forward;
+Function ReadBootSector(Drive:Byte;Var BootSec:BootSectorRec):Boolean;Near;
+  Forward;
+Function ReadSector(Drive:Byte;Sector:LongInt;Buffer:Pointer):Boolean;Near;
+  Forward;
+Function WriteSector(Drive:Byte;Sector:LongInt;Buffer:Pointer):Boolean;Near;
+  Forward;
 Function FindFreeCluster(Drive:Byte;BootSec:BootSectorRec):Word;Near;Forward;
-Function AllocateCluster(Drive:Byte;BootSec:BootSectorRec;Cluster:Word):Boolean;Near;Forward;
-Function CreateDirEntry(Drive:Byte;BootSec:BootSectorRec;ParentCluster:Word;DirName:String):Boolean;Near;Forward;
-Function ParsePath(Path:String;Var Drive:Byte;Var DirName:String):Boolean;Near;Forward;
-Function FindParentDirectory(Drive:Byte;BootSec:BootSectorRec;Path:String;Var ParentCluster:Word):Boolean;Near;Forward;
+Function AllocateCluster(Drive:Byte;BootSec:BootSectorRec;Cluster:Word):Boolean;
+  Near;Forward;
+Function CreateDirEntry(Drive:Byte;BootSec:BootSectorRec;ParentCluster:Word;
+  DirName:String):Boolean;Near;Forward;
+Function ParsePath(Path:String;Var Drive:Byte;Var DirName:String):Boolean;Near;
+  Forward;
+Function FindParentDirectory(Drive:Byte;BootSec:BootSectorRec;Path:String;
+  Var ParentCluster:Word):Boolean;Near;Forward;
 
 { Procédures spécifiques pour fonction 3Ah - Remove Directory }
 Function FindDirectoryEntry(Drive:Byte;BootSec:BootSectorRec;ParentCluster:Word;
                            DirName:String;Var Entry:DirectoryEntry;
                            Var EntryOffset:Word):Boolean;Near;Forward;
-Function IsDirectoryEmpty(Drive:Byte;BootSec:BootSectorRec;DirCluster:Word):Boolean;Near;Forward;
-Function FreeFATChain(Drive:Byte;BootSec:BootSectorRec;StartCluster:Word):Boolean;Near;Forward;
-Function DeleteDirEntry(Drive:Byte;BootSec:BootSectorRec;ParentCluster:Word;EntryOffset:Word):Boolean;Near;Forward;
-Function GetClusterSector(Drive:Byte;BootSec:BootSectorRec;Cluster:Word):LongInt;Near;Forward;
+Function IsDirectoryEmpty(Drive:Byte;BootSec:BootSectorRec;
+  DirCluster:Word):Boolean;Near;Forward;
+Function FreeFATChain(Drive:Byte;BootSec:BootSectorRec;
+  StartCluster:Word):Boolean;Near;Forward;
+Function DeleteDirEntry(Drive:Byte;BootSec:BootSectorRec;ParentCluster:Word;
+  EntryOffset:Word):Boolean;Near;Forward;
+Function GetClusterSector(Drive:Byte;BootSec:BootSectorRec;
+  Cluster:Word):LongInt;Near;Forward;
 
 { Fonctions principales pour 3Ah et 3Bh }
 Function DOS3Ah_RemoveDirectory(PathPtr:Pointer):Word;Near;Forward;
@@ -577,7 +593,8 @@ Function CreateNewInt21(PathPtr:Pointer;Attr:Word):Word;Near;Forward;
 Function TempInt21(PathPtr:Pointer;Attr:Word):Word;Near;Forward;
 Function CloseInt21(H:Word):Word;Near;Forward;
 Function SeekInt21(H,OffsetHi,OffsetLo:Word;Method:Byte):LongInt;Near;Forward;
-Function DateTimeInt21(H:Word;Action:Byte;NewDate,NewTime:Word):LongInt;Near;Forward;
+Function DateTimeInt21(H:Word;Action:Byte;NewDate,NewTime:Word):LongInt;Near;
+  Forward;
 Function LockInt21(H:Word;Action:Byte;Start,Len:LongInt):Word;Near;Forward;
 Function IoctlInt21(Sub,H:Word;Var Info:Word):Word;Near;Forward;
 Function FcbOpen(P:Pointer):Byte;Near;Forward;
@@ -595,37 +612,50 @@ Function FcbFileSize(P:Pointer):Byte;Near;Forward;
 Function FcbSetRandom(P:Pointer):Byte;Near;Forward;
 Function FcbBlockRead(P:Pointer;Count:Word;Var Done:Word):Byte;Near;Forward;
 Function FcbBlockWrite(P:Pointer;Count:Word;Var Done:Word):Byte;Near;Forward;
-Function FcbParse(StrPtr:Pointer;Fcb:Pointer;Flags:Word;Var NewOfs:Word):Byte;Near;Forward;
+Function FcbParse(StrPtr:Pointer;Fcb:Pointer;Flags:Word;Var NewOfs:Word):Byte;
+  Near;Forward;
 Function SftRefGet(I:Byte):Byte;Near;Forward;
 Procedure SetPartOfs(V:LongInt);Near;Forward;
-Function DiskTransfer(Op:Byte;Drive:Byte;Sector:LongInt;Buffer:Pointer):Boolean;Near;Forward;
+Function DiskTransfer(Op:Byte;Drive:Byte;Sector:LongInt;Buffer:Pointer):Boolean;
+  Near;Forward;
 
 { Procédures spécifiques pour fonction 3Bh - Change Directory }
-Function FindDirectoryByPath(Drive:Byte;BootSec:BootSectorRec;Path:String;Var DirCluster:Word):Boolean;Near;Forward;
+Function FindDirectoryByPath(Drive:Byte;BootSec:BootSectorRec;Path:String;
+  Var DirCluster:Word):Boolean;Near;Forward;
 Function SetCurrentDirectory(Drive:Byte;DirCluster:Word):Boolean;Near;Forward;
 Function DOS3Bh_ChangeDirectory(PathPtr:Pointer):Word;Near;Forward;
 
 { Procédures spécifiques pour fonction 3Ch - Create or Open File }
-Function ParseFilePath(Path:String;Var Drive:Byte;Var DirPath,FileName:String):Boolean;Near;Forward;
-Function FindOrCreateFile(Drive:Byte;BootSec:BootSectorRec;DirPath,FileName:String;
+Function ParseFilePath(Path:String;Var Drive:Byte;Var DirPath,
+  FileName:String):Boolean;Near;Forward;
+Function FindOrCreateFile(Drive:Byte;BootSec:BootSectorRec;DirPath,
+  FileName:String;
                          Attributes:Byte;Var FileHandle:Word):Word;Near;Forward;
 Function AllocateFileHandle(Drive:Byte;FirstCluster,FileSize:LongInt;
-                           Attributes:Byte;Var Handle:Word):Boolean;Near;Forward;
+                           Attributes:Byte;Var Handle:Word):Boolean;Near;
+                             Forward;
 Function CreateFileEntry(Drive:Byte;BootSec:BootSectorRec;DirCluster:Word;
-                        FileName:String;Attributes:Byte;Var FirstCluster:Word):Word;Near;Forward;
-Function OpenExistingFile(Drive:Byte;Entry:DirectoryEntry;Var Handle:Word):Word;Near;Forward;
+                        FileName:String;Attributes:Byte;
+                          Var FirstCluster:Word):Word;Near;Forward;
+Function OpenExistingFile(Drive:Byte;Entry:DirectoryEntry;Var Handle:Word):Word;
+  Near;Forward;
 Function DOS3Ch_CreateOpenFile(PathPtr:Pointer):Word;Near;Forward;
 
 { Procédures spécifiques pour fonction 3Dh - Open File }
 Function ValidateAccessMode(AccessMode:Byte):Boolean;Near;Forward;
-Function OpenFileReadOnly(Drive:Byte;Entry:DirectoryEntry;Var Handle:Word):Word;Near;Forward;
-Function OpenFileWriteOnly(Drive:Byte;Entry:DirectoryEntry;Var Handle:Word):Word;Near;Forward;
-Function OpenFileReadWrite(Drive:Byte;Entry:DirectoryEntry;Var Handle:Word):Word;Near;Forward;
+Function OpenFileReadOnly(Drive:Byte;Entry:DirectoryEntry;Var Handle:Word):Word;
+  Near;Forward;
+Function OpenFileWriteOnly(Drive:Byte;Entry:DirectoryEntry;
+  Var Handle:Word):Word;Near;Forward;
+Function OpenFileReadWrite(Drive:Byte;Entry:DirectoryEntry;
+  Var Handle:Word):Word;Near;Forward;
 Function DOS3Dh_OpenFile(PathPtr:Pointer;AccessMode:Byte):Word;Near;Forward;
 
 { Forward declarations pour fonction 3Eh }
-Function GetFileTableEntry(Handle:Word;Var Entry:FileTableEntry):Boolean;Near;Forward;
-Function SetFileTableEntry(Handle:Word;Entry:FileTableEntry):Boolean;Near;Forward;
+Function GetFileTableEntry(Handle:Word;Var Entry:FileTableEntry):Boolean;Near;
+  Forward;
+Function SetFileTableEntry(Handle:Word;Entry:FileTableEntry):Boolean;Near;
+  Forward;
 Function CloseFileHandle(Handle:Word):Word;Near;Forward;
 Function FlushFileBuffers(Handle:Word):Word;Near;Forward;
 Function UpdateDirectoryEntry(Handle:Word):Word;Near;Forward;
@@ -635,57 +665,81 @@ Function DOS3Eh_CloseFile(Handle:Word):Word;Near;Forward;
 Function ReadFromCluster(Drive:Byte;BootSec:BootSectorRec;Cluster:Word;
                          Offset:Word;Buffer:Pointer;
                          BytesToRead:Word):Word;Near;Forward;
-Function GetNextCluster(Drive:Byte;BootSec:BootSectorRec;CurrentCluster:Word):Word;Near;Forward;
-Function ReadFileData(Handle:Word;Buffer:Pointer;BytesToRead:Word;Var BytesRead:Word):Word;Near;Forward;
-Function DOS3Fh_ReadFile(Handle:Word;Buffer:Pointer;BytesToRead:Word;Var BytesRead:Word):Word;Near;Forward;
+Function GetNextCluster(Drive:Byte;BootSec:BootSectorRec;
+  CurrentCluster:Word):Word;Near;Forward;
+Function ReadFileData(Handle:Word;Buffer:Pointer;BytesToRead:Word;
+  Var BytesRead:Word):Word;Near;Forward;
+Function DOS3Fh_ReadFile(Handle:Word;Buffer:Pointer;BytesToRead:Word;
+  Var BytesRead:Word):Word;Near;Forward;
 
 { Forward declarations pour fonction 40h }
 Function WriteToCluster(Drive:Byte;BootSec:BootSectorRec;Cluster:Word;
-                       Offset:Word;Buffer:Pointer;BytesToWrite:Word):Word;Near;Forward;
-Function AllocateNewCluster(Drive:Byte;BootSec:BootSectorRec;PreviousCluster:Word):Word;Near;Forward;
-Function UpdateFATEntry(Drive:Byte;BootSec:BootSectorRec;Cluster:Word;NextCluster:Word):Boolean;Near;Forward;
-Function WriteFileData(Handle:Word;Buffer:Pointer;BytesToWrite:Word;Var BytesWritten:Word):Word;Near;Forward;
-Function DOS40h_WriteFile(Handle:Word;Buffer:Pointer;BytesToWrite:Word;Var BytesWritten:Word):Word;Near;Forward;
+                       Offset:Word;Buffer:Pointer;BytesToWrite:Word):Word;Near;
+                         Forward;
+Function AllocateNewCluster(Drive:Byte;BootSec:BootSectorRec;
+  PreviousCluster:Word):Word;Near;Forward;
+Function UpdateFATEntry(Drive:Byte;BootSec:BootSectorRec;Cluster:Word;
+  NextCluster:Word):Boolean;Near;Forward;
+Function WriteFileData(Handle:Word;Buffer:Pointer;BytesToWrite:Word;
+  Var BytesWritten:Word):Word;Near;Forward;
+Function DOS40h_WriteFile(Handle:Word;Buffer:Pointer;BytesToWrite:Word;
+  Var BytesWritten:Word):Word;Near;Forward;
 
 { Forward declarations pour fonction 41h }
-Function DeleteDirectoryEntry(Drive:Byte;BootSec:BootSectorRec;DirCluster:Word;FileName:String):Boolean;Near;Forward;
+Function DeleteDirectoryEntry(Drive:Byte;BootSec:BootSectorRec;DirCluster:Word;
+  FileName:String):Boolean;Near;Forward;
 Function DOS41h_DeleteFile(PathPtr:Pointer):Word;Near;Forward;
 
 { Forward declarations pour fonction 42h }
 Function CalculateClusterFromPosition(Drive:Byte;BootSec:BootSectorRec;
                                       FirstCluster:Word;Position:LongInt;
                                       Var TargetCluster:Word;
-                                      Var ClusterOffset:Word):Boolean;Near;Forward;
-Function DOS42h_SeekFile(Handle:Word;OffsetHi,OffsetLo:Word;Method:Byte):LongInt;Near;Forward;
+                                      Var ClusterOffset:Word):Boolean;Near;
+                                        Forward;
+Function DOS42h_SeekFile(Handle:Word;OffsetHi,OffsetLo:Word;
+  Method:Byte):LongInt;Near;Forward;
 
 { Forward declarations pour fonction 43h }
 Function GetFileAttributes(Drive:Byte;BootSec:BootSectorRec;DirCluster:Word;
-                           FileName:String;Var Attributes:Byte):Boolean;Near;Forward;
+                           FileName:String;Var Attributes:Byte):Boolean;Near;
+                             Forward;
 Function SetFileAttributes(Drive:Byte;BootSec:BootSectorRec;DirCluster:Word;
-                           FileName:String;NewAttributes:Byte):Boolean;Near;Forward;
-Function DOS43h_GetSetFileAttributes(PathPtr:Pointer;Action:Byte;NewAttributes:Byte):Word;Near;Forward;
+                           FileName:String;NewAttributes:Byte):Boolean;Near;
+                             Forward;
+Function DOS43h_GetSetFileAttributes(PathPtr:Pointer;Action:Byte;
+  NewAttributes:Byte):Word;Near;Forward;
 
 { Forward declarations pour fonction 44h }
 Function IOCTL_GetDeviceInfo(Handle:Word):Word;Near;Forward;
 Function IOCTL_SetDeviceInfo(Handle:Word;DeviceInfo:Word):Word;Near;Forward;
 Function IOCTL_GetDriveInfo(Drive:Byte):Word;Near;Forward;
 Function IOCTL_SetDriveInfo(Drive:Byte;DeviceInfo:Word):Word;Near;Forward;
-Function IOCTL_ReadControlData(Handle:Word;Buffer:Pointer;BytesToRead:Word):Word;Near;Forward;
-Function IOCTL_WriteControlData(Handle:Word;Buffer:Pointer;BytesToWrite:Word):Word;Near;Forward;
-Function DOS44h_IOCTL(Handle:Word;SubFunction:Byte;Buffer:Pointer;ByteCount:Word):Word;Near;Forward;
+Function IOCTL_ReadControlData(Handle:Word;Buffer:Pointer;
+  BytesToRead:Word):Word;Near;Forward;
+Function IOCTL_WriteControlData(Handle:Word;Buffer:Pointer;
+  BytesToWrite:Word):Word;Near;Forward;
+Function DOS44h_IOCTL(Handle:Word;SubFunction:Byte;Buffer:Pointer;
+  ByteCount:Word):Word;Near;Forward;
 Function DOS45h_DuplicateHandle(SourceHandle:Word):Word;Near;Forward;
-Function DOS46h_ForceDuplicateHandle(SourceHandle:Word;TargetHandle:Word):Word;Near;Forward;
-Function DOS47h_GetCurrentDirectory(Drive:Byte;BufferSeg:Word;BufferOfs:Word):Word;Near;Forward;
+Function DOS46h_ForceDuplicateHandle(SourceHandle:Word;TargetHandle:Word):Word;
+  Near;Forward;
+Function DOS47h_GetCurrentDirectory(Drive:Byte;BufferSeg:Word;
+  BufferOfs:Word):Word;Near;Forward;
 Function DOS48h_AllocateMemory(BlockSize:Word):Word;Near;Forward;
 Function DOS49h_FreeMemory(BlockSegment:Word):Word;Near;Forward;
 Function DOS4Ah_ModifyMemory(BlockSegment:Word;NewSize:Word):Word;Near;Forward;
-Function DOS4Bh_ExecProgram(ExecType:Byte;ProgramPath:String;ParamBlock:ExecParameterBlock):Word;Near;Forward;
+Function DOS4Bh_ExecProgram(ExecType:Byte;ProgramPath:String;
+  ParamBlock:ExecParameterBlock):Word;Near;Forward;
 Function DOS4Ch_TerminateProgram(ExitCode:Byte):Word;Near;Forward;
 Function DOS31h_Keep(ExitCode:Byte;Paras:Word):Word;Near;Forward;
-Function ExecFromInt21(Mode:Word;NamePtr:Pointer;BlockPtr:Pointer):Word;Near;Forward;
-Function ReadInt21(Handle:Word;Buf:Pointer;Count:Word;Var Got:Word):Word;Near;Forward;
-Function AbsDiskInt21(Wr,Drive,Count,SecHi,SecLo,BufSeg,BufOfs:Word):Word;Near;Forward;
-Function WriteInt21(Handle:Word;Buf:Pointer;Count:Word;Var Got:Word):Word;Near;Forward;
+Function ExecFromInt21(Mode:Word;NamePtr:Pointer;BlockPtr:Pointer):Word;Near;
+  Forward;
+Function ReadInt21(Handle:Word;Buf:Pointer;Count:Word;Var Got:Word):Word;Near;
+  Forward;
+Function AbsDiskInt21(Wr,Drive,Count,SecHi,SecLo,BufSeg,BufOfs:Word):Word;Near;
+  Forward;
+Function WriteInt21(Handle:Word;Buf:Pointer;Count:Word;Var Got:Word):Word;Near;
+  Forward;
 Function AllocInt21(Size:Word):Word;Near;Forward;
 Function FindFirstInt21(NamePtr:Pointer;Attr:Word):Word;Near;Forward;
 Function FindNextInt21:Word;Near;Forward;
@@ -709,7 +763,8 @@ Function DOS51h_GetPSPAddress:Word;Near;Forward;
 
 { Fonctions 52h et 53h - Structures internes DOS }
 Function DOS52h_GetListOfLists:Pointer;Near;Forward;
-Function DOS53h_TranslateBPBtoDPB(BPBPtr:Pointer;DPBPtr:Pointer):Word;Near;Forward;
+Function DOS53h_TranslateBPBtoDPB(BPBPtr:Pointer;DPBPtr:Pointer):Word;Near;
+  Forward;
 
 { Fonctions 2Eh et 54h - Vérification en écriture }
 Function DOS2Eh_SetVerifyFlag(VerifyState:Byte):Word;Near;Forward;
@@ -719,47 +774,61 @@ Function DOS54h_GetVerifyFlag:Byte;Near;Forward;
 Function DOS55h_CreateChildPSP(NewPSPSegment:Word):Word;Near;Forward;
 
 { Fonction 56h - Rename/Move File }
-Function DOS56h_RenameFile(OldPathPtr:Pointer;NewPathPtr:Pointer):Word;Near;Forward;
+Function DOS56h_RenameFile(OldPathPtr:Pointer;NewPathPtr:Pointer):Word;Near;
+  Forward;
 
 { Fonction 57h - Get/Set File Date and Time }
-Function DOS57h_GetSetFileDateTime(Handle:Word;Action:Byte;NewDate,NewTime:Word):LongInt;Near;Forward;
+Function DOS57h_GetSetFileDateTime(Handle:Word;Action:Byte;NewDate,
+  NewTime:Word):LongInt;Near;Forward;
 
 { Fonction 58h - Get/Set Memory Allocation Strategy }
-Function DOS58h_GetSetMemoryStrategy(Action:Byte;NewStrategy:Word):Word;Near;Forward;
+Function DOS58h_GetSetMemoryStrategy(Action:Byte;NewStrategy:Word):Word;Near;
+  Forward;
 
 { Fonction 59h - Get Extended Error Information }
 Function DOS59h_GetExtendedError:LongInt;Near;Forward;
 
 { Fonction 5Ah - Create Temporary File }
-Function DOS5Ah_CreateTempFile(PathPtr:Pointer;Attributes:Word):Word;Near;Forward;
+Function DOS5Ah_CreateTempFile(PathPtr:Pointer;Attributes:Word):Word;Near;
+  Forward;
 
 { Fonction 5Bh - Create New File }
-Function DOS5Bh_CreateNewFile(PathPtr:Pointer;Attributes:Word):Word;Near;Forward;
+Function DOS5Bh_CreateNewFile(PathPtr:Pointer;Attributes:Word):Word;Near;
+  Forward;
 
 { Fonction 5Ch - Lock/Unlock File Region }
-Function DOS5Ch_LockUnlockRegion(Handle:Word;Action:Byte;StartOffset,Length:LongInt):Word;Near;Forward;
+Function DOS5Ch_LockUnlockRegion(Handle:Word;Action:Byte;StartOffset,
+  Length:LongInt):Word;Near;Forward;
 
 { Fonctions utilitaires pour opérations FAT réelles }
 Function ReadFATSector(Drive:Byte;Sector:Word;Var Buffer):Boolean;Near;Forward;
 Function WriteFATSector(Drive:Byte;Sector:Word;Var Buffer):Boolean;Near;Forward;
-Function ReadDirectorySector(Drive:Byte;Sector:Word;Var Buffer):Boolean;Near;Forward;
-Function WriteDirectorySector(Drive:Byte;Sector:Word;Var Buffer):Boolean;Near;Forward;
+Function ReadDirectorySector(Drive:Byte;Sector:Word;Var Buffer):Boolean;Near;
+  Forward;
+Function WriteDirectorySector(Drive:Byte;Sector:Word;Var Buffer):Boolean;Near;
+  Forward;
 Function FindDirectoryEntryByName(Drive:Byte;DirCluster:Word;
                                   FileName:String;Var Entry:DirectoryEntryFAT;
                                   Var EntryOffset:Word):Boolean;Near;Forward;
-Function ParseFullPath(Path:String;Var Drive:Byte;Var DirPath,FileName:String):Boolean;Near;Forward;
-Function UpdateDirectoryEntryName(Drive:Byte;DirCluster:Word;EntryOffset:Word;NewName:String):Boolean;Near;Forward;
+Function ParseFullPath(Path:String;Var Drive:Byte;Var DirPath,
+  FileName:String):Boolean;Near;Forward;
+Function UpdateDirectoryEntryName(Drive:Byte;DirCluster:Word;EntryOffset:Word;
+  NewName:String):Boolean;Near;Forward;
 
 { Fonctions utilitaires pour la vérification }
-Function VerifyWrite(Drive:Byte;Sector:LongInt;Buffer:Pointer;Size:Word):Boolean;Near;Forward;
-Function WriteSectorWithVerify(Drive:Byte;Sector:LongInt;Buffer:Pointer):Boolean;Near;Forward;
+Function VerifyWrite(Drive:Byte;Sector:LongInt;Buffer:Pointer;
+  Size:Word):Boolean;Near;Forward;
+Function WriteSectorWithVerify(Drive:Byte;Sector:LongInt;
+  Buffer:Pointer):Boolean;Near;Forward;
 
 { Fonctions utilitaires pour EXEC }
-Function LoadExeFile(FileName:String;Var LoadSegment:Word;Var ExeHdr:ExeHeader):Boolean;Near;Forward;
+Function LoadExeFile(FileName:String;Var LoadSegment:Word;
+  Var ExeHdr:ExeHeader):Boolean;Near;Forward;
 Function LoadComFile(FileName:String;Var LoadSegment:Word):Boolean;Near;Forward;
 Function CreatePSP(ParentPSP:Word;TopMemory:Word):Word;Near;Forward;
 Function SetupEnvironment(EnvSeg:Word;ParentPSP:Word):Word;Near;Forward;
-Function RelocateExe(LoadSeg:Word;ExeHdr:ExeHeader;FileName:String):Boolean;Near;Forward;
+Function RelocateExe(LoadSeg:Word;ExeHdr:ExeHeader;FileName:String):Boolean;
+  Near;Forward;
 
 { Fonction pour charger le processeur de commandes }
 Function LoadAndExecuteCommandProcessor:Boolean;Near;Forward;
@@ -775,7 +844,8 @@ Function Pos(SubStr:String;S:String):Byte;Near;Forward;
 { Fonctions utilitaires pour la gestion mémoire }
 Function InitializeMemoryManager:Boolean;Near;Forward;
 Function FindFreeMCB(Size:Word;Var Segment:Word):Boolean;Near;Forward;
-Function CreateMCB(Segment:Word;Size:Word;Owner:Word;IsLast:Boolean):Boolean;Near;Forward;
+Function CreateMCB(Segment:Word;Size:Word;Owner:Word;IsLast:Boolean):Boolean;
+  Near;Forward;
 Function GetMCB(Segment:Word;Var MCB:MemoryControlBlock):Boolean;Near;Forward;
 Function SetMCB(Segment:Word;MCB:MemoryControlBlock):Boolean;Near;Forward;
 Function GetMemoryStrategy:Word;Near;Forward;
@@ -785,7 +855,8 @@ Function GetUMBLinkState:Word;Near;Forward;
 Procedure SetUMBLinkState(NewState:Word);Near;Forward;
 
 { Fonctions pour gestion des erreurs étendues }
-Procedure SetExtendedError(ErrorCode:Word;ErrorClass,SuggestedAction,ErrorLocus:Byte);Near;Forward;
+Procedure SetExtendedError(ErrorCode:Word;ErrorClass,SuggestedAction,
+  ErrorLocus:Byte);Near;Forward;
 Function GetExtendedErrorCode:Word;Near;Forward;
 Function GetExtendedErrorClass:Byte;Near;Forward;
 Function GetExtendedSuggestedAction:Byte;Near;Forward;
@@ -817,12 +888,15 @@ Procedure SetFileTableInUse(Index: Byte; InUse: Boolean);Near;Forward;
 { Procédure pour initialiser la table des verrous }
 Procedure InitializeFileLocks;Near;Forward;
 Procedure SetFileTableDrive(Index: Byte; Drive: Byte);Near;Forward;
-Procedure SetFileTableFirstCluster(Index: Byte; FirstCluster: Word);Near;Forward;
+Procedure SetFileTableFirstCluster(Index: Byte; FirstCluster: Word);Near;
+  Forward;
 Procedure SetFileTableFileSize(Index: Byte; FileSize: LongInt);Near;Forward;
 Procedure SetFileTableCurrentPos(Index: Byte; CurrentPos: LongInt);Near;Forward;
 Procedure SetFileTableAttributes(Index: Byte; Attributes: Byte);Near;Forward;
-Procedure SetFileTableCurrentCluster(Index: Byte; CurrentCluster: Word);Near;Forward;
-Procedure SetFileTableClusterOffset(Index: Byte; ClusterOffset: Word);Near;Forward;
+Procedure SetFileTableCurrentCluster(Index: Byte; CurrentCluster: Word);Near;
+  Forward;
+Procedure SetFileTableClusterOffset(Index: Byte; ClusterOffset: Word);Near;
+  Forward;
 
 { Fonctions d'accès aux nouvelles variables }
 Function GetLastReturnCode: Word;Near;Forward;
@@ -844,11 +918,16 @@ Var
  Msg:String[60];
  IntSeg, IntOfs: Word;
 Begin
- { Chargeur de la suite d'IO.SYS : le secteur de boot (MS-DOS 5/6) ne charge que les 3 premiers secteurs
-   du fichier en 0070:0000 (DL = unite de boot, BPB en 0000:7C00). On relit ici le reste depuis la racine
-   du volume (fichier contigu) ; sous /KERNELTEST (fichier deja entierement charge) la relecture est sans
-   effet. Ce code doit rester dans les 1536 premiers octets du fichier. Comme IO.SYS (> 30 Ko) recouvre la pile
-   du secteur de boot (0000:7C00) et le BPB, le chargeur copie ce dont il a besoin et passe sur une pile privee
+ { Chargeur de la suite d'IO.SYS : le secteur de boot (MS-DOS 5/6) ne charge que
+   les 3 premiers secteurs
+   du fichier en 0070:0000 (DL = unite de boot,
+     BPB en 0000:7C00). On relit ici le reste depuis la racine
+   du volume (fichier contigu) ;
+     sous /KERNELTEST (fichier deja entierement charge) la relecture est sans
+   effet. Ce code doit rester dans les 1536 premiers octets du fichier. Comme
+     IO.SYS (> 30 Ko) recouvre la pile
+   du secteur de boot (0000:7C00) et le BPB,
+     le chargeur copie ce dont il a besoin et passe sur une pile privee
    9000:FFF0 sur laquelle le noyau continue de s'executer. }
  ASM
   MOV BX,SS
@@ -1055,8 +1134,10 @@ Begin
   MOV BP,SP
   SUB SP,128
  END;
- { Le noyau est chargé comme IO.SYS : DS=CS pour les chaînes et constantes que le
-   compilateur place dans le segment du noyau (pas de segment de données séparé). }
+ { Le noyau est chargé comme IO.SYS : DS=CS pour les chaînes et constantes que
+   le
+   compilateur place dans le segment du noyau (pas de segment de données
+     séparé). }
  ASM
   PUSH CS
   POP DS
@@ -1110,7 +1191,8 @@ Begin
  { CONFIG.SYS : FILES, BUFFERS, LASTDRIVE, SHELL, DEVICE, INSTALL }
  InitConfig;
  { Charger et exécuter COMMAND.COM ou COMMAND.EXE }
- { Le processeur de commandes est relance s'il se termine (EXIT) ; absent, le noyau s'arrête }
+ { Le processeur de commandes est relance s'il se termine (EXIT) ; absent,
+   le noyau s'arrête }
  While LoadAndExecuteCommandProcessor Do;
  Msg:='Interpreteur de commandes introuvable (COMMAND.EXE)';
  ConPutChar(13);
@@ -1125,14 +1207,16 @@ Begin
  END;
 End;
 
-{ Debut de la partition du disque dur C: (0 si le disque commence par un secteur de boot FAT : superfloppy) }
+{ Debut de la partition du disque dur C: (0 si le disque commence par un secteur
+  de boot FAT : superfloppy) }
 Procedure InitPartition;
 Var Buf:Array[0..511] of Byte;
 Begin
  SetPartOfs(0);
  If DiskTransfer($02,2,0,@Buf) Then
   If (Buf[0]<>$EB) And (Buf[0]<>$E9) And (Buf[510]=$55) And (Buf[511]=$AA) Then
-   SetPartOfs(Word(Buf[$1C6])+Word(Buf[$1C7])*256+(LongInt(Buf[$1C8])+LongInt(Buf[$1C9])*256)*65536);
+   SetPartOfs(Word(Buf[$1C6])+Word(Buf[$1C7])*256+(LongInt(Buf[$1C8])+
+     LongInt(Buf[$1C9])*256)*65536);
 End;
 
 Procedure Data;Assembler;ASM
@@ -1160,14 +1244,22 @@ Procedure Data;Assembler;ASM
  DW 0          { CurrentEntry: Word }
  DB 0          { Active: Boolean }
 
- { CurrentDir: Array[0..5] of Record : Drive(1) + Cluster(2) + Path(1+63) = 67 octets par lecteur }
- DB 0,0,0,1,'\',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 1,0,0,1,'\',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 2,0,0,1,'\',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 3,0,0,1,'\',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 4,0,0,1,'\',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 5,0,0,1,'\',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- { FileTable:Array[0..19]of FileTableEntry - 20 entrées de 17 octets = 340 bytes }
+ { CurrentDir: Array[0..5] of Record : Drive(1) + Cluster(2) + Path(1+63) = 67
+   octets par lecteur }
+ DB 0,0,0,1,'\',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 1,0,0,1,'\',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 2,0,0,1,'\',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 3,0,0,1,'\',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 4,0,0,1,'\',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 5,0,0,1,'\',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ { FileTable:Array[0..19]of FileTableEntry - 20 entrées de 17 octets = 340 bytes
+   }
  DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0  { FileTable[0] }
  DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0  { FileTable[1] }
  DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0  { FileTable[2] }
@@ -1240,7 +1332,8 @@ Procedure Data;Assembler;ASM
  { FileLock[19] }
  DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0
  DB 0          { PendingLF }
- { FxLoc : emplacement de l'entree de repertoire de chaque handle (20 x 5 octets) }
+ { FxLoc : emplacement de l'entree de repertoire de chaque handle (20 x 5
+   octets) }
  DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
  DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
  DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
@@ -1248,15 +1341,18 @@ Procedure Data;Assembler;ASM
  DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
  { PartOfs : debut de la partition du disque dur (secteurs, 4 octets) }
  DB 0,0,0,0
- { SftRef : compteur de references de chaque entree de la table des fichiers ouverts (20 octets) }
+ { SftRef : compteur de references de chaque entree de la table des fichiers
+   ouverts (20 octets) }
  DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
  { KSP : sommet de la pile privee du noyau (segment 9000h) }
  DW 0F000h
  { CfgSeg : segment du bloc de configuration (CONFIG.SYS) }
  DW 0
 
- { Structure Liste des Listes pour fonction 52h (disposition MS-DOS 4+) : le mot qui precede est le segment du
-   premier MCB ; l'en-tete du pilote NUL est en LoL+22h, tete de la chaine des pilotes de peripheriques }
+ { Structure Liste des Listes pour fonction 52h (disposition MS-DOS 4+) : le mot
+   qui precede est le segment du
+   premier MCB ; l'en-tete du pilote NUL est en LoL+22h,
+     tete de la chaine des pilotes de peripheriques }
  DW 1080h
 @DOSListOfLists:
  DW 0,0        { 00 : premier DPB }
@@ -1582,18 +1678,22 @@ Procedure Intr21hCore;Assembler;ASM
  DW @F2h { Fonction 6Eh - interne : lecture absolue (INT 25h) }
  DW @F3h { Fonction 6Fh - interne : ecriture absolue (INT 26h) }
 
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   -}
  { Interruption 21h - Fonction 00h: Terminer le programme                      }
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   -}
 @00h:
  MOV AH,4Ch                 { Fonction 4Ch - Terminaison avec code de retour }
  XOR AL,AL                  { Code de retour = 0 }
  INT 21h                    { Appel recursif pour terminer proprement }
  JMP @Xit
 
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   -}
  { Interruption 21h - Fonction 01h: Entree de caractere avec echo              }
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   -}
 @01h:
  PUSH BX
  PUSH CX
@@ -1644,9 +1744,11 @@ Procedure Intr21hCore;Assembler;ASM
  POP AX                     { Restaurer le caractere }
  JMP @Xit
 
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   -}
  { Interruption 21h - Fonction 02h: Sortie de caractere                        }
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   -}
 @02h:
  PUSH BX
  PUSH CX
@@ -1671,9 +1773,11 @@ Procedure Intr21hCore;Assembler;ASM
  CLC
  JMP @Xit
 
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   -}
  { Interruption 21h - Fonction 03h: Entree de caractere depuis AUX             }
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   -}
 @03h:
  MOV AH,02h                 { BIOS - Lire caractere serie }
  XOR DX,DX                  { Port COM1 }
@@ -1684,9 +1788,11 @@ Procedure Intr21hCore;Assembler;ASM
 @03NoError:
  JMP @Xit
 
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   -}
  { Interruption 21h - Fonction 04h: Sortie de caractere vers AUX               }
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   -}
 @04h:
  MOV AL,DL
  MOV AH,01h                 { BIOS - Ecrire caractere serie }
@@ -1694,9 +1800,11 @@ Procedure Intr21hCore;Assembler;ASM
  INT 14h
  JMP @Xit
 
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   -}
  { Interruption 21h - Fonction 05h: Sortie de caractere vers PRN (imprimante)  }
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   -}
 @05h:
  MOV AL,DL
  XOR AH,AH                  { BIOS - Imprimer caractere }
@@ -1704,9 +1812,11 @@ Procedure Intr21hCore;Assembler;ASM
  INT 17h
  JMP @Xit
 
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   -}
  { Interruption 21h - Fonction 06h: Entree/sortie directe de console           }
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   -}
 @06h:
  CMP DL,0FFh                { Fonction d'entree ? }
  JNE @06Output
@@ -1829,9 +1939,11 @@ Procedure Intr21hCore;Assembler;ASM
 @08NoBreak:
  JMP @Xit
 
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   -}
  { Interruption 21h - Fonction 09h: Affichage de chaine terminee par $         }
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   -}
 @09h:
  PUSH BX
  PUSH CX
@@ -1856,9 +1968,11 @@ Procedure Intr21hCore;Assembler;ASM
  CLC
  JMP @Xit
 
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   -}
  { Interruption 21h - Fonction 0Ah: Lecture de chaine avec buffer              }
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   -}
 @0Ah:
  PUSH SI                    { Sauver registres }
  PUSH DI
@@ -1927,9 +2041,12 @@ Procedure Intr21hCore;Assembler;ASM
  MOV AL,0FFh
  JMP @Xit
 
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
- { Interruption 21h - Fonction 0Ch: Vider le tampon et appeler la fonction d'entree }
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   - - }
+ { Interruption 21h - Fonction 0Ch: Vider le tampon et appeler la fonction
+   d'entree }
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   - - }
 @0Ch:
  PUSH AX
   XOR AX,AX
@@ -1940,9 +2057,11 @@ Procedure Intr21hCore;Assembler;ASM
  POP BX
  JMP @CallFunc
 
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   -}
  { Interruption 21h - Fonction 0Dh: Reinitialisation du disque                 }
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   -}
 @0Dh:
  PUSH AX                    { Sauver registres }
  PUSH DX
@@ -2024,9 +2143,11 @@ Procedure Intr21hCore;Assembler;ASM
  POP BX
  JMP @Xit
 
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   - }
  { Interruption 21h - Fonction 11h: Rechercher le premier fichier avec FCB     }
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   - }
 @11h:
  PUSH BX
  PUSH CX
@@ -2050,9 +2171,11 @@ Procedure Intr21hCore;Assembler;ASM
  POP BX
  JMP @Xit
 
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   - }
  { Interruption 21h - Fonction 12h: Rechercher le fichier suivant avec FCB     }
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   - }
 @12h:
  PUSH BX
  PUSH CX
@@ -2076,9 +2199,11 @@ Procedure Intr21hCore;Assembler;ASM
  POP BX
  JMP @Xit
 
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   - }
  { Interruption 21h - Fonction 13h: Supprimer un fichier avec FCB              }
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   - }
 @13h:
  PUSH BX
  PUSH CX
@@ -2102,9 +2227,11 @@ Procedure Intr21hCore;Assembler;ASM
  POP BX
  JMP @Xit
 
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   - }
  { Interruption 21h - Fonction 14h: Lecture séquentielle avec FCB              }
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   - }
 @14h:
  PUSH BX
  PUSH CX
@@ -2128,9 +2255,11 @@ Procedure Intr21hCore;Assembler;ASM
  POP BX
  JMP @Xit
 
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   - }
  { Interruption 21h - Fonction 15h: Ecriture séquentielle avec FCB             }
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   - }
 @15h:
  PUSH BX
  PUSH CX
@@ -2154,9 +2283,11 @@ Procedure Intr21hCore;Assembler;ASM
  POP BX
  JMP @Xit
 
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   - }
  { Interruption 21h - Fonction 16h: Créer un fichier avec FCB                  }
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   - }
 @16h:
  PUSH BX
  PUSH CX
@@ -2180,9 +2311,11 @@ Procedure Intr21hCore;Assembler;ASM
  POP BX
  JMP @Xit
 
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   - }
  { Interruption 21h - Fonction 17h: Renommer un fichier avec FCB               }
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   - }
 @17h:
  PUSH BX
  PUSH CX
@@ -2206,9 +2339,11 @@ Procedure Intr21hCore;Assembler;ASM
  POP BX
  JMP @Xit
 
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   - }
  { Interruption 21h - Fonction 18h: Fonction réservée                          }
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   - }
 @18h:
  { Fonction réservée dans DOS classique - pas d'implémentation }
  { Certaines versions de DOS utilisent cette fonction à des fins internes }
@@ -2222,9 +2357,11 @@ Procedure Intr21hCore;Assembler;ASM
  MOV AL,BYTE PTR [Data + 2]  { CurrentDrive dans DataMOS.CurrDisk }
  JMP @Xit
 
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   - }
  { Interruption 21h - Fonction 1Ah: Définir l'adresse DTA                      }
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   - }
 @1Ah:
  { Définir l'adresse du Disk Transfer Area (DTA) }
  { DS:DX contient la nouvelle adresse DTA }
@@ -2233,9 +2370,11 @@ Procedure Intr21hCore;Assembler;ASM
  { Pas de valeur de retour pour cette fonction }
  JMP @Xit
 
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   - }
  { Interruption 21h - Fonction 1Bh: Obtenir infos allocation drive par défaut  }
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   - }
 @1Bh:
  { Retourner les informations d'allocation pour le lecteur par défaut }
  { Format de retour dans les registres :
@@ -2261,9 +2400,11 @@ Procedure Intr21hCore;Assembler;ASM
  POP ES
  JMP @Xit
 
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   - }
  { Interruption 21h - Fonction 1Ch: Obtenir infos allocation drive spécifique  }
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   - }
 @1Ch:
  { Retourner les informations d'allocation pour un lecteur spécifique }
  { DL contient le numéro de lecteur (1=A:, 2=B:, etc.) }
@@ -2302,12 +2443,16 @@ Procedure Intr21hCore;Assembler;ASM
  POP ES
  JMP @Xit
 
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   - }
  { Interruption 21h - Fonction 1Dh: Fermer tous les fichiers                   }
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   - }
 @1Dh:
- { Fonction non documentée dans DOS classique, utilisée pour fermer tous les FCB ouverts }
- { Dans une implémentation complète, il faudrait parcourir la table des FCB ouverts }
+ { Fonction non documentée dans DOS classique,
+   utilisée pour fermer tous les FCB ouverts }
+ { Dans une implémentation complète,
+   il faudrait parcourir la table des FCB ouverts }
  { et fermer chaque fichier ouvert }
  PUSH AX                    { Sauver registres }
  PUSH BX
@@ -2322,9 +2467,11 @@ Procedure Intr21hCore;Assembler;ASM
  POP AX
  JMP @Xit
 
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   - }
  { Interruption 21h - Fonction 1Eh: Fonction réservée/non documentée           }
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   - }
 @1Eh:
  { Fonction non documentée dans DOS classique }
  { Utilisée en interne par certaines versions de DOS pour la redirection I/O }
@@ -2332,19 +2479,24 @@ Procedure Intr21hCore;Assembler;ASM
  MOV AL,0                   { Code de retour : succès (pas d'erreur) }
  JMP @Xit
 
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   - }
  { Interruption 21h - Fonction 1Fh: Fonction réservée/non documentée           }
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   - }
 @1Fh:
  { Fonction non documentée dans DOS classique }
- { Utilisée en interne par certaines versions de DOS pour la configuration d'imprimante }
+ { Utilisée en interne par certaines versions de DOS pour la configuration
+   d'imprimante }
  { Pour compatibilité, on retourne simplement sans erreur }
  MOV AL,0                   { Code de retour : succès (pas d'erreur) }
  JMP @Xit
 
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   - }
  { Interruption 21h - Fonction 20h: Terminer le programme (obsolète)           }
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   - }
 @20h:
  { Fonction de terminaison obsolète, équivalente à la fonction 00h }
  MOV AH,4Ch                 { Fonction 4Ch - Terminaison avec code de retour }
@@ -2352,9 +2504,11 @@ Procedure Intr21hCore;Assembler;ASM
  INT 21h                    { Appel récursif pour terminer proprement }
  JMP @Xit
 
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   - }
  { Interruption 21h - Fonction 21h: Lecture aléatoire avec FCB                 }
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   - }
 @21h:
  PUSH BX
  PUSH CX
@@ -2378,9 +2532,11 @@ Procedure Intr21hCore;Assembler;ASM
  POP BX
  JMP @Xit
 
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   - }
  { Interruption 21h - Fonction 22h: Ecriture aléatoire avec FCB                }
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   - }
 @22h:
  PUSH BX
  PUSH CX
@@ -2404,9 +2560,11 @@ Procedure Intr21hCore;Assembler;ASM
  POP BX
  JMP @Xit
 
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   - }
  { Interruption 21h - Fonction 23h: Obtenir la taille de fichier avec FCB      }
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   - }
 @23h:
  PUSH BX
  PUSH CX
@@ -2430,9 +2588,11 @@ Procedure Intr21hCore;Assembler;ASM
  POP BX
  JMP @Xit
 
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   - }
  { Interruption 21h - Fonction 24h: Définir l'adresse aléatoire avec FCB       }
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   - }
 @24h:
  PUSH BX
  PUSH CX
@@ -2473,9 +2633,11 @@ Procedure Intr21hCore;Assembler;ASM
  MOV ES:[BX+2],DS
  JMP @Xit
 
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   - }
  { Interruption 21h - Fonction 26h: Créer un nouveau PSP                       }
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   - }
 @26h:
  { Créer un nouveau Program Segment Prefix }
  { DX contient l'adresse du segment du nouveau PSP }
@@ -2502,9 +2664,11 @@ Procedure Intr21hCore;Assembler;ASM
  POP AX
  JMP @Xit
 
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   - }
  { Interruption 21h - Fonction 27h: Lecture aléatoire de bloc avec FCB         }
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   - }
 @27h:
  PUSH BX
  PUSH SI
@@ -2533,9 +2697,11 @@ Procedure Intr21hCore;Assembler;ASM
  CLC
  JMP @Xit
 
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   - }
  { Interruption 21h - Fonction 28h: Ecriture aléatoire de bloc avec FCB        }
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   - }
 @28h:
  PUSH BX
  PUSH SI
@@ -2564,9 +2730,11 @@ Procedure Intr21hCore;Assembler;ASM
  CLC
  JMP @Xit
 
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   - }
  { Interruption 21h - Fonction 29h: Analyser nom de fichier dans FCB           }
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   - }
 @29h:
  PUSH BX
  PUSH CX
@@ -2637,9 +2805,11 @@ Procedure Intr21hCore;Assembler;ASM
  INT 1Ah
  JMP @Xit
 
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   - }
  { Interruption 21h - Fonction 2Ch: Lire l'heure système                       }
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   - }
 @2Ch:
  PUSH BX
  PUSH SI
@@ -2659,12 +2829,15 @@ Procedure Intr21hCore;Assembler;ASM
  POP BX
  JMP @Xit
 
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   - }
  { Interruption 21h - Fonction 2Dh: Fixer l'heure système                     }
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   - }
 @2Dh:
  { Fixer l'heure système }
- { Entrée : CH = heures (0-23), CL = minutes (0-59), DH = secondes (0-59), DL = centièmes (0-99) }
+ { Entrée : CH = heures (0-23), CL = minutes (0-59), DH = secondes (0-59),
+   DL = centièmes (0-99) }
  { Sortie : AL = 0 si succès, AL = FFh si heure invalide }
  PUSH AX                    { Sauver AX }
  PUSH BX                    { Sauver BX }
@@ -2691,9 +2864,11 @@ Procedure Intr21hCore;Assembler;ASM
  MOV AL,BL                  { Mettre le code de retour dans AL }
  JMP @Xit
 
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   - }
  { Interruption 21h - Fonction 2Eh: Fixer/réinitialiser drapeau vérification  }
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   - }
 @2Eh:
  PUSH BX
  PUSH CX
@@ -2717,15 +2892,19 @@ Procedure Intr21hCore;Assembler;ASM
  CLC
  JMP @Xit
 
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   - }
  { Interruption 21h - Fonction 2Fh: DOS Multiplex Interrupt                    }
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   - }
 @2Fh:
- { DOS Multiplex Interrupt - interface de communication pour TSR et utilitaires }
+ { DOS Multiplex Interrupt - interface de communication pour TSR et utilitaires
+   }
  { Entrée : AH = fonction, AL = sous-fonction, autres registres selon fonction }
  { Cette fonction est utilisée par DOSKEY, PRINT, APPEND, SHARE, etc. }
  { Pour cette implémentation de base, on retourne "fonction non supportée" }
- CMP AH,43h                 { Fonction 43h - Extended Memory Specification (XMS) ? }
+ CMP AH,43h                 { Fonction 43h - Extended Memory Specification (XMS)
+   ? }
  JE @2FhXMS
  CMP AH,10h                 { Fonction 10h - SHARE.EXE ? }
  JE @2FhShare
@@ -2741,9 +2920,11 @@ Procedure Intr21hCore;Assembler;ASM
  XOR AL,AL
  JMP @Xit
 
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   - }
  { Interruption 21h - Fonction 30h: Get DOS Version                            }
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   - }
 @30h:
  { Retourner la version DOS }
  { Sortie : AL = version majeure, AH = version mineure }
@@ -2756,9 +2937,11 @@ Procedure Intr21hCore;Assembler;ASM
  XOR CX,CX                  { Pas de numéro de série utilisateur }
  JMP @Xit
 
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   - }
  { Interruption 21h - Fonction 31h: Terminate Stay Resident (TSR)              }
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   - }
 @31h:
  PUSH BX
  PUSH CX
@@ -2783,9 +2966,11 @@ Procedure Intr21hCore;Assembler;ASM
  STC
  JMP @Xit
 
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   - }
  { Interruption 21h - Fonction 32h: Get Drive Parameter Block (DPB)            }
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   - }
 @32h:
  { Obtenir le DPB (Drive Parameter Block) pour un lecteur spécifié }
  { Entrée : DL = numéro de lecteur (0=défaut, 1=A:, 2=B:, etc.) }
@@ -2872,7 +3057,8 @@ Procedure Intr21hCore;Assembler;ASM
  JE @33h01h
  CMP AL,05h                 { Sous-fonction 05h : Get boot drive ? }
  JE @33h05h
- CMP AL,06h                 { Sous-fonction 06h : Get DOS version (existante) ? }
+ CMP AL,06h                 { Sous-fonction 06h : Get DOS version (existante) ?
+   }
  JE @33h06h
  JMP @Unknown33h
 
@@ -2885,7 +3071,8 @@ Procedure Intr21hCore;Assembler;ASM
 @33h01h:
  { Sous-fonction 01h : Set Control Break check state }
  { Entrée : DL = nouvel état (0=désactiver, 1=activer) }
- { Dans un DOS complet, ceci contrôlerait si Ctrl+C est vérifié pendant les E/S }
+ { Dans un DOS complet,
+   ceci contrôlerait si Ctrl+C est vérifié pendant les E/S }
  { Pour cette implémentation, on accepte la commande mais sans effet réel }
  CMP DL,1                   { Valeur valide ? }
  JA @Xit                    { Ignorer les valeurs invalides }
@@ -3049,9 +3236,11 @@ Procedure Intr21hCore;Assembler;ASM
  STC
  JMP @Xit
 
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   -}
  { Interruption 21h - Fonction 39h: Create Subdirectory                        }
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   -}
 @39h:
  PUSH BX
  PUSH CX
@@ -3081,9 +3270,11 @@ Procedure Intr21hCore;Assembler;ASM
  POP BX
  JMP @Xit
 
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   -}
  { Interruption 21h - Fonction 3Ah: Remove Directory (supprimer répertoire)   }
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   -}
 @3Ah:
  PUSH BX
  PUSH CX
@@ -3113,9 +3304,11 @@ Procedure Intr21hCore;Assembler;ASM
  POP BX
  JMP @Xit
 
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   -}
  { Interruption 21h - Fonction 3Bh: Change Directory (changer répertoire)     }
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   -}
 @3Bh:
  PUSH BX
  PUSH CX
@@ -3145,9 +3338,11 @@ Procedure Intr21hCore;Assembler;ASM
  POP BX
  JMP @Xit
 
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   -}
  { Interruption 21h - Fonction 3Ch: Create or Open File                        }
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   -}
 @3Ch:
  PUSH BX
  PUSH CX
@@ -3182,9 +3377,11 @@ Procedure Intr21hCore;Assembler;ASM
  POP BX
  JMP @Xit
 
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   -}
  { Interruption 21h - Fonction 3Dh: Open File                                  }
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   -}
 @3Dh:
  PUSH BX
  PUSH CX
@@ -3221,9 +3418,11 @@ Procedure Intr21hCore;Assembler;ASM
  POP BX
  JMP @Xit
 
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   -}
  { Interruption 21h - Fonction 3Eh: Close File                                 }
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   -}
 @3Eh:
  PUSH BX
  PUSH CX
@@ -3252,9 +3451,11 @@ Procedure Intr21hCore;Assembler;ASM
  POP BX
  JMP @Xit
 
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   -}
  { Interruption 21h - Fonction 3Fh: Read File                                  }
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   -}
 @3Fh:
  PUSH BX
  PUSH CX
@@ -3293,9 +3494,11 @@ Procedure Intr21hCore;Assembler;ASM
  POP BX
  JMP @Xit
 
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   -}
  { Interruption 21h - Fonction 40h: Write File                                 }
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   -}
 @40h:
  PUSH BX
  PUSH CX
@@ -3334,9 +3537,11 @@ Procedure Intr21hCore;Assembler;ASM
  POP BX
  JMP @Xit
 
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   -}
  { Interruption 21h - Fonction 41h: Delete File                                }
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   -}
 @41h:
  PUSH BX
  PUSH CX
@@ -3366,9 +3571,11 @@ Procedure Intr21hCore;Assembler;ASM
  POP BX
  JMP @Xit
 
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   -}
  { Interruption 21h - Fonction 42h: Seek File                                  }
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   -}
 @42h:
  PUSH BX
  PUSH CX
@@ -3406,9 +3613,11 @@ Procedure Intr21hCore;Assembler;ASM
  POP BX
  JMP @Xit
 
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   -}
  { Interruption 21h - Fonction 43h: Get/Set File Attributes                   }
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   -}
 @43h:
  PUSH BX
  PUSH CX
@@ -3460,9 +3669,11 @@ Procedure Intr21hCore;Assembler;ASM
  POP BX
  JMP @Xit
 
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   -}
  { Interruption 21h - Fonction 44h: IOCTL (Input/Output Control)              }
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   -}
 @44h:
  PUSH BX
  PUSH CX
@@ -3514,9 +3725,11 @@ Procedure Intr21hCore;Assembler;ASM
  POP BX
  JMP @Xit
 
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   -}
  { Interruption 21h - Fonction 45h: Duplicate Handle                           }
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   -}
 @45h:
  PUSH BX
  PUSH CX
@@ -3550,9 +3763,11 @@ Procedure Intr21hCore;Assembler;ASM
  POP BX
  JMP @Xit
 
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   -}
  { Interruption 21h - Fonction 46h: Force Duplicate Handle                    }
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   -}
 @46h:
  PUSH BX
  PUSH CX
@@ -3582,9 +3797,11 @@ Procedure Intr21hCore;Assembler;ASM
  POP BX
  JMP @Xit
 
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   -}
  { Interruption 21h - Fonction 47h: Get Current Directory                     }
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   -}
 @47h:
  PUSH BX
  PUSH CX
@@ -3616,9 +3833,11 @@ Procedure Intr21hCore;Assembler;ASM
  POP BX
  JMP @Xit
 
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   -}
  { Interruption 21h - Fonction 48h: Allocate Memory Block                     }
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   -}
 @48h:
  PUSH CX
  PUSH SI
@@ -3652,9 +3871,11 @@ Procedure Intr21hCore;Assembler;ASM
  POP CX
  JMP @Xit
 
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   -}
  { Interruption 21h - Fonction 49h: Free Memory Block                         }
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   -}
 @49h:
  PUSH BX
  PUSH CX
@@ -3683,9 +3904,11 @@ Procedure Intr21hCore;Assembler;ASM
  POP BX
  JMP @Xit
 
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   -}
  { Interruption 21h - Fonction 4Ah: Modify Memory Block                       }
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   -}
 @4Ah:
  PUSH BX
  PUSH CX
@@ -3715,9 +3938,11 @@ Procedure Intr21hCore;Assembler;ASM
  POP BX
  JMP @Xit
 
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   -}
  { Interruption 21h - Fonction 4Bh: EXEC - Load and Execute Program           }
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   -}
 @4Bh:
  PUSH BX                    { Sauvegarder les registres }
  PUSH CX
@@ -3725,7 +3950,8 @@ Procedure Intr21hCore;Assembler;ASM
  PUSH DI
 
  { Paramètres: AL = type EXEC, DS:DX = nom fichier, ES:BX = bloc paramètres }
- { Convention Pascal : arguments de gauche à droite, pointeur = segment puis offset, }
+ { Convention Pascal : arguments de gauche à droite,
+   pointeur = segment puis offset, }
  { l'appelée dépile ; DS = segment du noyau pendant l'appel }
  PUSH DS                    { DS de l'appelant, restauré après l'appel }
  XOR AH,AH
@@ -3758,9 +3984,11 @@ Procedure Intr21hCore;Assembler;ASM
  POP BX
  JMP @Xit
 
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   -}
  { Interruption 21h - Fonction 4Ch: Terminate Program                         }
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   -}
 @4Ch:
  PUSH CX                    { Sauvegarder les registres }
  PUSH SI
@@ -3778,9 +4006,11 @@ Procedure Intr21hCore;Assembler;ASM
  { En cas d'erreur, continuer quand même }
  JMP @Xit
 
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   -}
  { Interruption 21h - Fonction 4Dh: Get Return Code                           }
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   -}
 @4Dh:
  PUSH CX                    { Sauvegarder les registres }
  PUSH SI
@@ -3797,9 +4027,11 @@ Procedure Intr21hCore;Assembler;ASM
  POP CX
  JMP @Xit
 
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   -}
  { Interruption 21h - Fonction 4Eh: Find First File                           }
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   -}
 @4Eh:
  PUSH BX
  PUSH CX
@@ -3830,9 +4062,11 @@ Procedure Intr21hCore;Assembler;ASM
  POP BX
  JMP @Xit
 
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   -}
  { Interruption 21h - Fonction 4Fh: Find Next File                            }
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   -}
 @4Fh:
  PUSH BX
  PUSH CX
@@ -3860,9 +4094,11 @@ Procedure Intr21hCore;Assembler;ASM
  POP BX
  JMP @Xit
 
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   -}
  { Interruption 21h - Fonction 50h: Set PSP Address                           }
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   -}
 @50h:
  PUSH BX
  PUSH CX
@@ -3890,9 +4126,11 @@ Procedure Intr21hCore;Assembler;ASM
  CLC
  JMP @Xit
 
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   -}
  { Interruption 21h - Fonction 51h: Get PSP Address                           }
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   -}
 @51h:
  PUSH CX                    { Sauvegarder les registres }
 
@@ -3905,9 +4143,11 @@ Procedure Intr21hCore;Assembler;ASM
  POP CX
  JMP @Xit
 
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   -}
  { Interruption 21h - Fonction 52h: Get List of Lists                         }
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   -}
 @52h:
  PUSH CX                    { Sauvegarder les registres }
 
@@ -3921,16 +4161,20 @@ Procedure Intr21hCore;Assembler;ASM
  POP CX
  JMP @Xit
 
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   -}
  { Interruption 21h - Fonction 53h: Translate BPB to DPB                      }
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   -}
 @53h:
  CLC
  JMP @Xit
 
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   -}
  { Interruption 21h - Fonction 54h: Get Verify Flag                           }
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   -}
 @54h:
  PUSH BX
  PUSH CX
@@ -3952,9 +4196,11 @@ Procedure Intr21hCore;Assembler;ASM
  CLC
  JMP @Xit
 
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   -}
  { Interruption 21h - Fonction 55h: Create Child PSP                         }
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   -}
 @55h:
  PUSH BX
  PUSH CX
@@ -3982,9 +4228,11 @@ Procedure Intr21hCore;Assembler;ASM
  CLC
  JMP @Xit
 
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   -}
  { Interruption 21h - Fonction 56h: Rename/Move File                         }
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   -}
 @56h:
  PUSH BX
  PUSH CX
@@ -4016,9 +4264,11 @@ Procedure Intr21hCore;Assembler;ASM
  POP BX
  JMP @Xit
 
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   -}
  { Interruption 21h - Fonction 57h: Get/Set File Date and Time                }
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   -}
 @57h:
  PUSH BX
  PUSH SI
@@ -4071,9 +4321,11 @@ Procedure Intr21hCore;Assembler;ASM
  POP BX
  JMP @Xit
 
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   -}
  { Interruption 21h - Fonction 58h: Get/Set Memory Allocation Strategy       }
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   -}
 @58h:
  PUSH BX
  PUSH CX
@@ -4104,9 +4356,11 @@ Procedure Intr21hCore;Assembler;ASM
  STC
  JMP @Xit
 
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   -}
  { Interruption 21h - Fonction 59h: Get Extended Error Information           }
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   -}
 @59h:
  PUSH SI
  PUSH DI
@@ -4125,9 +4379,11 @@ Procedure Intr21hCore;Assembler;ASM
  CLC
  JMP @Xit
 
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   -}
  { Interruption 21h - Fonction 5Ah: Create Temporary File                     }
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   -}
 @5Ah:
  PUSH BX
  PUSH CX
@@ -4163,9 +4419,11 @@ Procedure Intr21hCore;Assembler;ASM
  POP BX
  JMP @Xit
 
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   -}
  { Interruption 21h - Fonction 5Bh: Create New File                           }
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   -}
 @5Bh:
  PUSH BX
  PUSH CX
@@ -4201,9 +4459,11 @@ Procedure Intr21hCore;Assembler;ASM
  POP BX
  JMP @Xit
 
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   -}
  { Interruption 21h - Fonction 5Ch: Lock/Unlock File Region                   }
- {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+ {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   -}
 @5Ch:
  PUSH BX
  PUSH CX
@@ -4286,7 +4546,8 @@ Procedure Intr21hCore;Assembler;ASM
 
 @Xit:
  DEC Data.DataMOS.InDos
- { IRET restaure les FLAGS de l'appelant : recopier CF (resultat) dans les FLAGS empiles }
+ { IRET restaure les FLAGS de l'appelant : recopier CF (resultat) dans les FLAGS
+   empiles }
  PUSH BP
  MOV BP,SP
  JC @XitCarry
@@ -4298,10 +4559,15 @@ Procedure Intr21hCore;Assembler;ASM
  POP BP
 END;
 
-{ Point d'entree de INT 21h : le noyau s'execute sur une pile privee (9000:0000..KSP), hors de l'arene
-  memoire, pour ne pas dependre de la pile (parfois minuscule) du programme appelant. Cadre utilisateur
-  sauvegarde : CX BX AX BP ES DS IP CS FLAGS (de bas en haut). Les registres de sortie sont rendus
-  dans ces emplacements avant de revenir sur la pile utilisateur. Un appel imbrique (deja sur la pile
+{ Point d'entree de INT 21h : le noyau s'execute sur une pile privee
+  (9000:0000..KSP), hors de l'arene
+  memoire,
+    pour ne pas dependre de la pile (parfois minuscule) du programme appelant.
+      Cadre utilisateur
+  sauvegarde : CX BX AX BP ES DS IP CS FLAGS (de bas en haut). Les registres de
+    sortie sont rendus
+  dans ces emplacements avant de revenir sur la pile utilisateur. Un appel
+    imbrique (deja sur la pile
   privee) va directement au coeur. }
 Procedure Intr21h;Assembler;ASM
  PUSH DS
@@ -4382,14 +4648,17 @@ Procedure Intr21h;Assembler;ASM
  IRET
 END;
 
-{ INT 20h (terminaison de programme, par exemple RET depuis un .COM) : AX=4C00h puis INT 21h }
+{ INT 20h (terminaison de programme,
+  par exemple RET depuis un .COM) : AX=4C00h puis INT 21h }
 Procedure Intr20hEntry;Assembler;ASM
  MOV AX,4C00h
  JMP Intr21h
 END;
 
-{ INT 25h / INT 26h : lecture / ecriture absolue de secteurs. Passent par INT 21h (fonctions internes
-  F2h/F3h) pour profiter de la pile privee ; retour FAR en laissant les FLAGS de l'INT sur la pile de
+{ INT 25h / INT 26h : lecture / ecriture absolue de secteurs. Passent par INT
+  21h (fonctions internes
+  F2h/F3h) pour profiter de la pile privee ;
+    retour FAR en laissant les FLAGS de l'INT sur la pile de
   l'appelant (comportement DOS), CF = erreur. }
 Procedure Intr25h;Assembler;ASM
  MOV AH,6Eh
@@ -4700,7 +4969,8 @@ ASM
  MOV AL,Index
  MOV AH,17                   { Taille d'une entrée FileTable }
  MUL AH
- ADD AX,FTBase+0                 { Ajouter offset de base FileTable dans DataMOS }
+ ADD AX,FTBase+0                 { Ajouter offset de base FileTable dans DataMOS
+   }
  MOV BX,AX
  MOV AL,BYTE PTR [Data + BX] { Lire InUse dans FileTable }
  CMP AL,0
@@ -4844,7 +5114,8 @@ ASM
  MOV AX,WORD PTR [Data + BX]
 END;
 
-Procedure SetFileTableCurrentCluster(Index: Byte; CurrentCluster: Word);Assembler;
+Procedure SetFileTableCurrentCluster(Index: Byte; CurrentCluster: Word);
+  Assembler;
 ASM
  MOV AL,Index
  MOV AH,17
@@ -5101,7 +5372,8 @@ Begin
   ValidateDriveNumber:=(DriveNumber>=0) And (DriveNumber<=NDrv-1); { A-Z }
 End;
 
-Procedure ConvertLBAtoCHS(LBA:LongInt;Var Cylinder,Head,Sector:Word;DPT:DriveParameterTable);
+Procedure ConvertLBAtoCHS(LBA:LongInt;Var Cylinder,Head,Sector:Word;
+  DPT:DriveParameterTable);
 { Convertit une adresse LBA en adresse CHS }
 Var
   SectorsPerCylinder:Word;
@@ -5209,7 +5481,8 @@ End;
 
 { Lire un secteur depuis un lecteur }
 { Une operation BIOS INT 13h sur un secteur (Op = 02h lecture, 03h ecriture) }
-Function BiosDisk(Op:Byte;BiosDrv:Byte;Cyl,Head,Sec:Word;Buffer:Pointer):Boolean;Assembler;
+Function BiosDisk(Op:Byte;BiosDrv:Byte;Cyl,Head,Sec:Word;
+  Buffer:Pointer):Boolean;Assembler;
 ASM
  MOV AX,Cyl
  MOV CH,AL
@@ -5401,7 +5674,8 @@ Begin
  For FATCopy:=0 to BootSec.NumberOfFATs-1 Do Begin
   If TotalClusters<4085 Then Begin
    { FAT12 }
-   FATSector:=BootSec.ReservedSectors+FATCopy*BootSec.SectorsPerFAT+(Cluster*3 div 2)div 512;
+   FATSector:=BootSec.ReservedSectors+FATCopy*BootSec.SectorsPerFAT+(Cluster*3
+     div 2)div 512;
    If ReadSector(Drive,FATSector,@FATBuffer) Then Begin
     J:=(Cluster*3 div 2)mod 512;
     If Cluster and 1=0 Then Begin
@@ -5415,7 +5689,8 @@ Begin
    End Else Exit;
   End Else Begin
    { FAT16 }
-   FATSector:=BootSec.ReservedSectors+FATCopy*BootSec.SectorsPerFAT+(Cluster*2)div 512;
+   FATSector:=BootSec.ReservedSectors+FATCopy*BootSec.SectorsPerFAT+(Cluster*
+     2)div 512;
    If ReadSector(Drive,FATSector,@FATBuffer) Then Begin
     J:=(Cluster*2)mod 512;
     FATBuffer[J]:=$FF;
@@ -5479,7 +5754,8 @@ Begin
 End;
 
 { Trouver le cluster parent d'un répertoire }
-Function FindParentDirectory(Drive:Byte;BootSec:BootSectorRec;Path:String;Var ParentCluster:Word):Boolean;
+Function FindParentDirectory(Drive:Byte;BootSec:BootSectorRec;Path:String;
+  Var ParentCluster:Word):Boolean;
 Begin
  { Pour cette implémentation simplifiée, on suppose créer dans la racine }
  ParentCluster:=0;  { 0 = répertoire racine }
@@ -5487,7 +5763,8 @@ Begin
 End;
 
 { Créer une entrée de répertoire }
-Function CreateDirEntry(Drive:Byte;BootSec:BootSectorRec;ParentCluster:Word;DirName:String):Boolean;
+Function CreateDirEntry(Drive:Byte;BootSec:BootSectorRec;ParentCluster:Word;
+  DirName:String):Boolean;
 Var
  DirSector:LongInt;
  DirBuffer:Array[0..511] of Byte;
@@ -5629,7 +5906,8 @@ Begin
       FillChar(DirBuffer[32+26],2,0); { Cluster parent = racine }
 
       { Écrire le secteur du nouveau répertoire }
-      DirSector:=BootSec.ReservedSectors+BootSec.NumberOfFATs*BootSec.SectorsPerFAT+
+      DirSector:=BootSec.ReservedSectors+BootSec.NumberOfFATs*
+        BootSec.SectorsPerFAT+
                  (BootSec.RootDirEntries*32+511)div 512+
                  (FreeCluster-2)*BootSec.SectorsPerCluster;
 
@@ -5648,7 +5926,8 @@ End;
 { FONCTIONS POUR SUPPRIMER UN RÉPERTOIRE (Fonction 3Ah)                      }
 {==============================================================================}
 
-Function GetClusterSector(Drive:Byte;BootSec:BootSectorRec;Cluster:Word):LongInt;
+Function GetClusterSector(Drive:Byte;BootSec:BootSectorRec;
+  Cluster:Word):LongInt;
 { Calcule le secteur de départ d'un cluster donné }
 Begin
  If Cluster = 0 Then
@@ -5667,7 +5946,8 @@ Function FindDirectoryEntry(Drive:Byte;BootSec:BootSectorRec;
                            ParentCluster:Word;DirName:String;
                            Var Entry:DirectoryEntry;
                            Var EntryOffset:Word):Boolean;
-{ Cherche une entrée (fichier ou répertoire) par son nom 8.3 (8 caractères de nom
+{ Cherche une entrée (fichier ou répertoire) par son nom 8.3 (8 caractères de
+  nom
   + 3 d'extension, complétés par des espaces) dans le répertoire parent : racine
   (ParentCluster=0) ou chaîne de clusters. }
 Var
@@ -5712,7 +5992,8 @@ Begin
     For J:=0 To 15 Do Begin
      EntryPtr:=@DirBuffer[J*32];
      If EntryPtr^.FileName[0]=#0 Then Exit;
-     If (EntryPtr^.FileName[0]<>#$E5) And ((EntryPtr^.Attributes And $08)=0) Then Begin
+     If (EntryPtr^.FileName[0]<>#$E5) And ((EntryPtr^.Attributes And $08)=0)
+       Then Begin
       Match:=True;
       For K:=0 To 7 Do If EntryPtr^.FileName[K]<>Name11[K] Then Match:=False;
       For K:=0 To 2 Do If EntryPtr^.Extension[K]<>Name11[8+K] Then Match:=False;
@@ -5731,7 +6012,8 @@ Begin
  Until (Cluster<2) Or (Cluster>=$FF8);
 End;
 
-Function IsDirectoryEmpty(Drive:Byte;BootSec:BootSectorRec;DirCluster:Word):Boolean;
+Function IsDirectoryEmpty(Drive:Byte;BootSec:BootSectorRec;
+  DirCluster:Word):Boolean;
 { Vérifie si un répertoire est vide (contient seulement . et ..) }
 Var
  DirBuffer:Array[0..511] of Byte;
@@ -5766,7 +6048,8 @@ Begin
  IsDirectoryEmpty:=(ValidEntries <= 2);
 End;
 
-Function FreeFATChain(Drive:Byte;BootSec:BootSectorRec;StartCluster:Word):Boolean;
+Function FreeFATChain(Drive:Byte;BootSec:BootSectorRec;
+  StartCluster:Word):Boolean;
 { Libère une chaîne de clusters dans la FAT }
 Var
  FATBuffer:Array[0..511] of Byte;
@@ -5809,7 +6092,8 @@ Begin
  FreeFATChain:=True;
 End;
 
-Function DeleteDirEntry(Drive:Byte;BootSec:BootSectorRec;ParentCluster:Word;EntryOffset:Word):Boolean;
+Function DeleteDirEntry(Drive:Byte;BootSec:BootSectorRec;ParentCluster:Word;
+  EntryOffset:Word):Boolean;
 { Supprime une entrée de répertoire }
 Var
  DirBuffer:Array[0..511] of Byte;
@@ -5836,10 +6120,14 @@ Begin
 End;
 
 { ===== Couche FAT en ecriture (FAT12/FAT16) =====
-  Volume compact (pas de copie du secteur de boot de 512 octets sur la pile), entrees de repertoire
-  manipulees directement dans le tampon d'un secteur (decalages : nom 0-10, attribut 11, date 24,
-  premier cluster 26, taille 28). L'emplacement de l'entree de repertoire de chaque handle est
-  memorise dans Data.DataMOS.FxLoc (FxBase) pour mettre a jour la taille a la fermeture. }
+  Volume compact (pas de copie du secteur de boot de 512 octets sur la pile),
+    entrees de repertoire
+  manipulees directement dans le tampon d'un secteur (decalages : nom 0-10,
+    attribut 11, date 24,
+  premier cluster 26,
+    taille 28). L'emplacement de l'entree de repertoire de chaque handle est
+  memorise dans Data.DataMOS.FxLoc (FxBase) pour mettre a jour la taille a la
+    fermeture. }
 Function FxGetSec(H:Byte):LongInt;Assembler;
 ASM
  MOV AL,H
@@ -5891,7 +6179,8 @@ Begin
  V.SPF:=Word(Buf[22])+Word(Buf[23])*256;
  Tot:=Word(Buf[19])+Word(Buf[20])*256;
  If Tot=0 Then
-  Tot:=Word(Buf[32])+Word(Buf[33])*256+(LongInt(Buf[34])+LongInt(Buf[35])*256)*65536;
+  Tot:=Word(Buf[32])+Word(Buf[33])*256+(LongInt(Buf[34])+LongInt(Buf[35])*256)*
+    65536;
  If V.SPC=0 Then Exit;
  Root:=(LongInt(V.RootEnt)*32+511) Div 512;
  V.FirstData:=LongInt(V.Res)+LongInt(V.NFat)*V.SPF+Root;
@@ -5955,7 +6244,8 @@ Begin
 End;
 
 Function FxAlloc(Var V:TFxVol;Prev:Word):Word;
-{ Premier cluster libre a partir de Prev+1 (puis 2) ; marque fin de chaine et le relie a Prev }
+{ Premier cluster libre a partir de Prev+1 (puis 2) ;
+  marque fin de chaine et le relie a Prev }
 Var
  B:Array[0..1023] of Byte;
  C,Start,K,O,R:Word;
@@ -6050,8 +6340,10 @@ Begin
  End;
 End;
 
-{ Cherche Nm (11 caracteres) dans le repertoire Dir : emplacement (Sec,Idx) et contenu ; FSec/FIdx = premier emplacement libre }
-Function FxScan(Var V:TFxVol;Dir:Word;Var Nm:String;Var Sec:LongInt;Var Idx:Byte;
+{ Cherche Nm (11 caracteres) dans le repertoire Dir : emplacement (Sec,Idx) et
+  contenu ; FSec/FIdx = premier emplacement libre }
+Function FxScan(Var V:TFxVol;Dir:Word;Var Nm:String;Var Sec:LongInt;
+  Var Idx:Byte;
                 Var FSec:LongInt;Var FIdx:Integer;Var E:TFxEnt):Boolean;
 Var
  Buf:TFxSec;
@@ -6082,7 +6374,8 @@ Begin
      Idx:=I;
      E.Attr:=Buf[P+11];
      E.Cluster:=Word(Buf[P+26])+Word(Buf[P+27])*256;
-     E.Size:=Word(Buf[P+28])+Word(Buf[P+29])*256+(LongInt(Buf[P+30])+LongInt(Buf[P+31])*256)*65536;
+     E.Size:=Word(Buf[P+28])+Word(Buf[P+29])*256+(LongInt(Buf[P+30])+
+       LongInt(Buf[P+31])*256)*65536;
      FxScan:=True;
      Exit;
     End;
@@ -6093,7 +6386,8 @@ Begin
 End;
 
 { Ecrit une entree de repertoire dans le tampon a la position P }
-{ Date et heure DOS courantes (horloge BIOS INT 1Ah/02h-04h) ; 1980-01-01 00:00 si l'horloge est absente }
+{ Date et heure DOS courantes (horloge BIOS INT 1Ah/02h-04h) ;
+  1980-01-01 00:00 si l'horloge est absente }
 Procedure FxStamp(Var Buf:TFxSec;P:Word);
 Var
  D,T:LongInt;
@@ -6107,7 +6401,8 @@ Begin
  H:=Hi(Word(T));
  Mi:=Lo(Word(T));
  Sc:=Hi(Word(T Shr 16));
- If (Y<1980) Or (Y>2107) Or (Mo<1) Or (Mo>12) Or (Dy<1) Or (Dy>31) Or (H>23) Or (Mi>59) Or (Sc>59) Then Begin
+ If (Y<1980) Or (Y>2107) Or (Mo<1) Or (Mo>12) Or (Dy<1) Or (Dy>31) Or (H>23) Or
+   (Mi>59) Or (Sc>59) Then Begin
   PD:=$21;
   PT:=0;
  End Else Begin
@@ -6120,7 +6415,8 @@ Begin
  Buf[P+25]:=PD Shr 8;
 End;
 
-Procedure FxPutEnt(Var Buf:TFxSec;P:Word;Var Nm:String;Attr:Byte;Cl:Word;Size:LongInt);
+Procedure FxPutEnt(Var Buf:TFxSec;P:Word;Var Nm:String;Attr:Byte;Cl:Word;
+  Size:LongInt);
 Var K:Byte;
 Begin
  FillChar(Buf[P],32,0);
@@ -6162,7 +6458,8 @@ Begin
 End;
 
 { Chemin ASCIIZ -> volume, repertoire parent (cluster) et nom 11 caracteres }
-Function FxOpenPath(PathPtr:Pointer;Var V:TFxVol;Var Dir:Word;Var Nm:String):Boolean;
+Function FxOpenPath(PathPtr:Pointer;Var V:TFxVol;Var Dir:Word;
+  Var Nm:String):Boolean;
 Var
  P:PChar;
  Path,DirP,FN:String;
@@ -6190,7 +6487,8 @@ Begin
  FxOpenPath:=True;
 End;
 
-{ Nom 8.3 (11 caracteres) invalide pour une creation : vide, joker, caracteres interdits }
+{ Nom 8.3 (11 caracteres) invalide pour une creation : vide, joker,
+  caracteres interdits }
 Function InList(C:Byte;Const L:String):Boolean;
 Var K:Byte;
 Begin
@@ -6219,10 +6517,13 @@ Var
 Begin
  FxOpen:=$FFFF;
  If Not FxOpenPath(PathPtr,V,Dir,Nm) Then Begin SetStandardError(3); Exit End;
- If Not FxScan(V,Dir,Nm,Sec,Idx,FS,FI,E) Then Begin SetStandardError(2); Exit End;
+ If Not FxScan(V,Dir,Nm,Sec,Idx,FS,FI,E) Then Begin SetStandardError(2);
+   Exit End;
  If (E.Attr And $10)<>0 Then Begin SetStandardError(5); Exit End;
- If ((Mode And 3)<>0) And ((E.Attr And $01)<>0) Then Begin SetStandardError(5); Exit End;
- If Not AllocateFileHandle(V.Drive,E.Cluster,E.Size,Mode And 3,H) Then Begin SetStandardError(4); Exit End;
+ If ((Mode And 3)<>0) And ((E.Attr And $01)<>0) Then Begin SetStandardError(5);
+   Exit End;
+ If Not AllocateFileHandle(V.Drive,E.Cluster,E.Size,Mode And 3,
+   H) Then Begin SetStandardError(4); Exit End;
  FxSetLoc(H,Sec,Idx);
  FxOpen:=H;
 End;
@@ -6258,7 +6559,8 @@ Begin
   FxPutEnt(Buf,P,Nm,Attr Or $20,0,0);
  End;
  If Not WriteSector(V.Drive,Sec,@Buf) Then Begin SetStandardError(5); Exit End;
- If Not AllocateFileHandle(V.Drive,0,0,2,H) Then Begin SetStandardError(4); Exit End;
+ If Not AllocateFileHandle(V.Drive,0,0,2,H) Then Begin SetStandardError(4);
+   Exit End;
  FxSetLoc(H,Sec,Idx);
  FxCreate:=H;
 End;
@@ -6278,8 +6580,10 @@ Begin
  P:=FxGetIdx(H)*32;
  Cl:=GetFileTableFirstCluster(H);
  Size:=GetFileTableFileSize(H);
- If (Buf[P+26]<>(Cl And $FF)) Or (Buf[P+27]<>(Cl Shr 8)) Or (Buf[P+28]<>(Size And $FF)) Or
-    (Buf[P+29]<>((Size Shr 8) And $FF)) Or (Buf[P+30]<>((Size Shr 16) And $FF)) Then FxStamp(Buf,P);
+ If (Buf[P+26]<>(Cl And $FF)) Or (Buf[P+27]<>(Cl Shr 8)) Or (Buf[P+28]<>(Size
+   And $FF)) Or
+    (Buf[P+29]<>((Size Shr 8) And $FF)) Or (Buf[P+30]<>((Size Shr 16) And $FF))
+      Then FxStamp(Buf,P);
  Buf[P+26]:=Cl And $FF;
  Buf[P+27]:=Cl Shr 8;
  Buf[P+28]:=Size And $FF;
@@ -6290,7 +6594,8 @@ Begin
 End;
 
 { Ecrit Gap octets nuls a la fin du fichier (position courante = taille) }
-Function FxWriteData(H:Word;Buffer:Pointer;Count:Word;Var Written:Word):Word;Forward;
+Function FxWriteData(H:Word;Buffer:Pointer;Count:Word;Var Written:Word):Word;
+  Forward;
 
 Procedure FxFillGap(H:Word;Gap:LongInt);
 Var Z:Array[0..511] of Byte;
@@ -6305,7 +6610,8 @@ Begin
  End;
 End;
 
-{ 40h avec 0 octet : le fichier est tronque (ou prolonge) a la position courante }
+{ 40h avec 0 octet : le fichier est tronque (ou prolonge) a la position courante
+  }
 Function FxTruncate(H:Word):Word;
 Var V:TFxVol;
  Pos,Size:LongInt;
@@ -6378,7 +6684,8 @@ Begin
  Size:=GetFileTableFileSize(H);
  CSize:=V.SPC*512;
  If (First>=2) And ((Cur=$FFFF) Or (Cur<2)) Then Begin
-  { apres une lecture jusqu'a la fin : revenir sur le dernier cluster de la chaine }
+  { apres une lecture jusqu'a la fin : revenir sur le dernier cluster de la
+    chaine }
   Cur:=First;
   While (FxGet(V,Cur)<>$FFFF) And (FxGet(V,Cur)>=2) Do Cur:=FxGet(V,Cur);
   Off:=CSize;
@@ -6435,7 +6742,8 @@ Begin
  FxDelete:=3;
  If Not FxOpenPath(PathPtr,V,Dir,Nm) Then Begin SetStandardError(3); Exit End;
  FxDelete:=2;
- If Not FxScan(V,Dir,Nm,Sec,Idx,FS,FI,E) Then Begin SetStandardError(2); Exit End;
+ If Not FxScan(V,Dir,Nm,Sec,Idx,FS,FI,E) Then Begin SetStandardError(2);
+   Exit End;
  FxDelete:=5;
  If (E.Attr And $11)<>0 Then Begin SetStandardError(5); Exit End;
  If E.Cluster>=2 Then FxFreeChain(V,E.Cluster);
@@ -6463,10 +6771,12 @@ Begin
  If Not FxOpenPath(NewPtr,V2,Dir2,Nm2) Then Begin SetStandardError(3); Exit End;
  If FxBadName(Nm2) Then Begin SetStandardError(3); Exit End;
  FxRename:=2;
- If Not FxScan(V,Dir,Nm,Sec,Idx,FS,FI,E) Then Begin SetStandardError(2); Exit End;
+ If Not FxScan(V,Dir,Nm,Sec,Idx,FS,FI,E) Then Begin SetStandardError(2);
+   Exit End;
  FxRename:=5;
  If V.Drive<>V2.Drive Then Begin SetStandardError(17); FxRename:=17; Exit End;
- If FxScan(V2,Dir2,Nm2,Sec2,Idx2,FS2,FI2,E2) Then Begin SetStandardError(5); Exit End;
+ If FxScan(V2,Dir2,Nm2,Sec2,Idx2,FS2,FI2,E2) Then Begin SetStandardError(5);
+   Exit End;
  If Not ReadSector(V.Drive,Sec,@Buf) Then Begin SetStandardError(5); Exit End;
  If Dir=Dir2 Then Begin
   For K:=0 To 10 Do Buf[Idx*32+K]:=Ord(Nm2[K+1]);
@@ -6512,7 +6822,8 @@ Begin
  FxPutEnt(Buf,32,Dot,$10,Dir,0);
  WriteSector(V.Drive,V.FirstData+LongInt(C-2)*V.SPC,@Buf);
  FillChar(Buf,512,0);
- For K:=1 To V.SPC-1 Do WriteSector(V.Drive,V.FirstData+LongInt(C-2)*V.SPC+K,@Buf);
+ For K:=1 To V.SPC-1 Do WriteSector(V.Drive,V.FirstData+LongInt(C-2)*V.SPC+K,
+   @Buf);
  { entree dans le repertoire parent }
  If Not ReadSector(V.Drive,FS,@Buf) Then Begin SetStandardError(5); Exit End;
  FxPutEnt(Buf,FI*32,Nm,$10,C,0);
@@ -6534,7 +6845,8 @@ Var
 Begin
  FxRmDir:=3;
  If Not FxOpenPath(PathPtr,V,Dir,Nm) Then Begin SetStandardError(3); Exit End;
- If Not FxScan(V,Dir,Nm,Sec,Idx,FS,FI,E) Then Begin SetStandardError(3); Exit End;
+ If Not FxScan(V,Dir,Nm,Sec,Idx,FS,FI,E) Then Begin SetStandardError(3);
+   Exit End;
  FxRmDir:=5;
  If (E.Attr And $10)=0 Then Begin SetStandardError(5); Exit End;
  { le repertoire doit etre vide (hors "." et "..") }
@@ -6542,7 +6854,8 @@ Begin
  While FxDirSec(V,E.Cluster,N,S) Do Begin
   If Not ReadSector(V.Drive,S,@Buf) Then Begin SetStandardError(5); Exit End;
   For I:=0 To 15 Do
-   If (Buf[I*32]<>0) And (Buf[I*32]<>$E5) And (Buf[I*32]<>Ord('.')) Then Begin SetStandardError(5); Exit End;
+   If (Buf[I*32]<>0) And (Buf[I*32]<>$E5) And (Buf[I*32]<>Ord('.')) Then Begin
+     SetStandardError(5); Exit End;
   Inc(N);
  End;
  If E.Cluster>=2 Then FxFreeChain(V,E.Cluster);
@@ -6602,7 +6915,8 @@ Begin
    I:=J;
    If Comp<>'.' Then Begin
     FxName11(Comp,Nm);
-    If Not FxScan(V,Dir,Nm,Sec,Idx,FS,FI,E) Then Begin SetStandardError(3); Exit End;
+    If Not FxScan(V,Dir,Nm,Sec,Idx,FS,FI,E) Then Begin SetStandardError(3);
+      Exit End;
     If (E.Attr And $10)=0 Then Begin SetStandardError(3); Exit End;
     Dir:=E.Cluster;
     If Comp='..' Then Begin
@@ -6625,15 +6939,18 @@ Begin
  FxChDir:=0;
 End;
 
-{ Etat d'une recherche 4Eh/4Fh : conserve dans les 21 octets reserves de la DTA (comme MS-DOS), ce qui
-  permet plusieurs recherches imbriquees : [0]=lecteur+1, [1..12]=masque, [13]=attributs, [14..15]=entree,
+{ Etat d'une recherche 4Eh/4Fh : conserve dans les 21 octets reserves de la DTA
+  (comme MS-DOS), ce qui
+  permet plusieurs recherches imbriquees : [0]=lecteur+1, [1..12]=masque,
+    [13]=attributs, [14..15]=entree,
   [16..17]=repertoire, [18]=actif }
 Procedure FindSaveDta(Var St:FindFileState;Var DTA:DTAStruct);
 Var K:Byte;
 Begin
  DTA.Reserved[0]:=Ord(St.SearchPath[1])-64;
  For K:=1 To 12 Do
-  If K<=Length(St.SearchMask) Then DTA.Reserved[K]:=Ord(St.SearchMask[K]) Else DTA.Reserved[K]:=0;
+  If K<=Length(St.SearchMask) Then DTA.Reserved[K]:=Ord(St.SearchMask[K]) Else
+    DTA.Reserved[K]:=0;
  DTA.Reserved[13]:=St.SearchAttr;
  DTA.Reserved[14]:=Lo(St.CurrentEntry);
  DTA.Reserved[15]:=Hi(St.CurrentEntry);
@@ -6659,7 +6976,8 @@ Begin
  St.CurrentDir:=Word(DTA.Reserved[16])+Word(DTA.Reserved[17])*256;
 End;
 
-{ Recherche de fichiers (4Eh/4Fh) : repertoire courant ou sous-repertoire, entrees de toute taille de repertoire }
+{ Recherche de fichiers (4Eh/4Fh) : repertoire courant ou sous-repertoire,
+  entrees de toute taille de repertoire }
 Function FxFindFrom(Var DTA:DTAStruct):Word;
 Var
  V:TFxVol;
@@ -6686,7 +7004,8 @@ Begin
     FindSaveDta(St,DTA);
     Exit;
    End;
-   If (Buf[P]<>$E5) And ((Buf[P+11] And $1E And (Not St.SearchAttr))=0) Then Begin
+   If (Buf[P]<>$E5) And ((Buf[P+11] And $1E And (Not St.SearchAttr))=0) Then
+     Begin
     L:=0;
     For K:=0 To 7 Do
      If Buf[P+K]<>32 Then Begin Inc(L); Nm[L]:=Chr(Buf[P+K]) End Else Break;
@@ -6702,7 +7021,8 @@ Begin
      DTA.Attribute:=Buf[P+11];
      DTA.Time:=Word(Buf[P+22])+Word(Buf[P+23])*256;
      DTA.Date:=Word(Buf[P+24])+Word(Buf[P+25])*256;
-     DTA.Size:=Word(Buf[P+28])+Word(Buf[P+29])*256+(LongInt(Buf[P+30])+LongInt(Buf[P+31])*256)*65536;
+     DTA.Size:=Word(Buf[P+28])+Word(Buf[P+29])*256+(LongInt(Buf[P+30])+
+       LongInt(Buf[P+31])*256)*65536;
      Move(Nm[1],DTA.Name[0],L);
      DTA.Name[L]:=#0;
      St.CurrentEntry:=N*16+I+1;
@@ -6747,7 +7067,8 @@ Begin
  If Mask='' Then Mask:='*.*';
  If Dr>NDrv-1 Then Begin FxFindFirst:=3; Exit End;
  If Not FxVol(Dr,V) Then Begin FxFindFirst:=3; Exit End;
- If (Q<=Length(Path)) And ((Path[Q]='\') Or (Path[Q]='/')) Then Start:=0 Else Start:=GetCurrentDirCluster(Dr);
+ If (Q<=Length(Path)) And ((Path[Q]='\') Or (Path[Q]='/')) Then Start:=0 Else
+   Start:=GetCurrentDirCluster(Dr);
  If Not FxWalk(V,DirP,Start,Dir) Then Begin FxFindFirst:=3; Exit End;
  If Mask='*.*' Then Mask:='*';
  St.SearchMask:=UpperCase(Mask);
@@ -6823,7 +7144,8 @@ End;
 { FONCTIONS POUR CHANGER DE RÉPERTOIRE (Fonction 3Bh)                        }
 {==============================================================================}
 
-Function FindDirectoryByPath(Drive:Byte;BootSec:BootSectorRec;Path:String;Var DirCluster:Word):Boolean;
+Function FindDirectoryByPath(Drive:Byte;BootSec:BootSectorRec;Path:String;
+  Var DirCluster:Word):Boolean;
 { Trouve un répertoire par son chemin complet }
 Var
  PathParts:Array[0..15] of String; { Maximum 16 niveaux }
@@ -6871,7 +7193,8 @@ Begin
 
  { Parcourir chaque partie du chemin }
  For I:=0 To PartCount-1 Do Begin
-  If Not FindDirectoryEntry(Drive,BootSec,CurrentCluster,PathParts[I],Entry,EntryOffset) Then
+  If Not FindDirectoryEntry(Drive,BootSec,CurrentCluster,PathParts[I],Entry,
+    EntryOffset) Then
    Exit; { Partie non trouvée }
 
   { Vérifier que c'est un répertoire }
@@ -6879,7 +7202,8 @@ Begin
    Exit; { Pas un répertoire }
 
   { Passer au cluster suivant }
-  CurrentCluster:=Entry.FirstClusterLow or (Word(Entry.FirstClusterHigh) shl 16);
+  CurrentCluster:=Entry.FirstClusterLow or (Word(Entry.FirstClusterHigh) shl
+    16);
  End;
 
  DirCluster:=CurrentCluster;
@@ -6916,7 +7240,8 @@ End;
 {==============================================================================}
 
 { Analyser un chemin de fichier (séparé répertoire/fichier) }
-Function ParseFilePath(Path:String;Var Drive:Byte;Var DirPath,FileName:String):Boolean;
+Function ParseFilePath(Path:String;Var Drive:Byte;Var DirPath,
+  FileName:String):Boolean;
 Var
  I,J:Byte;
  FullPath:String;
@@ -6971,7 +7296,8 @@ Begin
  AllocateFileHandle:=False;
  Handle:=0;
 
- { Chercher une entrée libre dans la table des fichiers (poignées 0..4 = périphériques standard) }
+ { Chercher une entrée libre dans la table des fichiers (poignées 0..4 =
+   périphériques standard) }
  For I:=5 To CfgWord(0)-1 Do Begin
   If Not GetFileTableInUse(I) Then Begin
    { Initialiser l'entrée via fonctions d'accès Code Segment }
@@ -6994,7 +7320,8 @@ End;
 
 { Créer une nouvelle entrée de fichier dans le répertoire }
 Function CreateFileEntry(Drive:Byte;BootSec:BootSectorRec;DirCluster:Word;
-                        FileName:String;Attributes:Byte;Var FirstCluster:Word):Word;
+                        FileName:String;Attributes:Byte;
+                          Var FirstCluster:Word):Word;
 Var
  Buffer: Array[0..511] of Byte;
  Entry: DirectoryEntry;
@@ -7011,7 +7338,8 @@ Begin
  { Calculer le secteur du répertoire }
  If DirCluster = 0 Then Begin
   { Répertoire racine }
-  DirSector:=BootSec.ReservedSectors + (BootSec.NumberOfFATs * BootSec.SectorsPerFAT);
+  DirSector:=BootSec.ReservedSectors + (BootSec.NumberOfFATs *
+    BootSec.SectorsPerFAT);
  End
  Else Begin
   { Sous-répertoire }
@@ -7111,7 +7439,8 @@ Var
  FirstCluster: Word;
  FileSize: LongInt;
 Begin
- FirstCluster:=Entry.FirstClusterLow or (LongInt(Entry.FirstClusterHigh) shl 16);
+ FirstCluster:=Entry.FirstClusterLow or (LongInt(Entry.FirstClusterHigh) shl
+   16);
  FileSize:=Entry.FileSize;
 
  If AllocateFileHandle(Drive,FirstCluster,FileSize,Entry.Attributes,Handle) Then
@@ -7121,7 +7450,8 @@ Begin
 End;
 
 { Trouver ou créer un fichier }
-Function FindOrCreateFile(Drive:Byte;BootSec:BootSectorRec;DirPath,FileName:String;
+Function FindOrCreateFile(Drive:Byte;BootSec:BootSectorRec;DirPath,
+  FileName:String;
                          Attributes:Byte;Var FileHandle:Word):Word;
 Var
  DirCluster: Word;
@@ -7143,7 +7473,8 @@ Begin
  End;
 
  { Chercher si le fichier existe déjà }
- If FindDirectoryEntry(Drive,BootSec,DirCluster,FileName + '        ',Entry,EntryOffset) Then Begin
+ If FindDirectoryEntry(Drive,BootSec,DirCluster,FileName + '        ',Entry,
+   EntryOffset) Then Begin
   { Fichier existant - l'ouvrir }
   If (Entry.Attributes and $10) <> 0 Then Begin
    FindOrCreateFile:=5; { Access denied - c'est un répertoire }
@@ -7154,7 +7485,8 @@ Begin
  End
  Else Begin
   { Fichier n'existe pas - le créer }
-  Result:=CreateFileEntry(Drive,BootSec,DirCluster,FileName,Attributes,FirstCluster);
+  Result:=CreateFileEntry(Drive,BootSec,DirCluster,FileName,Attributes,
+    FirstCluster);
   If Result <> 0 Then Begin
    FindOrCreateFile:=Result;
    Exit;
@@ -7186,7 +7518,8 @@ Var
  FirstCluster: Word;
  FileSize: LongInt;
 Begin
- FirstCluster:=Entry.FirstClusterLow or (LongInt(Entry.FirstClusterHigh) shl 16);
+ FirstCluster:=Entry.FirstClusterLow or (LongInt(Entry.FirstClusterHigh) shl
+   16);
  FileSize:=Entry.FileSize;
 
  If AllocateFileHandle(Drive,FirstCluster,FileSize,$00,Handle) Then
@@ -7196,12 +7529,14 @@ Begin
 End;
 
 { Ouvrir fichier en écriture seule }
-Function OpenFileWriteOnly(Drive:Byte;Entry:DirectoryEntry;Var Handle:Word):Word;
+Function OpenFileWriteOnly(Drive:Byte;Entry:DirectoryEntry;
+  Var Handle:Word):Word;
 Var
  FirstCluster: Word;
  FileSize: LongInt;
 Begin
- FirstCluster:=Entry.FirstClusterLow or (LongInt(Entry.FirstClusterHigh) shl 16);
+ FirstCluster:=Entry.FirstClusterLow or (LongInt(Entry.FirstClusterHigh) shl
+   16);
  FileSize:=Entry.FileSize;
 
  If AllocateFileHandle(Drive,FirstCluster,FileSize,$01,Handle) Then
@@ -7211,12 +7546,14 @@ Begin
 End;
 
 { Ouvrir fichier en lecture/écriture }
-Function OpenFileReadWrite(Drive:Byte;Entry:DirectoryEntry;Var Handle:Word):Word;
+Function OpenFileReadWrite(Drive:Byte;Entry:DirectoryEntry;
+  Var Handle:Word):Word;
 Var
  FirstCluster: Word;
  FileSize: LongInt;
 Begin
- FirstCluster:=Entry.FirstClusterLow or (LongInt(Entry.FirstClusterHigh) shl 16);
+ FirstCluster:=Entry.FirstClusterLow or (LongInt(Entry.FirstClusterHigh) shl
+   16);
  FileSize:=Entry.FileSize;
 
  If AllocateFileHandle(Drive,FirstCluster,FileSize,$02,Handle) Then
@@ -7463,7 +7800,8 @@ Begin
  If Old<>$FFFF Then SftRelease(Old);
 End;
 
-{ Table de handles d'un nouveau processus : copie de celle du parent (references incrementees) }
+{ Table de handles d'un nouveau processus : copie de celle du parent (references
+  incrementees) }
 Procedure JftInherit(Child,Parent:Word);
 Var I:Word;
  V:Byte;
@@ -7545,7 +7883,8 @@ Begin
  LockInt21:=DOS5Ch_LockUnlockRegion(S,Action,Start,Len);
 End;
 
-{ 44h : sous-fonctions de peripherique ; Info = valeur de retour (DX pour 0 et 9, AX pour les autres) }
+{ 44h : sous-fonctions de peripherique ;
+  Info = valeur de retour (DX pour 0 et 9, AX pour les autres) }
 Function IoctlInt21(Sub,H:Word;Var Info:Word):Word;
 Var S:Word;
 Begin
@@ -7575,8 +7914,10 @@ Begin
 End;
 
 {==============================================================================}
-{ FCB (INT 21h 0Fh..17h, 21h..24h, 27h..29h) : traduits en fonctions de handle  }
-{ Octets utilises dans le FCB : +18h = index SFT, +19h = marqueur $5A (ouvert). }
+{ FCB (INT 21h 0Fh..17h, 21h..24h,
+  27h..29h) : traduits en fonctions de handle  }
+{ Octets utilises dans le FCB : +18h = index SFT,
+  +19h = marqueur $5A (ouvert). }
 {==============================================================================}
 Procedure BufParts(Buf:Pointer;Var S,O:Word);Near;Forward;
 
@@ -7590,7 +7931,8 @@ Begin
  If Mem[S:O]=$FF Then Inc(O,7);
 End;
 
-{ Nom du FCB (offset Off) sous la forme "[X:]NOM[.EXT]" ; False si le nom est vide }
+{ Nom du FCB (offset Off) sous la forme "[X:]NOM[.EXT]" ;
+  False si le nom est vide }
 Procedure FcbField(S,O,Off,Len:Word;Wild:Boolean;Var Path:String);
 Var I,L,T:Byte;
 Begin
@@ -7604,7 +7946,8 @@ Begin
  If T<L Then Path:=Path+'*';
 End;
 
-{ Off >= $100 : un '?' final d'un champ couvre aussi les caracteres absents ('*') }
+{ Off >= $100 : un '?' final d'un champ couvre aussi les caracteres absents
+  ('*') }
 Function FcbName(S,O,Off:Word;Var Path:String):Boolean;
 Var Wild:Boolean;
  N:Byte;
@@ -7708,7 +8051,8 @@ Begin
  FcbClose:=0;
 End;
 
-{ Entree de repertoire de la recherche courante -> DTA au format FCB (lecteur + entree de 32 octets) }
+{ Entree de repertoire de la recherche courante -> DTA au format FCB (lecteur +
+  entree de 32 octets) }
 Procedure FcbFill(Var T:DTAStruct;Drive:Byte);
 Var D:Word;
  DS_,DO_:Word;
@@ -7905,7 +8249,8 @@ Begin
  MemW[S:O+$23]:=Word(R Shr 16);
 End;
 
-{ Lit un enregistrement a la position Pos dans la DTA : 0 ok, 1 fin de fichier, 3 enregistrement partiel }
+{ Lit un enregistrement a la position Pos dans la DTA : 0 ok, 1 fin de fichier,
+  3 enregistrement partiel }
 Function FcbReadRec(S,O,T:Word;Pos:LongInt;DO_:Word):Byte;
 Var Rs,Got,I,DS_:Word;
 Begin
@@ -8017,7 +8362,8 @@ Begin
  FcbRandWrite:=FcbWriteRec(S,O,T,Rec*FcbRecSize(S,O));
 End;
 
-{ 27h / 28h : Count enregistrements a partir de l'enregistrement aleatoire ; Done = nombre traite }
+{ 27h / 28h : Count enregistrements a partir de l'enregistrement aleatoire ;
+  Done = nombre traite }
 Function FcbBlockRead(P:Pointer;Count:Word;Var Done:Word):Byte;
 Var S,O,T,I,Rs,DO_:Word;
  Rec:LongInt;
@@ -8080,7 +8426,8 @@ Begin
  FcbStoreRand(S,O,Rec);
 End;
 
-{ 23h : taille du fichier (en enregistrements) dans le champ d'enregistrement aleatoire }
+{ 23h : taille du fichier (en enregistrements) dans le champ d'enregistrement
+  aleatoire }
 Function FcbFileSize(P:Pointer):Byte;
 Var S,O:Word;
  Path:String;
@@ -8098,7 +8445,8 @@ Begin
  FcbFileSize:=0;
 End;
 
-{ 24h : champ d'enregistrement aleatoire = bloc courant / enregistrement courant }
+{ 24h : champ d'enregistrement aleatoire = bloc courant / enregistrement courant
+  }
 Function FcbSetRandom(P:Pointer):Byte;
 Var S,O:Word;
 Begin
@@ -8107,7 +8455,8 @@ Begin
  FcbSetRandom:=0;
 End;
 
-{ 29h : analyse d'un nom de fichier (chaine en StrPtr) dans le FCB Fcb ; NewOfs = offset apres l'analyse }
+{ 29h : analyse d'un nom de fichier (chaine en StrPtr) dans le FCB Fcb ;
+  NewOfs = offset apres l'analyse }
 Function FcbIsSep(C:Byte):Boolean;
 Begin
  FcbIsSep:=(C<=32) Or InList(C,'.:;,=+/"[]<>|\');
@@ -8125,10 +8474,12 @@ Begin
  C:=Mem[SS_:SO];
  While (C=32) Or (C=9) Do Begin Inc(SO); C:=Mem[SS_:SO]; End;
  If (Flags And 1)<>0 Then
-  While (C=Ord(';')) Or (C=Ord(',')) Or (C=Ord('=')) Do Begin Inc(SO); C:=Mem[SS_:SO]; End;
+  While (C=Ord(';')) Or (C=Ord(',')) Or (C=Ord('=')) Do Begin Inc(SO);
+    C:=Mem[SS_:SO]; End;
  { lecteur }
  If (Flags And 2)=0 Then Mem[FS:FO]:=0;
- If (Mem[SS_:SO+1]=Ord(':')) And (((C>=65) And (C<=90)) Or ((C>=97) And (C<=122))) Then Begin
+ If (Mem[SS_:SO+1]=Ord(':')) And (((C>=65) And (C<=90)) Or ((C>=97) And
+   (C<=122))) Then Begin
   If C>=97 Then C:=C-32;
   Mem[FS:FO]:=C-64;
   Inc(SO,2);
@@ -8181,7 +8532,8 @@ Begin
 End;
 
 { Lire des données depuis un cluster spécifique }
-Function ReadFromCluster(Drive:Byte;BootSec:BootSectorRec;Cluster:Word;Offset:Word;Buffer:Pointer;BytesToRead:Word):Word;
+Function ReadFromCluster(Drive:Byte;BootSec:BootSectorRec;Cluster:Word;
+  Offset:Word;Buffer:Pointer;BytesToRead:Word):Word;
 Var
  FirstDataSector: LongInt;
  ClusterSector: LongInt;
@@ -8197,11 +8549,13 @@ Begin
  ReadFromCluster:=0; { Succès par défaut }
 
  { Calculer le premier secteur de données }
- FirstDataSector:=BootSec.ReservedSectors + (BootSec.NumberOfFATs * BootSec.SectorsPerFAT) +
+ FirstDataSector:=BootSec.ReservedSectors + (BootSec.NumberOfFATs *
+   BootSec.SectorsPerFAT) +
                   ((BootSec.RootDirEntries * 32) div BootSec.BytesPerSector);
 
  { Calculer le secteur du cluster }
- ClusterSector:=FirstDataSector + (LongInt(Cluster - 2) * BootSec.SectorsPerCluster);
+ ClusterSector:=FirstDataSector + (LongInt(Cluster - 2) *
+   BootSec.SectorsPerCluster);
 
  BytesRemaining:=BytesToRead;
 
@@ -8218,7 +8572,8 @@ Begin
   ByteInSector:=Offset mod BootSec.BytesPerSector;
 
   { Lire le secteur }
-  If Not ReadSector(Drive, ClusterSector + SectorInCluster, @SectorBuffer) Then Begin
+  If Not ReadSector(Drive, ClusterSector + SectorInCluster,
+    @SectorBuffer) Then Begin
    ReadFromCluster:=5; { Access denied }
    Exit;
   End;
@@ -8274,7 +8629,8 @@ Begin
 End;
 
 { Obtenir le cluster suivant dans la chaîne FAT }
-Function GetNextCluster(Drive:Byte;BootSec:BootSectorRec;CurrentCluster:Word):Word;
+Function GetNextCluster(Drive:Byte;BootSec:BootSectorRec;
+  CurrentCluster:Word):Word;
 Var
  FATSector: Word;
  FATOffset: Word;
@@ -8319,7 +8675,8 @@ Begin
 End;
 
 { Lire les données d'un fichier }
-Function ReadFileData(Handle:Word;Buffer:Pointer;BytesToRead:Word;Var BytesRead:Word):Word;
+Function ReadFileData(Handle:Word;Buffer:Pointer;BytesToRead:Word;
+  Var BytesRead:Word):Word;
 Var
  FileEntry: FileTableEntry;
  Drive: Byte;
@@ -8345,7 +8702,9 @@ Begin
  If Not FileEntry.InUse Then Exit;
 
  Drive:=FileEntry.Drive; { index 0-based, tel que stocké }
-{$IFDEF KDEBUG}DbgW('D',FileEntry.Drive);DbgW('A',FileEntry.Attributes);DbgW('S',Word(FileEntry.FileSize));DbgW('P',Word(FileEntry.CurrentPos));DbgW('F',FileEntry.FirstCluster);{$ENDIF}
+{$IFDEF KDEBUG}DbgW('D',FileEntry.Drive);DbgW('A',FileEntry.Attributes);
+  DbgW('S',Word(FileEntry.FileSize));DbgW('P',Word(FileEntry.CurrentPos));
+    DbgW('F',FileEntry.FirstCluster);{$ENDIF}
 
  { Lire boot sector }
  If Not ReadBootSector(Drive, BootSec) Then Begin
@@ -8382,7 +8741,8 @@ Begin
 
  ClusterSize:=BootSec.SectorsPerCluster * BootSec.BytesPerSector;
 
- While (BytesToRead > 0) and (CurrentCluster <> $FFFF) and (CurrentCluster >= 2) Do Begin
+ While (BytesToRead > 0) and (CurrentCluster <> $FFFF) and (CurrentCluster >= 2)
+   Do Begin
   { Calculer combien on peut lire du cluster courant }
   RemainingInCluster:=ClusterSize - FileEntry.ClusterOffset;
   BytesToReadNow:=BytesToRead;
@@ -8390,7 +8750,8 @@ Begin
    BytesToReadNow:=RemainingInCluster;
 
   { Lire du cluster courant }
-  Result:=ReadFromCluster(Drive, BootSec, CurrentCluster, FileEntry.ClusterOffset, Ptr(BufferSeg, BufferOfs), BytesToReadNow);
+  Result:=ReadFromCluster(Drive, BootSec, CurrentCluster,
+    FileEntry.ClusterOffset, Ptr(BufferSeg, BufferOfs), BytesToReadNow);
   If Result <> 0 Then Begin
    ReadFileData:=Result;
    Exit;
@@ -8426,13 +8787,15 @@ Begin
 End;
 
 { Fonction principale 3Fh }
-Function DOS3Fh_ReadFile(Handle:Word;Buffer:Pointer;BytesToRead:Word;Var BytesRead:Word):Word;
+Function DOS3Fh_ReadFile(Handle:Word;Buffer:Pointer;BytesToRead:Word;
+  Var BytesRead:Word):Word;
 Begin
  DOS3Fh_ReadFile:=ReadFileData(Handle, Buffer, BytesToRead, BytesRead);
 End;
 
 { Écrire des données vers un cluster spécifique }
-Function WriteToCluster(Drive:Byte;BootSec:BootSectorRec;Cluster:Word;Offset:Word;Buffer:Pointer;BytesToWrite:Word):Word;
+Function WriteToCluster(Drive:Byte;BootSec:BootSectorRec;Cluster:Word;
+  Offset:Word;Buffer:Pointer;BytesToWrite:Word):Word;
 Var
  FirstDataSector: LongInt;
  ClusterSector: LongInt;
@@ -8448,11 +8811,13 @@ Begin
  WriteToCluster:=0; { Succès par défaut }
 
  { Calculer le premier secteur de données }
- FirstDataSector:=BootSec.ReservedSectors + (BootSec.NumberOfFATs * BootSec.SectorsPerFAT) +
+ FirstDataSector:=BootSec.ReservedSectors + (BootSec.NumberOfFATs *
+   BootSec.SectorsPerFAT) +
                   ((BootSec.RootDirEntries * 32) div BootSec.BytesPerSector);
 
  { Calculer le secteur du cluster }
- ClusterSector:=FirstDataSector + (LongInt(Cluster - 2) * BootSec.SectorsPerCluster);
+ ClusterSector:=FirstDataSector + (LongInt(Cluster - 2) *
+   BootSec.SectorsPerCluster);
 
  BytesRemaining:=BytesToWrite;
 
@@ -8470,7 +8835,8 @@ Begin
 
   { Si on n'écrit pas tout le secteur, il faut d'abord le lire }
   If (ByteInSector <> 0) or (BytesRemaining < BootSec.BytesPerSector) Then Begin
-   If Not ReadSector(Drive, ClusterSector + SectorInCluster, @SectorBuffer) Then Begin
+   If Not ReadSector(Drive, ClusterSector + SectorInCluster,
+     @SectorBuffer) Then Begin
     WriteToCluster:=5; { Access denied }
     Exit;
    End;
@@ -8508,7 +8874,8 @@ Begin
   END;
 
   { Écrire le secteur }
-  If Not WriteSector(Drive, ClusterSector + SectorInCluster, @SectorBuffer) Then Begin
+  If Not WriteSector(Drive, ClusterSector + SectorInCluster,
+    @SectorBuffer) Then Begin
    WriteToCluster:=5; { Access denied }
    Exit;
   End;
@@ -8533,7 +8900,8 @@ Begin
 End;
 
 { Mettre à jour une entrée dans la FAT }
-Function UpdateFATEntry(Drive:Byte;BootSec:BootSectorRec;Cluster:Word;NextCluster:Word):Boolean;
+Function UpdateFATEntry(Drive:Byte;BootSec:BootSectorRec;Cluster:Word;
+  NextCluster:Word):Boolean;
 Var
  FATSector: Word;
  FATOffset: Word;
@@ -8555,10 +8923,12 @@ Begin
 
   If (Cluster mod 2) = 0 Then Begin
    Buffer[FATOffset]:=NextCluster and $FF;
-   Buffer[FATOffset + 1]:=(Buffer[FATOffset + 1] and $F0) or ((NextCluster shr 8) and $0F);
+   Buffer[FATOffset + 1]:=(Buffer[FATOffset + 1] and $F0) or ((NextCluster shr
+     8) and $0F);
   End
   Else Begin
-   Buffer[FATOffset]:=(Buffer[FATOffset] and $0F) or ((NextCluster and $0F) shl 4);
+   Buffer[FATOffset]:=(Buffer[FATOffset] and $0F) or ((NextCluster and $0F) shl
+     4);
    Buffer[FATOffset + 1]:=(NextCluster shr 4) and $FF;
   End;
  End
@@ -8576,14 +8946,16 @@ Begin
 
  { Écrire dans toutes les copies de la FAT }
  For I:=0 To BootSec.NumberOfFATs-1 Do Begin
-  If Not WriteSector(Drive, FATSector + (I * BootSec.SectorsPerFAT), @Buffer) Then Exit;
+  If Not WriteSector(Drive, FATSector + (I * BootSec.SectorsPerFAT),
+    @Buffer) Then Exit;
  End;
 
  UpdateFATEntry:=True;
 End;
 
 { Allouer un nouveau cluster et le chaîner au précédent }
-Function AllocateNewCluster(Drive:Byte;BootSec:BootSectorRec;PreviousCluster:Word):Word;
+Function AllocateNewCluster(Drive:Byte;BootSec:BootSectorRec;
+  PreviousCluster:Word):Word;
 Var
  NewCluster: Word;
  MaxCluster: Word;
@@ -8618,18 +8990,21 @@ Begin
 End;
 
 { Écrire les données d'un fichier }
-Function WriteFileData(Handle:Word;Buffer:Pointer;BytesToWrite:Word;Var BytesWritten:Word):Word;
+Function WriteFileData(Handle:Word;Buffer:Pointer;BytesToWrite:Word;
+  Var BytesWritten:Word):Word;
 Begin
  WriteFileData:=FxWriteData(Handle,Buffer,BytesToWrite,BytesWritten);
 End;
 { Fonction principale 40h }
-Function DOS40h_WriteFile(Handle:Word;Buffer:Pointer;BytesToWrite:Word;Var BytesWritten:Word):Word;
+Function DOS40h_WriteFile(Handle:Word;Buffer:Pointer;BytesToWrite:Word;
+  Var BytesWritten:Word):Word;
 Begin
  DOS40h_WriteFile:=WriteFileData(Handle, Buffer, BytesToWrite, BytesWritten);
 End;
 
 { Supprimer une entrée de répertoire }
-Function DeleteDirectoryEntry(Drive:Byte;BootSec:BootSectorRec;DirCluster:Word;FileName:String):Boolean;
+Function DeleteDirectoryEntry(Drive:Byte;BootSec:BootSectorRec;DirCluster:Word;
+  FileName:String):Boolean;
 Var
  Buffer: Array[0..511] of Byte;
  Entry: DirectoryEntry;
@@ -8650,15 +9025,18 @@ Begin
  { Calculer le secteur de début du répertoire }
  If DirCluster = 0 Then Begin
   { Répertoire racine }
-  FirstDataSector:=BootSec.ReservedSectors + (BootSec.NumberOfFATs * BootSec.SectorsPerFAT);
+  FirstDataSector:=BootSec.ReservedSectors + (BootSec.NumberOfFATs *
+    BootSec.SectorsPerFAT);
   DirSector:=FirstDataSector;
   SectorsToRead:=(BootSec.RootDirEntries * 32) div BootSec.BytesPerSector;
  End
  Else Begin
   { Sous-répertoire }
-  FirstDataSector:=BootSec.ReservedSectors + (BootSec.NumberOfFATs * BootSec.SectorsPerFAT) +
+  FirstDataSector:=BootSec.ReservedSectors + (BootSec.NumberOfFATs *
+    BootSec.SectorsPerFAT) +
                    ((BootSec.RootDirEntries * 32) div BootSec.BytesPerSector);
-  DirSector:=FirstDataSector + (LongInt(DirCluster - 2) * BootSec.SectorsPerCluster);
+  DirSector:=FirstDataSector + (LongInt(DirCluster - 2) *
+    BootSec.SectorsPerCluster);
   SectorsToRead:=BootSec.SectorsPerCluster;
  End;
 
@@ -8679,7 +9057,8 @@ Begin
     End;
    End;
 
-   If Found and (Entry.FileName[0] <> #0) and (Entry.FileName[0] <> #$E5) Then Begin
+   If Found and (Entry.FileName[0] <> #0) and (Entry.FileName[0] <> #$E5) Then
+     Begin
     { Entrée trouvée - la marquer comme supprimée }
     Entry.FileName[0]:=#$E5;
 
@@ -8739,14 +9118,16 @@ Begin
 End;
 
 { Fonction principale 42h - Seek File }
-Function DOS42h_SeekFile(Handle:Word;OffsetHi,OffsetLo:Word;Method:Byte):LongInt;
+Function DOS42h_SeekFile(Handle:Word;OffsetHi,OffsetLo:Word;
+  Method:Byte):LongInt;
 Var
  V:TFxVol;
  P,Q,Size:LongInt;
  First,Cur,Off,CSize,N:Word;
 Begin
  DOS42h_SeekFile:=$FFFFFFFF;
- { peripheriques (CON, AUX, PRN...) : le positionnement reussit et rend 0, comme sous MS-DOS }
+ { peripheriques (CON, AUX, PRN...) : le positionnement reussit et rend 0,
+   comme sous MS-DOS }
  If Handle<5 Then Begin
   DOS42h_SeekFile:=0;
   Exit;
@@ -8779,7 +9160,8 @@ Begin
    Exit;
   End;
   CSize:=V.SPC*512;
-  { cluster qui contient la position (au plus la fin du fichier ; plus loin, un trou sera comble a l'ecriture) }
+  { cluster qui contient la position (au plus la fin du fichier ; plus loin,
+    un trou sera comble a l'ecriture) }
   Q:=P;
   If Q>Size Then Q:=Size;
   N:=Word(Q Div CSize);
@@ -8804,7 +9186,8 @@ Begin
 End;
 
 { Obtenir les attributs d'un fichier }
-Function GetFileAttributes(Drive:Byte;BootSec:BootSectorRec;DirCluster:Word;FileName:String;Var Attributes:Byte):Boolean;
+Function GetFileAttributes(Drive:Byte;BootSec:BootSectorRec;DirCluster:Word;
+  FileName:String;Var Attributes:Byte):Boolean;
 Var
  Buffer: Array[0..511] of Byte;
  Entry: DirectoryEntry;
@@ -8826,15 +9209,18 @@ Begin
  { Calculer le secteur de début du répertoire }
  If DirCluster = 0 Then Begin
   { Répertoire racine }
-  FirstDataSector:=BootSec.ReservedSectors + (BootSec.NumberOfFATs * BootSec.SectorsPerFAT);
+  FirstDataSector:=BootSec.ReservedSectors + (BootSec.NumberOfFATs *
+    BootSec.SectorsPerFAT);
   DirSector:=FirstDataSector;
   SectorsToRead:=(BootSec.RootDirEntries * 32) div BootSec.BytesPerSector;
  End
  Else Begin
   { Sous-répertoire }
-  FirstDataSector:=BootSec.ReservedSectors + (BootSec.NumberOfFATs * BootSec.SectorsPerFAT) +
+  FirstDataSector:=BootSec.ReservedSectors + (BootSec.NumberOfFATs *
+    BootSec.SectorsPerFAT) +
                    ((BootSec.RootDirEntries * 32) div BootSec.BytesPerSector);
-  DirSector:=FirstDataSector + (LongInt(DirCluster - 2) * BootSec.SectorsPerCluster);
+  DirSector:=FirstDataSector + (LongInt(DirCluster - 2) *
+    BootSec.SectorsPerCluster);
   SectorsToRead:=BootSec.SectorsPerCluster;
  End;
 
@@ -8855,7 +9241,8 @@ Begin
     End;
    End;
 
-   If Found and (Entry.FileName[0] <> #0) and (Entry.FileName[0] <> #$E5) Then Begin
+   If Found and (Entry.FileName[0] <> #0) and (Entry.FileName[0] <> #$E5) Then
+     Begin
     { Entrée trouvée - retourner les attributs }
     Attributes:=Entry.Attributes;
     GetFileAttributes:=True;
@@ -8868,7 +9255,8 @@ Begin
 End;
 
 { Définir les attributs d'un fichier }
-Function SetFileAttributes(Drive:Byte;BootSec:BootSectorRec;DirCluster:Word;FileName:String;NewAttributes:Byte):Boolean;
+Function SetFileAttributes(Drive:Byte;BootSec:BootSectorRec;DirCluster:Word;
+  FileName:String;NewAttributes:Byte):Boolean;
 Var
  Buffer: Array[0..511] of Byte;
  Entry: DirectoryEntry;
@@ -8892,15 +9280,18 @@ Begin
  { Calculer le secteur de début du répertoire }
  If DirCluster = 0 Then Begin
   { Répertoire racine }
-  FirstDataSector:=BootSec.ReservedSectors + (BootSec.NumberOfFATs * BootSec.SectorsPerFAT);
+  FirstDataSector:=BootSec.ReservedSectors + (BootSec.NumberOfFATs *
+    BootSec.SectorsPerFAT);
   DirSector:=FirstDataSector;
   SectorsToRead:=(BootSec.RootDirEntries * 32) div BootSec.BytesPerSector;
  End
  Else Begin
   { Sous-répertoire }
-  FirstDataSector:=BootSec.ReservedSectors + (BootSec.NumberOfFATs * BootSec.SectorsPerFAT) +
+  FirstDataSector:=BootSec.ReservedSectors + (BootSec.NumberOfFATs *
+    BootSec.SectorsPerFAT) +
                    ((BootSec.RootDirEntries * 32) div BootSec.BytesPerSector);
-  DirSector:=FirstDataSector + (LongInt(DirCluster - 2) * BootSec.SectorsPerCluster);
+  DirSector:=FirstDataSector + (LongInt(DirCluster - 2) *
+    BootSec.SectorsPerCluster);
   SectorsToRead:=BootSec.SectorsPerCluster;
  End;
 
@@ -8921,7 +9312,8 @@ Begin
     End;
    End;
 
-   If Found and (Entry.FileName[0] <> #0) and (Entry.FileName[0] <> #$E5) Then Begin
+   If Found and (Entry.FileName[0] <> #0) and (Entry.FileName[0] <> #$E5) Then
+     Begin
     { Entrée trouvée - modifier les attributs }
     Entry.Attributes:=NewAttributes;
 
@@ -8939,7 +9331,8 @@ Begin
 End;
 
 { Fonction principale 43h }
-Function DOS43h_GetSetFileAttributes(PathPtr:Pointer;Action:Byte;NewAttributes:Byte):Word;
+Function DOS43h_GetSetFileAttributes(PathPtr:Pointer;Action:Byte;
+  NewAttributes:Byte):Word;
 Var
  V:TFxVol;
  Dir:Word;
@@ -9097,7 +9490,8 @@ Begin
 End;
 
 { Lire les données de contrôle (sous-fonction 02h) }
-Function IOCTL_ReadControlData(Handle:Word;Buffer:Pointer;BytesToRead:Word):Word;
+Function IOCTL_ReadControlData(Handle:Word;Buffer:Pointer;
+  BytesToRead:Word):Word;
 Begin
  IOCTL_ReadControlData:=1; { Invalid function par défaut }
 
@@ -9108,7 +9502,8 @@ Begin
 End;
 
 { Écrire les données de contrôle (sous-fonction 03h) }
-Function IOCTL_WriteControlData(Handle:Word;Buffer:Pointer;BytesToWrite:Word):Word;
+Function IOCTL_WriteControlData(Handle:Word;Buffer:Pointer;
+  BytesToWrite:Word):Word;
 Begin
  IOCTL_WriteControlData:=1; { Invalid function par défaut }
 
@@ -9119,7 +9514,8 @@ Begin
 End;
 
 { Fonction principale 44h - IOCTL }
-Function DOS44h_IOCTL(Handle:Word;SubFunction:Byte;Buffer:Pointer;ByteCount:Word):Word;
+Function DOS44h_IOCTL(Handle:Word;SubFunction:Byte;Buffer:Pointer;
+  ByteCount:Word):Word;
 Var
  Result: Word;
  Drive: Byte;
@@ -9157,7 +9553,8 @@ Begin
   End;
 
   $08: Begin { Get drive information }
-   Drive:=Handle; { Pour cette sous-fonction, Handle contient le numéro de lecteur }
+   Drive:=Handle; { Pour cette sous-fonction,
+     Handle contient le numéro de lecteur }
    Result:=IOCTL_GetDriveInfo(Drive);
    If Result <> $FFFF Then Begin
     { Retourner l'information dans DX }
@@ -9193,7 +9590,8 @@ Begin
 End;
 
 { Fonction 47h - Get Current Directory }
-Function DOS47h_GetCurrentDirectory(Drive:Byte;BufferSeg:Word;BufferOfs:Word):Word;
+Function DOS47h_GetCurrentDirectory(Drive:Byte;BufferSeg:Word;
+  BufferOfs:Word):Word;
 Var
  CurrentDrive: Byte;
  I: Byte;
@@ -9231,7 +9629,8 @@ Var
 Begin
  InitializeMemoryManager:=False;
 
- { Le premier MCB commence généralement à 0x0060 (après les vecteurs d'interruption) }
+ { Le premier MCB commence généralement à 0x0060 (après les vecteurs
+   d'interruption) }
  FirstMCB:=ArenaBase;
 
  { Créer le premier MCB couvrant toute la mémoire conventionnelle }
@@ -9642,7 +10041,8 @@ Begin
 End;
 
 { Charge un fichier EXE en mémoire }
-Function LoadExeFile(FileName:String;Var LoadSegment:Word;Var ExeHdr:ExeHeader):Boolean;
+Function LoadExeFile(FileName:String;Var LoadSegment:Word;
+  Var ExeHdr:ExeHeader):Boolean;
 Begin
  LoadExeFile:=False;
 
@@ -9740,7 +10140,8 @@ ASM
  RETF
 END;
 
-{ Retour dans le noyau, a l'appelant d'ExecEnter, quand le programme se termine. }
+{ Retour dans le noyau, a l'appelant d'ExecEnter,
+  quand le programme se termine. }
 Procedure ExecReturn(ChildPSP:Word);Assembler;
 ASM
  MOV ES,ChildPSP
@@ -9772,7 +10173,8 @@ Begin
  End;
 End;
 
-{ Libere tous les blocs d'un proprietaire et fusionne les blocs libres contigus }
+{ Libere tous les blocs d'un proprietaire et fusionne les blocs libres contigus
+  }
 Procedure FreeProcessMemory(Owner:Word);
 Var
  Cur: Word;
@@ -9793,7 +10195,8 @@ Begin
  Cur:=ArenaBase;
  While GetMCB(Cur,MCB) Do Begin
   If MCB.BlockType='Z' Then Break;
-  If (MCB.Owner=0) And GetMCB(Cur+MCB.BlockSize+1,Next) And (Next.Owner=0) Then Begin
+  If (MCB.Owner=0) And GetMCB(Cur+MCB.BlockSize+1,
+    Next) And (Next.Owner=0) Then Begin
    MCB.BlockSize:=MCB.BlockSize+Next.BlockSize+1;
    MCB.BlockType:=Next.BlockType;
    SetMCB(Cur,MCB);
@@ -9827,7 +10230,8 @@ Begin
  MemW[P:2]:=Top;
  Mem[P:5]:=$9A;
  MemW[P:$16]:=Parent;
- { le premier processus (parent sans PSP valide) est son propre parent, comme sous MS-DOS }
+ { le premier processus (parent sans PSP valide) est son propre parent,
+   comme sous MS-DOS }
  If (Parent=0) Or (MemW[Parent:0]<>$20CD) Then MemW[P:$16]:=P;
  JftInherit(P,Parent);
  MemW[P:$2C]:=EnvSeg;
@@ -9885,7 +10289,8 @@ Begin
 End;
 
 { Fonction principale 4Bh - EXEC (type 00h : charger et executer) }
-{ Chargement d'un programme .COM : image a PSP:0100, tout le bloc libre alloue (64 Ko au plus),
+{ Chargement d'un programme .COM : image a PSP:0100,
+  tout le bloc libre alloue (64 Ko au plus),
   pile en haut du segment avec un mot nul (le RET termine par INT 20h du PSP) }
 Function ExecCom(Handle:Word;ProgramPath:String;CmdLine:Pointer):Word;
 Var
@@ -9938,11 +10343,13 @@ Begin
  ExecCom:=0;
 End;
 
-Function DOS4Bh_ExecProgram(ExecType:Byte;ProgramPath:String;ParamBlock:ExecParameterBlock):Word;
+Function DOS4Bh_ExecProgram(ExecType:Byte;ProgramPath:String;
+  ParamBlock:ExecParameterBlock):Word;
 Var
  Hdr: ExeHeader;
  Path: Array[0..127] of Char;
- Handle,Got,I,Block,ImgSeg,Need,Avail,EnvSeg,Parent,Chunk,Reloc,FixSeg,FixOfs: Word;
+ Handle,Got,I,Block,ImgSeg,Need,Avail,EnvSeg,Parent,Chunk,Reloc,FixSeg,
+   FixOfs: Word;
  FileLen,ImgBytes,WantL: LongInt;
  Pairs: Array[0..63] of Word;
  Left,Todo: Word;
@@ -9956,11 +10363,15 @@ Begin
  If Handle=$FFFF Then Exit;
  Got:=0;
  DOS3Fh_ReadFile(Handle,@Hdr,SizeOf(Hdr),Got);
-{$IFDEF KDEBUG}DbgW('g',Got);DbgW('m',Hdr.Signature);DbgW('p',Hdr.PagesInFile);{$ENDIF}
- If (Got<SizeOf(Hdr)) Or ((Hdr.Signature<>$5A4D) And (Hdr.Signature<>$4D5A)) Then Begin
+{$IFDEF KDEBUG}DbgW('g',Got);DbgW('m',Hdr.Signature);DbgW('p',Hdr.PagesInFile);
+  {$ENDIF}
+ If (Got<SizeOf(Hdr)) Or ((Hdr.Signature<>$5A4D) And (Hdr.Signature<>$4D5A))
+   Then Begin
   { fichier .COM : image brute }
-  If (Length(ProgramPath)>=4) And (UpCase(ProgramPath[Length(ProgramPath)-2])='C') And
-     (UpCase(ProgramPath[Length(ProgramPath)-1])='O') And (UpCase(ProgramPath[Length(ProgramPath)])='M') Then Begin
+  If (Length(ProgramPath)>=4) And
+    (UpCase(ProgramPath[Length(ProgramPath)-2])='C') And
+     (UpCase(ProgramPath[Length(ProgramPath)-1])='O') And
+       (UpCase(ProgramPath[Length(ProgramPath)])='M') Then Begin
    DOS4Bh_ExecProgram:=ExecCom(Handle,ProgramPath,ParamBlock.CommandLine);
    Exit;
   End;
@@ -9981,7 +10392,8 @@ Begin
   Exit;
  End;
  { donner au programme tout ce qui est possible jusqu'au maximum demande }
- If (Hdr.MaxExtraParagraphs>=Hdr.MinExtraParagraphs) And (Hdr.MaxExtraParagraphs<>$FFFF) Then Begin
+ If (Hdr.MaxExtraParagraphs>=Hdr.MinExtraParagraphs) And
+   (Hdr.MaxExtraParagraphs<>$FFFF) Then Begin
   WantL:=Need;
   WantL:=WantL-Hdr.MinExtraParagraphs;
   WantL:=WantL+Hdr.MaxExtraParagraphs;
@@ -10033,12 +10445,14 @@ Begin
  SetDTA(Block,$80);
  { sauver les vecteurs de terminaison dans le PSP }
  DOS4Bh_ExecProgram:=0;
- ExecEnter(Block,ImgSeg+Hdr.InitialCS,Hdr.InitialIP,ImgSeg+Hdr.InitialSS,Hdr.InitialSP);
+ ExecEnter(Block,ImgSeg+Hdr.InitialCS,Hdr.InitialIP,ImgSeg+Hdr.InitialSS,
+   Hdr.InitialSP);
  { le programme est termine : retour ici }
  DOS4Bh_ExecProgram:=0;
 End;
 
-{ Pont INT 21h/4Bh : ASCIIZ DS:DX et bloc de parametres ES:BX -> parametres Pascal }
+{ Pont INT 21h/4Bh : ASCIIZ DS:DX et bloc de parametres ES:BX -> parametres
+  Pascal }
 Function ExecFromInt21(Mode:Word;NamePtr:Pointer;BlockPtr:Pointer):Word;
 Var
  Name: String;
@@ -10183,7 +10597,8 @@ Begin
  R:=BiosDateRaw;
  CY:=Word(R);
  MD:=Word(R Shr 16);
- DateInt21:=LongInt(Bcd(Hi(CY))*100+Bcd(Lo(CY)))+LongInt(Bcd(Hi(MD))*256+Bcd(Lo(MD)))*65536;
+ DateInt21:=LongInt(Bcd(Hi(CY))*100+Bcd(Lo(CY)))+LongInt(Bcd(Hi(MD))*256+
+   Bcd(Lo(MD)))*65536;
 End;
 
 { Jour de la semaine (0=dimanche) par la formule de Sakamoto }
@@ -10198,7 +10613,8 @@ Begin
  D:=Lo(Word(R Shr 16));
  If (M<1) Or (M>12) Then M:=1;
  If M<3 Then Dec(Y);
- WdayInt21:=(Y+Y Div 4-Y Div 100+Y Div 400+Word(Mem[CSeg:Ofs(DowTable)+M-1])+D) Mod 7;
+ WdayInt21:=(Y+Y Div 4-Y Div 100+Y Div 400+Word(Mem[CSeg:Ofs(DowTable)+M-1])+D)
+   Mod 7;
 End;
 
 { INT 21h/2Ch : DX:AX = (heures << 8 | minutes) ; (secondes << 8 | centiemes) }
@@ -10221,7 +10637,8 @@ END;
 { 38h : informations pays au format DOS (34 octets) en Buf }
 Function CountryInt21(Buf:Pointer):Word;
 Const
- { code pays (2 octets), octets 0..17 de la structure (format de date, monnaie, separateurs, formats), separateur de liste (2) :
+ { code pays (2 octets), octets 0..17 de la structure (format de date, monnaie,
+   separateurs, formats), separateur de liste (2) :
    Etats-Unis, Canada, France, Espagne }
  T: String[88]=#1#0#0#0'$'#0#0#0#0','#0'.'#0'/'#0':'#0#0#2#0','#0+
               #2#0#1#0'$'#0#0#0#0' '#0','#0'/'#0':'#0#0#2#1';'#0+
@@ -10252,7 +10669,8 @@ Begin
 End;
 
 { Entree depuis l'entree standard quand elle est redirigee vers un fichier :
-  $FFFE = console (a traiter par le clavier), $FFFF = fin de fichier, sinon l'octet lu }
+  $FFFE = console (a traiter par le clavier), $FFFF = fin de fichier,
+    sinon l'octet lu }
 Function CharIn21(Echo:Word):Word;
 Var C:Byte;
  Got,S:Word;
@@ -10282,8 +10700,10 @@ Begin
 End;
 
 { Lecture : poignees 0..4 = console (ligne editee, terminee par CR LF) }
-{ Lecture / ecriture absolue de secteurs logiques (INT 25h / 26h). CX=FFFFh : paquet DS:BX
-  (secteur LongInt, nombre Word, tampon Pointer). Rend 0 ou un code d'erreur DOS. }
+{ Lecture / ecriture absolue de secteurs logiques (INT 25h / 26h). CX=FFFFh :
+  paquet DS:BX
+  (secteur LongInt, nombre Word,
+    tampon Pointer). Rend 0 ou un code d'erreur DOS. }
 Function AbsDiskInt21(Wr,Drive,Count,SecHi,SecLo,BufSeg,BufOfs:Word):Word;
 Var
  Sec: LongInt;
@@ -10430,10 +10850,13 @@ Begin
  FindNextInt21:=DOS4Fh_FindNextFile(D^);
 End;
 
-{ ---------- CONFIG.SYS : FILES, BUFFERS, LASTDRIVE, SHELL, DEVICE, INSTALL ---------- }
+{ ---------- CONFIG.SYS : FILES, BUFFERS, LASTDRIVE, SHELL, DEVICE,
+  INSTALL ---------- }
 { Bloc de configuration (segment CfgSeg, alloue au demarrage) :
-    0 FILES (mot)  2 LASTDRIVE (nombre d'unites)  4 BUFFERS  8 tete de la chaine des pilotes (FFFF:FFFF = vide)
-    12 SHELL : chemin (chaine Pascal de 63 car.)  76 SHELL : arguments  140 requete de pilote  172 ligne de commande du pilote
+    0 FILES (mot)  2 LASTDRIVE (nombre d'unites)  4 BUFFERS  8 tete de la chaine
+      des pilotes (FFFF:FFFF = vide)
+    12 SHELL : chemin (chaine Pascal de 63 car.)  76 SHELL : arguments  140
+      requete de pilote  172 ligne de commande du pilote
     320 contenu du fichier CONFIG.SYS }
 Function CfgSegGet:Word;Assembler;
 ASM
@@ -10453,14 +10876,16 @@ END;
 Procedure CfgMsg(Id:Byte);
 Var I:Byte; M:String[40];
 Begin
- If Id=0 Then M:='Pilote non installe' Else If Id=1 Then M:='INSTALL: programme introuvable'
+ If Id=0 Then M:='Pilote non installe' Else If Id=1 Then
+   M:='INSTALL: programme introuvable'
  Else M:='Commande incorrecte dans CONFIG.SYS';
  For I:=1 To Length(M) Do ConPutChar(Ord(M[I]));
  ConPutChar(13);
  ConPutChar(10);
 End;
 
-{ DEVICE= : charge le pilote dont le chemin est a CfS:300 (ASCIIZ), appelle sa commande INIT et l'ajoute a la chaine }
+{ DEVICE= : charge le pilote dont le chemin est a CfS:300 (ASCIIZ),
+  appelle sa commande INIT et l'ajoute a la chaine }
 Procedure CfgCopy(Src,Dst,Len:Word);
 Var CfS,I:Word;
 Begin
@@ -10469,7 +10894,8 @@ Begin
  While I<Len Do Begin Mem[CfS:Dst+I]:=Mem[CfS:Src+I]; Inc(I); End;
 End;
 
-{ DEVICE= : charge un pilote par DEVLOAD.EXE ; INSTALL= : lance un programme residant (ligne de commande a CfS:172) }
+{ DEVICE= : charge un pilote par DEVLOAD.EXE ;
+  INSTALL= : lance un programme residant (ligne de commande a CfS:172) }
 Procedure CfgRun(Dev:Boolean;V,P,A,E:Word);
 Var
  PB: ExecParameterBlock;
@@ -10495,7 +10921,8 @@ Begin
  If DOS4Bh_ExecProgram(0,Pth,PB)<>0 Then CfgMsg(0);
 End;
 
-{ Traite la ligne CfS:S..E-1 du tampon (en place) : le mot-cle est reconnu par ses deux premieres lettres }
+{ Traite la ligne CfS:S..E-1 du tampon (en place) : le mot-cle est reconnu par
+  ses deux premieres lettres }
 Procedure CfgLine(S,E:Word);
 Var
  CfS,V,P,A,I,N,Sig: Word;
@@ -10516,23 +10943,30 @@ Begin
  For I:=V To P-1 Do
   If (Mem[CfS:I]>=48) And (Mem[CfS:I]<=57) Then N:=N*10+Mem[CfS:I]-48;
  Case Sig Of
-  $4649:Begin If N<8 Then N:=8; If N>20 Then N:=20; MemW[CfS:0]:=N; End;    { FILES }
-  $4255:Begin If N<1 Then N:=1; MemW[CfS:4]:=N; End;                         { BUFFERS }
-  $4C41:Begin                                                                { LASTDRIVE }
+  $4649:Begin If N<8 Then N:=8; If N>20 Then N:=20; MemW[CfS:0]:=N; End;
+    { FILES }
+  $4255:Begin If N<1 Then N:=1; MemW[CfS:4]:=N; End;
+    { BUFFERS }
+  $4C41:Begin                                                                {
+    LASTDRIVE }
    N:=(Mem[CfS:V] And $DF)-64;
    If N<3 Then N:=3;
    If N>NDrv Then N:=NDrv;
    MemW[CfS:2]:=N;
   End;
-  $5348:Begin                                                                { SHELL }
+  $5348:Begin                                                                {
+    SHELL }
    Mem[CfS:12]:=P-V;
    CfgCopy(V,13,P-V);
    Mem[CfS:76]:=E-A;
    CfgCopy(A,77,E-A);
   End;
-  $4445:CfgRun(True,V,P,A,E);                                                { DEVICE, DEVICEHIGH }
-  $494E:CfgRun(False,V,P,A,E);                                               { INSTALL }
-  $5245,$4252,$444F,$5354,$4643,$434F,$5357:;                               { INSTALL REM BREAK DOS STACKS FCBS COUNTRY SWITCHES }
+  $4445:CfgRun(True,V,P,A,E);
+    { DEVICE, DEVICEHIGH }
+  $494E:CfgRun(False,V,P,A,E);
+    { INSTALL }
+  $5245,$4252,$444F,$5354,$4643,$434F,$5357:;
+    { INSTALL REM BREAK DOS STACKS FCBS COUNTRY SWITCHES }
   Else CfgMsg(2);
  End;
 End;
@@ -10564,7 +10998,8 @@ Begin
   I:=0;
   While I<Got Do Begin
    S:=I;
-   While (I<Got) And (Mem[CfS:400+I]<>13) And (Mem[CfS:400+I]<>10) And (Mem[CfS:400+I]<>26) Do Inc(I);
+   While (I<Got) And (Mem[CfS:400+I]<>13) And (Mem[CfS:400+I]<>10) And
+     (Mem[CfS:400+I]<>26) Do Inc(I);
    CfgLine(400+S,400+I);
    Inc(I);
   End;
@@ -10572,7 +11007,8 @@ Begin
  DOS4Ah_ModifyMemory(CfS,25);
 End;
 
-{ SHELL= de CONFIG.SYS : lance l'interpreteur choisi (0 = s'est execute puis termine, 1 = absent ou echec) }
+{ SHELL= de CONFIG.SYS : lance l'interpreteur choisi (0 = s'est execute puis
+  termine, 1 = absent ou echec) }
 Function CfgShell:Word;
 Var
  PB: ExecParameterBlock;
@@ -10619,7 +11055,8 @@ Begin
 
  Result:=CfgShell;
  { Essayer de charger COMMAND.COM en premier }
- If Result <> 0 Then Result:=DOS4Bh_ExecProgram(0, 'C:\COMMAND.COM', ParamBlock);
+ If Result <> 0 Then Result:=DOS4Bh_ExecProgram(0, 'C:\COMMAND.COM',
+   ParamBlock);
  If Result <> 0 Then Begin
   { Si COMMAND.COM échoue, essayer COMMAND.EXE }
   Result:=DOS4Bh_ExecProgram(0, 'C:\COMMAND.EXE', ParamBlock);
@@ -10709,7 +11146,8 @@ Begin
 
     { Chercher le prochain caractère non-wildcard dans le masque }
     While (FI <= FLen) Do Begin
-     If MatchFileName(Copy(FileName,FI,FLen-FI+1),Copy(Mask,MI,MLen-MI+1)) Then Begin
+     If MatchFileName(Copy(FileName,FI,FLen-FI+1),Copy(Mask,MI,
+       MLen-MI+1)) Then Begin
       MatchFileName:=True;
       Exit;
      End;
@@ -10775,7 +11213,8 @@ Var
 Begin
  RootSectorOf:=0;
  If ReadBootSector(Drive,BootSec) Then
-  RootSectorOf:=BootSec.ReservedSectors+BootSec.NumberOfFATs*BootSec.SectorsPerFAT;
+  RootSectorOf:=BootSec.ReservedSectors+BootSec.NumberOfFATs*
+    BootSec.SectorsPerFAT;
 End;
 
 Function RootSizeOf(Drive:Byte):Word;
@@ -10835,7 +11274,8 @@ Begin
  { Calculer les paramètres CHS pour le lecteur C: (disque dur) }
  DriveNum := $80;  { Premier disque dur }
 
- { Conversion LBA vers CHS (supposons géométrie standard 63 secteurs/piste, 16 têtes) }
+ { Conversion LBA vers CHS (supposons géométrie standard 63 secteurs/piste,
+   16 têtes) }
  Head := (Sector DIV 63) MOD 16;
  Track := Sector DIV (63 * 16);
  SectorNum := (Sector MOD 63) + 1;  { Les secteurs commencent à 1 }
@@ -10968,7 +11408,8 @@ Begin
  SetLastReturnCode(ExitCode);
  JftReleaseAll(Cur);
  If Parent=Cur Then Begin
-  { processeur de commandes principal : plus de processus courant (le noyau relancera COMMAND) }
+  { processeur de commandes principal : plus de processus courant (le noyau
+    relancera COMMAND) }
   SetCurrentPSP(0);
   SetDTA($9000,0);
  End Else Begin
@@ -10982,8 +11423,10 @@ Begin
  ExecReturn(Cur);
 End;
 
-{ Fonction 31h - Terminate and Stay Resident : le bloc du programme est reduit a Paras paragraphes
-  (6 au minimum) et reste alloue ; ne revient pas si le programme a ete lance par EXEC }
+{ Fonction 31h - Terminate and Stay Resident : le bloc du programme est reduit a
+  Paras paragraphes
+  (6 au minimum) et reste alloue ;
+    ne revient pas si le programme a ete lance par EXEC }
 Function DOS31h_Keep(ExitCode:Byte;Paras:Word):Word;
 Var
  Cur,Parent: Word;
@@ -11075,7 +11518,8 @@ Function DOS52h_GetListOfLists:Pointer;Assembler;
 ASM
  MOV DX,CS
  MOV AX,OFFSET Data
- ADD AX,FxBase+130            { Liste des Listes (apres CfgSeg et le mot du premier MCB) }
+ ADD AX,FxBase+130            { Liste des Listes (apres CfgSeg et le mot du
+   premier MCB) }
 END;
 
 { Fonction 53h - Translate BPB to DPB }
@@ -11130,8 +11574,10 @@ Begin
  End;
 
  { Calculer secteur de début des données }
- DPB.FirstDirSector:=BPB.ReservedSectors + (BPB.NumberOfFATs * BPB.SectorsPerFAT);
- DPB.FirstDataSector:=DPB.FirstDirSector + ((BPB.RootDirEntries * 32) div BPB.BytesPerSector);
+ DPB.FirstDirSector:=BPB.ReservedSectors + (BPB.NumberOfFATs *
+   BPB.SectorsPerFAT);
+ DPB.FirstDataSector:=DPB.FirstDirSector + ((BPB.RootDirEntries * 32) div
+   BPB.BytesPerSector);
 
  { Calculer nombre total de clusters }
  If BPB.TotalSectors = 0 Then
@@ -11170,7 +11616,8 @@ End;
 { Fonctions 2Eh et 54h - Vérification en écriture avec vraies vérifications }
 
 { Fonction utilitaire - Vérifier l'écriture d'un secteur }
-Function VerifyWrite(Drive:Byte;Sector:LongInt;Buffer:Pointer;Size:Word):Boolean;
+Function VerifyWrite(Drive:Byte;Sector:LongInt;Buffer:Pointer;
+  Size:Word):Boolean;
 Var
  VerifyBuffer: Array[0..511] of Byte;
  I: Word;
@@ -11218,7 +11665,8 @@ Begin
 End;
 
 { Fonction utilitaire - Écrire un secteur avec vérification }
-Function WriteSectorWithVerify(Drive:Byte;Sector:LongInt;Buffer:Pointer):Boolean;
+Function WriteSectorWithVerify(Drive:Byte;Sector:LongInt;
+  Buffer:Pointer):Boolean;
 Var
  WriteSuccess: Boolean;
  VerifySuccess: Boolean;
@@ -11313,7 +11761,8 @@ Begin
  DOS55h_CreateChildPSP := 8; { Insufficient memory par défaut }
 
  { Vérifier que le segment est valide }
- If NewPSPSegment < ArenaBase Then Begin { En-dessous de la zone conventionnelle }
+ If NewPSPSegment < ArenaBase Then Begin { En-dessous de la zone conventionnelle
+   }
   DOS55h_CreateChildPSP := 7; { Memory control blocks destroyed }
   Exit;
  End;
@@ -11541,7 +11990,8 @@ Begin
 End;
 
 { Analyser un chemin complet en drive, répertoire et nom de fichier }
-Function ParseFullPath(Path:String;Var Drive:Byte;Var DirPath,FileName:String):Boolean;
+Function ParseFullPath(Path:String;Var Drive:Byte;Var DirPath,
+  FileName:String):Boolean;
 Var
  ColonPos, LastSlashPos: Byte;
  I: Byte;
@@ -11663,7 +12113,8 @@ Begin
 End;
 
 { Mettre à jour le nom dans une entrée de répertoire }
-Function UpdateDirectoryEntryName(Drive:Byte;DirCluster:Word;EntryOffset:Word;NewName:String):Boolean;
+Function UpdateDirectoryEntryName(Drive:Byte;DirCluster:Word;EntryOffset:Word;
+  NewName:String):Boolean;
 Var
  Buffer: Array[0..511] of Byte;
  RootSector, TargetSector: Word;
@@ -11741,7 +12192,8 @@ Begin
 End;
 
 { Extrait les composants d'une date/heure DOS }
-Procedure UnpackDOSDateTime(DOSDateTime:LongInt;Var Year,Month,Day,Hour,Minute,Second:Word);
+Procedure UnpackDOSDateTime(DOSDateTime:LongInt;Var Year,Month,Day,Hour,Minute,
+  Second:Word);
 Var
  DOSDate, DOSTime: Word;
 Begin
@@ -11760,7 +12212,8 @@ Begin
 End;
 
 { Obtient l'offset d'une entrée de répertoire par son handle }
-Function GetDirectoryOffsetByHandle(Handle:Word;Var Drive:Byte;Var EntryOffset:Word):Boolean;
+Function GetDirectoryOffsetByHandle(Handle:Word;Var Drive:Byte;
+  Var EntryOffset:Word):Boolean;
 Var
  FileEntry: FileTableEntry;
  SearchResult: Boolean;
@@ -11786,7 +12239,8 @@ Begin
 End;
 
 { Met à jour la date/heure dans une entrée de répertoire }
-Function UpdateDirectoryDateTime(Drive:Byte;EntryOffset:Word;NewDate,NewTime:Word):Boolean;
+Function UpdateDirectoryDateTime(Drive:Byte;EntryOffset:Word;NewDate,
+  NewTime:Word):Boolean;
 Var
  Sector: Word;
  Buffer: Array[0..511] Of Byte;
@@ -11826,7 +12280,8 @@ Begin
 End;
 
 { Obtient la date/heure d'une entrée de répertoire }
-Function GetDirectoryDateTime(Drive:Byte;EntryOffset:Word;Var Date,Time:Word):Boolean;
+Function GetDirectoryDateTime(Drive:Byte;EntryOffset:Word;Var Date,
+  Time:Word):Boolean;
 Var
  Sector: Word;
  Buffer: Array[0..511] Of Byte;
@@ -11859,7 +12314,8 @@ Begin
 End;
 
 { Fonction principale 57h - Get/Set File Date and Time }
-Function DOS57h_GetSetFileDateTime(Handle:Word;Action:Byte;NewDate,NewTime:Word):LongInt;
+Function DOS57h_GetSetFileDateTime(Handle:Word;Action:Byte;NewDate,
+  NewTime:Word):LongInt;
 Var
  Buf:TFxSec;
  Sec:LongInt;
@@ -11891,7 +12347,8 @@ Begin
   Exit;
  End;
  If Action=0 Then Begin
-  DOS57h_GetSetFileDateTime:=(LongInt(Word(Buf[P+24])+Word(Buf[P+25])*256) Shl 16) Or
+  DOS57h_GetSetFileDateTime:=(LongInt(Word(Buf[P+24])+Word(Buf[P+25])*256) Shl
+    16) Or
    LongInt(Word(Buf[P+22])+Word(Buf[P+23])*256);
   Exit;
  End;
@@ -12004,7 +12461,8 @@ End;
 Function AreUMBsAvailable:Boolean;
 Begin
  { Pour cette implémentation basique, simuler la disponibilité des UMB }
- { Dans un vrai DOS, cela vérifierait la présence d'un gestionnaire UMB comme EMM386 }
+ { Dans un vrai DOS,
+   cela vérifierait la présence d'un gestionnaire UMB comme EMM386 }
  AreUMBsAvailable := True; { Supposer que les UMB sont disponibles }
 End;
 
@@ -12077,8 +12535,10 @@ Begin
 
  While CurrentSeg < $A000 Do Begin
   If GetMCB(CurrentSeg, MCB) Then Begin
-   { Vérifier si le bloc est libre, assez grand, mais plus petit que le meilleur }
-   If (MCB.Owner = 0) And (MCB.BlockSize >= Size) And (MCB.BlockSize < BestSize) Then Begin
+   { Vérifier si le bloc est libre, assez grand,
+     mais plus petit que le meilleur }
+   If (MCB.Owner = 0) And (MCB.BlockSize >= Size) And (MCB.BlockSize < BestSize)
+     Then Begin
     BestSeg := CurrentSeg + 1;
     BestSize := MCB.BlockSize;
     Found := True;
@@ -12127,7 +12587,8 @@ End;
 
 { Fonction améliorée d'allocation mémoire avec stratégies }
 Function AllocateMemoryWithStrategy(Size:Word;Strategy:Word):Word;
-{ Premier bloc libre assez grand ; le reste du bloc devient un nouveau bloc libre. }
+{ Premier bloc libre assez grand ;
+  le reste du bloc devient un nouveau bloc libre. }
 Var
  Cur: Word;
  MCB: MemoryControlBlock;
@@ -12225,7 +12686,8 @@ Begin
   End;
  End;
 
- { Note: Cette implémentation gère les stratégies d'allocation mémoire et UMB basiques.
+ { Note: Cette implémentation gère les stratégies d'allocation mémoire et UMB
+   basiques.
    Un système DOS complet supporterait :
    - La gestion de la mémoire étendue (XMS)
    - La gestion de la mémoire expansée (EMS)
@@ -12248,7 +12710,8 @@ End;
 { Fonctions de gestion des erreurs étendues pour DOS 59h }
 
 { Définit une erreur étendue complète dans le Code Segment }
-Procedure SetExtendedError(ErrorCode:Word;ErrorClass,SuggestedAction,ErrorLocus:Byte);
+Procedure SetExtendedError(ErrorCode:Word;ErrorClass,SuggestedAction,
+  ErrorLocus:Byte);
 Begin
  { Sauvegarder toutes les informations d'erreur dans la structure Data }
  ASM
@@ -12519,7 +12982,8 @@ Begin
  { Empaqueter le résultat dans un LongInt }
  { High Word: ErrorClass dans le byte haut, SuggestedAction dans le byte bas }
  { Low Word: ErrorCode }
- Result := (LongInt(ErrorClass) SHL 24) OR (LongInt(SuggestedAction) SHL 16) OR ErrorCode;
+ Result := (LongInt(ErrorClass) SHL 24) OR (LongInt(SuggestedAction) SHL 16) OR
+   ErrorCode;
 
  { Note: Dans le handler assembleur, le Locus sera récupéré séparément }
  DOS59h_GetExtendedError := Result;
@@ -12534,7 +12998,8 @@ Var
  Handle: Word;
  T: String[12];
 Begin
- { le chemin (repertoire) est suivi du nom genere TMPnnnnn.TMP dans le tampon de l'appelant }
+ { le chemin (repertoire) est suivi du nom genere TMPnnnnn.TMP dans le tampon de
+   l'appelant }
  P:=PChar(PathPtr);
  L:=0;
  While (P[L]<>#0) And (L<240) Do Inc(L);
@@ -12596,7 +13061,8 @@ Begin
 End;
 
 { Vérifier si une région est en conflit avec les verrous existants }
-Function CheckLockConflict(Handle:Word;StartOffset,Length:LongInt;PSPOwner:Word):Boolean;
+Function CheckLockConflict(Handle:Word;StartOffset,Length:LongInt;
+  PSPOwner:Word):Boolean;
 Const
  FileLockEntrySize=SizeOf(FileLockEntry);
 Var
@@ -12631,17 +13097,21 @@ Begin
      (LockEntry.PSPOwner <> PSPOwner) Then Begin
    LockEnd := LockEntry.StartOffset + LockEntry.Length - 1;
    { Vérifier si les régions se chevauchent }
-   If Not ((RequestEnd < LockEntry.StartOffset) or (StartOffset > LockEnd)) Then Begin
+   If Not ((RequestEnd < LockEntry.StartOffset) or (StartOffset > LockEnd)) Then
+     Begin
     CheckLockConflict := True;
-    SetExtendedError(ERROR_ACCESS_DENIED, ERRCLASS_AUTH, ERRACT_USER, ERRLOC_UNK);
+    SetExtendedError(ERROR_ACCESS_DENIED, ERRCLASS_AUTH, ERRACT_USER,
+      ERRLOC_UNK);
     Exit;
    End;
   End;
  End;
 End;
 
-{ Fonction principale 5Ch - Lock/Unlock File Region (AL=0 verrouiller, AL=1 deverrouiller).
-  Table des verrous : 20 entrees de 14 octets dans DataMOS.FileLocks (InUse:1, Handle:2, PSP:2,
+{ Fonction principale 5Ch - Lock/Unlock File Region (AL=0 verrouiller,
+  AL=1 deverrouiller).
+  Table des verrous : 20 entrees de 14 octets dans DataMOS.FileLocks (InUse:1,
+    Handle:2, PSP:2,
   Debut:4, Longueur:4, Type:1). Handle = index SFT. }
 Const
  LkBase=865;
@@ -12688,10 +13158,12 @@ Procedure LockReleasePsp(Psp:Word);
 Var I:Word;
 Begin
  For I:=0 To 19 Do
-  If (LkGetB(LkBase+I*14)<>0) And (LkGetW(LkBase+I*14+3)=Psp) Then LkSetB(LkBase+I*14,0);
+  If (LkGetB(LkBase+I*14)<>0) And (LkGetW(LkBase+I*14+3)=Psp) Then
+    LkSetB(LkBase+I*14,0);
 End;
 
-Function DOS5Ch_LockUnlockRegion(Handle:Word;Action:Byte;StartOffset,Length:LongInt):Word;
+Function DOS5Ch_LockUnlockRegion(Handle:Word;Action:Byte;StartOffset,
+  Length:LongInt):Word;
 Var
  I,E,Free,Psp:Word;
  S,L:LongInt;

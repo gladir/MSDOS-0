@@ -2,7 +2,8 @@
   @created: 2026
   @website(https://www.gladir.com/msdos0)
   @abstract(Target: Turbo Pascal 7)
-  Charge un pilote de peripherique (commande DEVICE= de CONFIG.SYS) : le noyau lance
+  Charge un pilote de peripherique (commande DEVICE= de CONFIG.SYS) : le noyau
+    lance
   DEVLOAD.EXE avec le chemin du pilote suivi de ses arguments.
 }
 
@@ -118,7 +119,8 @@ Begin
   Inc(N);
  End;
  Close(F);
- { liste des listes : l'en-tete du pilote NUL est en LoL+22h, tete de la chaine }
+ { liste des listes : l'en-tete du pilote NUL est en LoL+22h,
+   tete de la chaine }
  Regs.AH:=$52;
  MsDos(Regs);
  LoLSeg:=Regs.ES;
@@ -138,8 +140,11 @@ Begin
   Regs.AH:=$49;
   Regs.ES:=DrvSeg;
   MsDos(Regs);
-  If (Req.Status And $8000)<>0 Then WriteLn('Echec de l''initialisation du pilote : ',Path)
-                               Else WriteLn('Pilote de bloc non pris en charge : ',Path);
+  If (Req.Status And $8000)<>0 Then
+    WriteLn('Echec de l''initialisation du pilote : ',Path)
+                               Else
+                                 WriteLn('Pilote de bloc non pris en charge : ',
+                                   Path);
   Halt(1);
  End;
  { taille residente : jusqu'a l'adresse de rupture rendue par INIT }

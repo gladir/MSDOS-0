@@ -13,7 +13,9 @@ Uses DOS;
 
 Const
  MAX_DRIVES=26;
- DEFAULT_ENTRIES=22;      { 26 lecteurs x 22 entrees : tient dans le segment de donnees de 64 Ko avec les donnees internes de TPC }
+ DEFAULT_ENTRIES=22;
+   { 26 lecteurs x 22 entrees : tient dans le segment de donnees de 64 Ko avec
+     les donnees internes de TPC }
  ENTRY_SIZE=32;  { Taille d'une entr‚e de r‚pertoire DOS }
   { XMS }
  XMS_INT = $2F;
@@ -119,7 +121,8 @@ Begin
  End;
 End;
 
-Procedure InstallHandler(Flags,rCS,rIP,rAX,rBX,rCX,rDX,rSI,rDI,rDS,rES,rBP:Word);Interrupt;
+Procedure InstallHandler(Flags,rCS,rIP,rAX,rBX,rCX,rDX,rSI,rDI,rDS,rES,
+  rBP:Word);Interrupt;
 Var
  DriveIndex: Integer;
  FileName: string;
@@ -192,7 +195,9 @@ Begin
   { Initialiser le TSR }
  Regs.AH:=$31;           { Fonction TSR }
  Regs.AL:=0;             { Code de sortie }
- Regs.DX:=SSeg+$400-PrefixSeg;  { paragraphes conserves : du PSP a la fin de la pile (code, donnees et pile) }
+ Regs.DX:=SSeg+$400-PrefixSeg;
+   { paragraphes conserves : du PSP a la fin de la pile (code,
+     donnees et pile) }
  Intr($21,Regs);
  InstallFastOpen:=True;
 End;

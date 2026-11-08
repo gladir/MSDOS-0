@@ -23,7 +23,8 @@ End;
 
 Procedure Check(Msg:String;Ok:Boolean);
 Begin
- If Ok Then WriteLn('OK   ',Msg) Else Begin WriteLn('FAIL ',Msg); Inc(Fails); End;
+ If Ok Then WriteLn('OK   ',Msg) Else Begin WriteLn('FAIL ',Msg); Inc(Fails);
+   End;
 End;
 
 Function Call:Boolean;
@@ -180,7 +181,8 @@ Begin
  R.AH:=$5A; R.CX:=0; R.DS:=Seg(Path); R.DX:=Ofs(Path);
  Check('5Ah fichier temporaire',Call);
  H:=R.AX;
- Check('5Ah nom genere commence par \TMP',(Path[0]='\') And (Path[1]='T') And (Path[2]='M'));
+ Check('5Ah nom genere commence par \TMP',
+   (Path[0]='\') And (Path[1]='T') And (Path[2]='M'));
  DosClose(H);
  R.AH:=$41; R.DS:=Seg(Path); R.DX:=Ofs(Path);
  Check('41h supprime le fichier temporaire',Call);
@@ -205,7 +207,8 @@ Begin
  R.AH:=$14; R.DS:=Seg(Fcb); R.DX:=Ofs(Fcb);
  MsDos(R);
  Check('14h lecture sequentielle -> 3 (partiel)',R.AL=3);
- Check('DTA = texte redirige',(Dta[0]=Ord('t')) And (Dta[13]=Ord('e')) And (Dta[50]=0));
+ Check('DTA = texte redirige',
+   (Dta[0]=Ord('t')) And (Dta[13]=Ord('e')) And (Dta[50]=0));
  R.AH:=$14; R.DS:=Seg(Fcb); R.DX:=Ofs(Fcb);
  MsDos(R);
  Check('14h lecture suivante -> 1 (fin)',R.AL=1);
@@ -239,7 +242,8 @@ Begin
  FillChar(Dta,SizeOf(Dta),0);
  R.AH:=$21; R.DS:=Seg(Fcb); R.DX:=Ofs(Fcb);
  MsDos(R);
- Check('21h lecture aleatoire enregistrement 1',(R.AL=0) And (Dta[0]=100) And (Dta[63]=163));
+ Check('21h lecture aleatoire enregistrement 1',
+   (R.AL=0) And (Dta[0]=100) And (Dta[63]=163));
  R.AH:=$23; R.DS:=Seg(Fcb); R.DX:=Ofs(Fcb);
  MsDos(R);
  Check('23h taille = 2 enregistrements',(R.AL=0) And (Fcb[33]=2));
@@ -260,7 +264,8 @@ Begin
  { renommer / supprimer FCB }
  FcbName(Fcb,0,'FCBTEST DAT');
  For I:=0 To 10 Do Fcb[$11+I]:=32;
- Fcb[$11]:=Ord('F'); Fcb[$12]:=Ord('C'); Fcb[$13]:=Ord('B'); Fcb[$19]:=Ord('B'); Fcb[$1A]:=Ord('A'); Fcb[$1B]:=Ord('K');
+ Fcb[$11]:=Ord('F'); Fcb[$12]:=Ord('C'); Fcb[$13]:=Ord('B'); Fcb[$19]:=Ord('B');
+   Fcb[$1A]:=Ord('A'); Fcb[$1B]:=Ord('K');
  R.AH:=$17; R.DS:=Seg(Fcb); R.DX:=Ofs(Fcb);
  MsDos(R);
  Check('17h renommer FCBTEST.DAT -> FCB.BAK',R.AL=0);
@@ -276,11 +281,13 @@ Begin
  { analyse de nom 29h }
  Z('b:fichier*.t?t rest');
  FillChar(Fcb,37,0);
- R.AH:=$29; R.AL:=0; R.DS:=Seg(Name); R.SI:=Ofs(Name); R.ES:=Seg(Fcb); R.DI:=Ofs(Fcb);
+ R.AH:=$29; R.AL:=0; R.DS:=Seg(Name); R.SI:=Ofs(Name); R.ES:=Seg(Fcb);
+   R.DI:=Ofs(Fcb);
  MsDos(R);
  Check('29h joker -> AL=1',R.AL=1);
  Check('29h lecteur B',Fcb[0]=2);
- Check('29h nom FICHIER?',(Fcb[1]=Ord('F')) And (Fcb[7]=Ord('R')) And (Fcb[8]=Ord('?')));
+ Check('29h nom FICHIER?',
+   (Fcb[1]=Ord('F')) And (Fcb[7]=Ord('R')) And (Fcb[8]=Ord('?')));
  Check('29h ext T?T',(Fcb[9]=Ord('T')) Or (Fcb[9]=Ord('?')));
  Check('29h SI apres analyse',R.SI=Ofs(Name)+Length('b:fichier*.t?t'));
  { nettoyage }
@@ -288,5 +295,6 @@ Begin
  Z('OUT.TXT'); R.AH:=$41; R.DS:=Seg(Name); R.DX:=Ofs(Name); MsDos(R);
  Z('NEW5B.TMP'); R.AH:=$41; R.DS:=Seg(Name); R.DX:=Ofs(Name); MsDos(R);
  Z('FCBTEST.DAT'); R.AH:=$41; R.DS:=Seg(Name); R.DX:=Ofs(Name); MsDos(R);
- If Fails=0 Then WriteLn('== TOUS LES TESTS REUSSIS ==') Else WriteLn('== ECHECS : ',Fails,' ==');
+ If Fails=0 Then WriteLn('== TOUS LES TESTS REUSSIS ==') Else
+   WriteLn('== ECHECS : ',Fails,' ==');
 End.

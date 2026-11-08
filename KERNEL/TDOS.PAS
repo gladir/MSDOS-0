@@ -12,7 +12,8 @@ Var
 
 Procedure Check(Msg:String;Ok:Boolean);
 Begin
- If Ok Then WriteLn('OK   ',Msg) Else Begin WriteLn('FAIL ',Msg); Inc(Fails); End;
+ If Ok Then WriteLn('OK   ',Msg) Else Begin WriteLn('FAIL ',Msg); Inc(Fails);
+   End;
 End;
 
 Function Call:Boolean;
@@ -25,8 +26,10 @@ Begin
  Fails:=0;
  WriteLn('== TDOS : fonctions systeme ==');
  R.AH:=$30; Check('30h version',Call And (R.AL>=3));
- GetDate(Y,M,D,Dw); Check('2Ah date plausible',(Y>=2024) And (M>=1) And (M<=12) And (D>=1) And (D<=31));
- GetTime(H,Mi,Sc,Cs); Check('2Ch heure plausible',(H<24) And (Mi<60) And (Sc<60));
+ GetDate(Y,M,D,Dw); Check('2Ah date plausible',
+   (Y>=2024) And (M>=1) And (M<=12) And (D>=1) And (D<=31));
+ GetTime(H,Mi,Sc,Cs); Check('2Ch heure plausible',
+   (H<24) And (Mi<60) And (Sc<60));
  FillChar(Buf,SizeOf(Buf),$FF);
  R.AX:=$3800; R.DS:=Seg(Buf); R.DX:=Ofs(Buf);
  Check('38h infos pays',Call And (R.BX=33) And (Buf[2]<>$FF));
@@ -48,7 +51,8 @@ Begin
  R.AH:=$50; R.BX:=Psp; Check('50h fixer PSP',Call);
  R.AH:=$34; Check('34h indos',Call);
  R.AH:=$19; Check('19h lecteur courant = C',Call And (R.AL=2));
- R.AH:=$36; R.DL:=0; Check('36h espace libre',Call And (R.AX<>$FFFF) And (R.BX>0));
+ R.AH:=$36; R.DL:=0; Check('36h espace libre',
+   Call And (R.AX<>$FFFF) And (R.BX>0));
  R.AH:=$48; R.BX:=$100; Check('48h allocation',Call);
  S1:=R.AX;
  R.AH:=$48; R.BX:=$100; Check('48h seconde allocation',Call);
@@ -58,7 +62,8 @@ Begin
  R.AH:=$49; R.ES:=S1; Check('49h liberation',Call);
  R.AH:=$49; R.ES:=S2; Check('49h liberation 2',Call);
  R.AH:=$49; R.ES:=S2; Check('49h double liberation -> erreur',Not Call);
- R.AH:=$48; R.BX:=$FFFF; Check('48h trop grand -> erreur 8',(Not Call) And (R.AX=8) And (R.BX>$1000));
+ R.AH:=$48; R.BX:=$FFFF; Check('48h trop grand -> erreur 8',
+   (Not Call) And (R.AX=8) And (R.BX>$1000));
  GetIntVec($60,V);
  SetIntVec($60,Ptr($1234,$5678));
  GetIntVec($60,V);
@@ -67,5 +72,6 @@ Begin
  R.AH:=$67; R.BX:=30; Check('67h nombre de handles accepte',Call);
  R.AH:=$68; R.BX:=1; Check('68h commit',Call);
  R.AH:=$62; Call; 
- If Fails=0 Then WriteLn('== TOUS LES TESTS REUSSIS ==') Else WriteLn('== ECHECS : ',Fails,' ==');
+ If Fails=0 Then WriteLn('== TOUS LES TESTS REUSSIS ==') Else
+   WriteLn('== ECHECS : ',Fails,' ==');
 End.

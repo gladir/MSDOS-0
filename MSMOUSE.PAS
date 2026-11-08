@@ -13,7 +13,8 @@ Uses DOS;
 
 Const
  { Version du pilote souris - Compatible Microsoft Mouse Driver }
- MOUSE_DRIVER_VERSION = $0806;  { Version 8.06 - Format: version majeure.mineure }
+ MOUSE_DRIVER_VERSION = $0806;
+   { Version 8.06 - Format: version majeure.mineure }
 
  { Codes d'erreur pour les opÇrations souris }
  ERR_SUCCESS = 0;               { OpÇration rÇussie }
@@ -88,7 +89,8 @@ Type
  End;
 
 Var
- Language:(_French,_English,_Germany,_Italian,_Spain,_Albanian,_Portuguese,_Swedish,_Danish,_Japanese);
+ Language:(_French,_English,_Germany,_Italian,_Spain,_Albanian,_Portuguese,
+   _Swedish,_Danish,_Japanese);
  TmpLanguage: String;
  MouseDriver: TMouseDriver;
  I: Byte;
@@ -539,7 +541,8 @@ Begin
    Case DetectedType Of
     MOUSE_TYPE_NONE: WriteLn('  Keine Maus erkannt');
     MOUSE_TYPE_SERIAL: WriteLn('  Serielle Maus an COM',
-                              (MouseDriver.SerialPort - COM1_BASE) Div 8 + 1, ' erkannt');
+                              (MouseDriver.SerialPort - COM1_BASE) Div 8 + 1,
+                                ' erkannt');
     MOUSE_TYPE_PS2: WriteLn('  PS/2-Maus erkannt');
     MOUSE_TYPE_BUS: WriteLn('  Bus-Maus erkannt');
    End;
@@ -562,41 +565,53 @@ Procedure ShowInternalInfo;Begin
  Case Language Of
   _English: Begin
    WriteLn('Mouse Driver Internal Information:');
-   WriteLn('  Version: ', MOUSE_DRIVER_VERSION Shr 8, '.', MOUSE_DRIVER_VERSION And $FF);
+   WriteLn('  Version: ', MOUSE_DRIVER_VERSION Shr 8, '.',
+     MOUSE_DRIVER_VERSION And $FF);
    WriteLn('  Driver installed: ', MouseDriver.Installed);
    If MouseDriver.Installed Then Begin
     WriteLn('  Mouse type: ', MouseDriver.MouseType);
-    WriteLn('  Position: (', MouseDriver.State.X, ',', MouseDriver.State.Y, ')');
+    WriteLn('  Position: (', MouseDriver.State.X, ',', MouseDriver.State.Y,
+      ')');
     WriteLn('  Button state: ', MouseDriver.State.Buttons);
     WriteLn('  Cursor visible: ', MouseDriver.State.Visible);
-    WriteLn('  X limits: ', MouseDriver.State.MinX, '-', MouseDriver.State.MaxX);
-    WriteLn('  Y limits: ', MouseDriver.State.MinY, '-', MouseDriver.State.MaxY);
+    WriteLn('  X limits: ', MouseDriver.State.MinX, '-',
+      MouseDriver.State.MaxX);
+    WriteLn('  Y limits: ', MouseDriver.State.MinY, '-',
+      MouseDriver.State.MaxY);
    End;
   End;
   _Germany: Begin
    WriteLn('Interne Informationen des Maustreibers:');
-   WriteLn('  Version: ', MOUSE_DRIVER_VERSION Shr 8, '.', MOUSE_DRIVER_VERSION And $FF);
+   WriteLn('  Version: ', MOUSE_DRIVER_VERSION Shr 8, '.',
+     MOUSE_DRIVER_VERSION And $FF);
    WriteLn('  Treiber installiert: ', MouseDriver.Installed);
    If MouseDriver.Installed Then Begin
     WriteLn('  Maustyp: ', MouseDriver.MouseType);
-    WriteLn('  Position: (', MouseDriver.State.X, ',', MouseDriver.State.Y, ')');
+    WriteLn('  Position: (', MouseDriver.State.X, ',', MouseDriver.State.Y,
+      ')');
     WriteLn('  Tastenstatus: ', MouseDriver.State.Buttons);
     WriteLn('  Cursor sichtbar: ', MouseDriver.State.Visible);
-    WriteLn('  X-Grenzen: ', MouseDriver.State.MinX, '-', MouseDriver.State.MaxX);
-    WriteLn('  Y-Grenzen: ', MouseDriver.State.MinY, '-', MouseDriver.State.MaxY);
+    WriteLn('  X-Grenzen: ', MouseDriver.State.MinX, '-',
+      MouseDriver.State.MaxX);
+    WriteLn('  Y-Grenzen: ', MouseDriver.State.MinY, '-',
+      MouseDriver.State.MaxY);
    End;
   End;
   Else Begin { Franáais }
    WriteLn('Informations internes du pilote souris:');
-   WriteLn('  Version: ', MOUSE_DRIVER_VERSION Shr 8, '.', MOUSE_DRIVER_VERSION And $FF);
+   WriteLn('  Version: ', MOUSE_DRIVER_VERSION Shr 8, '.',
+     MOUSE_DRIVER_VERSION And $FF);
    WriteLn('  Pilote installÇ: ', MouseDriver.Installed);
    If MouseDriver.Installed Then Begin
     WriteLn('  Type souris: ', MouseDriver.MouseType);
-    WriteLn('  Position: (', MouseDriver.State.X, ',', MouseDriver.State.Y, ')');
+    WriteLn('  Position: (', MouseDriver.State.X, ',', MouseDriver.State.Y,
+      ')');
     WriteLn('  êtat boutons: ', MouseDriver.State.Buttons);
     WriteLn('  Curseur visible: ', MouseDriver.State.Visible);
-    WriteLn('  Limites X: ', MouseDriver.State.MinX, '-', MouseDriver.State.MaxX);
-    WriteLn('  Limites Y: ', MouseDriver.State.MinY, '-', MouseDriver.State.MaxY);
+    WriteLn('  Limites X: ', MouseDriver.State.MinX, '-',
+      MouseDriver.State.MaxX);
+    WriteLn('  Limites Y: ', MouseDriver.State.MinY, '-',
+      MouseDriver.State.MaxY);
    End;
   End;
  End;
@@ -623,11 +638,14 @@ BEGIN
   If StrToUpper(Copy(TmpLanguage, 1, 2)) = 'IT' Then Language := _Italian Else
   If StrToUpper(Copy(TmpLanguage, 1, 2)) = 'SP' Then Language := _Spain Else
   If (StrToUpper(Copy(TmpLanguage, 1, 2)) = 'SQ') or
-     (StrToUpper(Copy(TmpLanguage, 1, 3)) = 'ALB') Then Language := _Albanian Else
+     (StrToUpper(Copy(TmpLanguage, 1,
+       3)) = 'ALB') Then Language := _Albanian Else
   If (StrToUpper(Copy(TmpLanguage, 1, 2)) = 'PT') or
-     (StrToUpper(Copy(TmpLanguage, 1, 3)) = 'PRT') Then Language := _Portuguese Else
+     (StrToUpper(Copy(TmpLanguage, 1,
+       3)) = 'PRT') Then Language := _Portuguese Else
   If (StrToUpper(Copy(TmpLanguage, 1, 2)) = 'SE') or
-     (StrToUpper(Copy(TmpLanguage, 1, 3)) = 'SWE') Then Language := _Swedish Else
+     (StrToUpper(Copy(TmpLanguage, 1,
+       3)) = 'SWE') Then Language := _Swedish Else
   If (StrToUpper(Copy(TmpLanguage, 1, 2)) = 'DK') or
      (StrToUpper(Copy(TmpLanguage, 1, 3)) = 'DNK') Then Language := _Danish Else
   If (StrToUpper(Copy(TmpLanguage, 1, 2)) = 'JP') or
@@ -649,7 +667,8 @@ BEGIN
      WriteLn('MSMOUSE [parameters]');
      WriteLn;
      WriteLn('Parameters:');
-     WriteLn('  /Y         Load driver without displaying messages (silent mode)');
+     WriteLn('  /Y         Load driver without displaying messages (silent ' +
+       'mode)');
      WriteLn('  /R         Reset the mouse driver already loaded in memory');
      WriteLn('  /U         Unload the driver from memory (if loaded as TSR)');
      WriteLn('  /C         Force hardware mouse detection');
@@ -668,28 +687,36 @@ BEGIN
      WriteLn('Parameter:');
      WriteLn('  /Y         Treiber ohne Nachrichten laden (stiller Modus)');
      WriteLn('  /R         Im Speicher geladenen Maustreiber zurÅcksetzen');
-     WriteLn('  /U         Treiber aus dem Speicher entfernen (wenn als TSR geladen)');
+     WriteLn('  /U         Treiber aus dem Speicher entfernen (wenn als TSR ' +
+       'geladen)');
      WriteLn('  /C         Hardware-Mauserkennung erzwingen');
      WriteLn('  /S         Serielle Maus erzwingen (COM1/COM2)');
      WriteLn('  /B         Bus-Maus erzwingen (IBM PC)');
-     WriteLn('  /I         Interne Treiber- und Hardware-Informationen anzeigen');
+     WriteLn('  /I         Interne Treiber- und Hardware-Informationen ' +
+       'anzeigen');
      WriteLn('  /?         Diese Hilfe anzeigen');
     End;
     Else Begin { Franáais }
      WriteLn('MSMOUSE - Pilote de souris MS');
      WriteLn;
-     WriteLn('Cette commande permet de charger le pilote souris pour les applications MS-DOS.');
+     WriteLn('Cette commande permet de charger le pilote souris pour les ' +
+       'applications MS-DOS.');
      WriteLn;
      WriteLn('MSMOUSE [paramätres]');
      WriteLn;
      WriteLn('Paramätres:');
-     WriteLn('  /Y         Charger le pilote sans afficher de messages (mode silencieux)');
-     WriteLn('  /R         RÇinitialiser le pilote souris dÇjÖ chargÇ en mÇmoire');
-     WriteLn('  /U         DÇcharger le pilote de la mÇmoire (si chargÇ comme TSR)');
+     WriteLn('  /Y         Charger le pilote sans afficher de messages (mode ' +
+       'silencieux)');
+     WriteLn('  /R         RÇinitialiser le pilote souris dÇjÖ chargÇ en ' +
+       'mÇmoire');
+     WriteLn('  /U         DÇcharger le pilote de la mÇmoire (si chargÇ ' +
+       'comme TSR)');
      WriteLn('  /C         Forcer la dÇtection du matÇriel souris');
-     WriteLn('  /S         Forcer l''utilisation d''une souris sÇrie (COM1/COM2)');
+     WriteLn('  /S         Forcer l''utilisation d''une souris sÇrie ' +
+       '(COM1/COM2)');
      WriteLn('  /B         Forcer l''utilisation d''une souris bus (IBM PC)');
-     WriteLn('  /I         Afficher les informations internes du pilote et matÇriel');
+     WriteLn('  /I         Afficher les informations internes du pilote et ' +
+       'matÇriel');
      WriteLn('  /?         Afficher cette aide');
     End;
    End;
@@ -758,7 +785,8 @@ BEGIN
              MOUSE_DRIVER_VERSION And $FF, ' loaded successfully.');
      Case MouseDriver.MouseType Of
       MOUSE_TYPE_SERIAL: WriteLn('Serial mouse detected on COM',
-                                (MouseDriver.SerialPort - COM1_BASE) Div 8 + 1, '.');
+                                (MouseDriver.SerialPort - COM1_BASE) Div 8 + 1,
+                                  '.');
       MOUSE_TYPE_PS2: WriteLn('PS/2 mouse detected.');
       MOUSE_TYPE_BUS: WriteLn('Bus mouse detected.');
      End;
@@ -768,7 +796,8 @@ BEGIN
              MOUSE_DRIVER_VERSION And $FF, ' erfolgreich geladen.');
      Case MouseDriver.MouseType Of
       MOUSE_TYPE_SERIAL: WriteLn('Serielle Maus an COM',
-                                (MouseDriver.SerialPort - COM1_BASE) Div 8 + 1, ' erkannt.');
+                                (MouseDriver.SerialPort - COM1_BASE) Div 8 + 1,
+                                  ' erkannt.');
       MOUSE_TYPE_PS2: WriteLn('PS/2-Maus erkannt.');
       MOUSE_TYPE_BUS: WriteLn('Bus-Maus erkannt.');
      End;
@@ -778,7 +807,8 @@ BEGIN
              MOUSE_DRIVER_VERSION And $FF, ' chargÇ avec succäs.');
      Case MouseDriver.MouseType Of
       MOUSE_TYPE_SERIAL: WriteLn('Souris sÇrie dÇtectÇe sur COM',
-                                (MouseDriver.SerialPort - COM1_BASE) Div 8 + 1, '.');
+                                (MouseDriver.SerialPort - COM1_BASE) Div 8 + 1,
+                                  '.');
       MOUSE_TYPE_PS2: WriteLn('Souris PS/2 dÇtectÇe.');
       MOUSE_TYPE_BUS: WriteLn('Souris bus dÇtectÇe.');
      End;

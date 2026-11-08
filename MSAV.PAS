@@ -140,7 +140,8 @@ Begin
  GotoXY(38,14);Write('Fichiers examines: ',ScanState.Scanned:6);
  GotoXY(38,15);Write('Resultats        : ',ScanState.Infected:6,' alerte(s)');
  DrawBar(38,18,35,ScanState.Scanned,ScanState.Files);
- GotoXY(3,23);Write(PadRight('Repertoire : '+Copy(ScanState.CurrentDirectory,1,68),76));
+ GotoXY(3,23);Write(PadRight('Repertoire : '+Copy(ScanState.CurrentDirectory,1,
+   68),76));
 End;
 
 Procedure CountFiles(DirPath:String);
@@ -186,7 +187,9 @@ begin
     ContainsText(Header,'STONED')or
     ContainsText(Header,'VIRUS')Then ScanFile:=2
   Else
- If IsDOSProgram(FileName)and(TotalRead>=2)and(Header[1]='M')and(Header[2]='Z')Then
+ If
+   IsDOSProgram(FileName)and(TotalRead>=
+     2)and(Header[1]='M')and(Header[2]='Z')Then
   ScanFile:=1;
 End;
 
@@ -234,7 +237,8 @@ Begin
  ClrScr;TextColor(15);TextBackground(1);
  WriteLn('MSAV - Microsoft Anti-Virus pour DOS');
  TextBackground(7);TextColor(0);
- WriteLn;WriteLn('Analyse en lecture seule des fichiers du repertoire courant.');
+ WriteLn;
+   WriteLn('Analyse en lecture seule des fichiers du repertoire courant.');
  WriteLn;WriteLn('MSAV [chemin] [/S]');
  WriteLn;WriteLn('  chemin  Repertoire de depart, courant par defaut.');
  WriteLn('  /S      Parcourt aussi les sous-repertoires.');
@@ -274,8 +278,10 @@ Begin
  UpdateScreen('Analyse en cours');
  ScanFiles(RootPath);
  GotoXY(38,20);
- If ScanState.Stop Then Write('Analyse interrompue.') Else Write('Analyse terminee.');
- GotoXY(38,21);Write(ScanState.Infected,' alerte(s), ',ScanState.Suspicious,' programme(s) DOS.');
+ If ScanState.Stop Then Write('Analyse interrompue.') Else
+   Write('Analyse terminee.');
+ GotoXY(38,21);Write(ScanState.Infected,' alerte(s), ',ScanState.Suspicious,
+   ' programme(s) DOS.');
  GotoXY(38,23);Write('Appuyez sur une touche pour quitter.');
  ReadKey;
  TextBackground(0);TextColor(7);ClrScr;

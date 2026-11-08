@@ -14,7 +14,8 @@ Var
 
 Procedure Check(Msg:String;Ok:Boolean);
 Begin
- If Ok Then WriteLn('OK   ',Msg) Else Begin WriteLn('FAIL ',Msg); Inc(Fails); End;
+ If Ok Then WriteLn('OK   ',Msg) Else Begin WriteLn('FAIL ',Msg); Inc(Fails);
+   End;
 End;
 
 Function Num(N:Word):String;
@@ -48,14 +49,16 @@ Begin
  For I:=0 To 49 Do Begin
   BlockRead(F,Chk,4096,Got);
   Fill(Byte(I));
-  If (Got<>4096) Or (Buf[0]<>Chk[0]) Or (Buf[100]<>Chk[100]) Or (Buf[4095]<>Chk[4095]) Then Inc(N);
+  If (Got<>4096) Or (Buf[0]<>Chk[0]) Or (Buf[100]<>Chk[100]) Or
+    (Buf[4095]<>Chk[4095]) Then Inc(N);
  End;
  Check('relecture 50 blocs sans erreur',N=0);
  { acces direct : bloc 30 }
  Seek(F,LongInt(30)*4096);
  BlockRead(F,Chk,4096,Got);
  Fill(30);
- Check('Seek + lecture bloc 30',(Got=4096) And (Chk[1]=Buf[1]) And (Chk[2000]=Buf[2000]));
+ Check('Seek + lecture bloc 30',
+   (Got=4096) And (Chk[1]=Buf[1]) And (Chk[2000]=Buf[2000]));
  Seek(F,204800);
  BlockRead(F,Chk,10,Got);
  Check('lecture en fin de fichier -> 0',Got=0);
@@ -183,5 +186,6 @@ Begin
  Assign(F,'TXT.TXT'); Erase(F);
  Free1:=DiskFree(0);
  Check('espace libre restitue',Free1=Free0);
- If Fails=0 Then WriteLn('== TOUS LES TESTS REUSSIS ==') Else WriteLn('== ECHECS : ',Fails,' ==');
+ If Fails=0 Then WriteLn('== TOUS LES TESTS REUSSIS ==') Else
+   WriteLn('== ECHECS : ',Fails,' ==');
 End.
