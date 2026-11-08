@@ -318,122 +318,93 @@ Begin
 End;
 
  { Gestionnaire d'interruption INT 21h pour intercepter les appels de partage }
-{$F+}
-Procedure ShareInt21Handler;
-{$F-}
 {$IFNDEF FPC}
+{ Gestionnaires d'interruption (procedures Interrupt : registres sauves, IRET) : les fonctions traitees
+  par SHARE sont rendues directement, les autres sont transmises a l'ancien gestionnaire. }
+Procedure ShareInt21Handler(Flags,rCS,rIP,rAX,rBX,rCX,rDX,rSI,rDI,rDS,rES,rBP:Word);Interrupt;
 Var
- SavedAX, SavedBX, SavedCX, SavedDX: Word;
+ Old: Pointer;
 Begin
- Asm
-  Mov SavedAX, AX
-  Mov SavedBX, BX
-  Mov SavedCX, CX
-  Mov SavedDX, DX
- End;
-  { V‚rifier les fonctions de verrouillage de fichier }
- Case SavedAX Shr 8 Of
-  $5C: Begin { Verrouiller/D‚verrouiller r‚gion de fichier }
-   Case SavedAX And $FF Of
-    $00: Begin { Verrouiller }
-     { Impl‚menter la logique de verrouillage }
-     Asm
-      Mov AX, ERR_SUCCESS
-     End;
-    End;
-    $01: Begin { D‚verrouiller }
-     { Impl‚menter la logique de d‚verrouillage }
-     Asm
-      Mov AX, ERR_SUCCESS
-     End;
-    End;
-    Else Begin
-     { Passer … l'ancien gestionnaire }
-     Asm
-      Mov AX, SavedAX
-      Mov BX, SavedBX
-      Mov CX, SavedCX
-      Mov DX, SavedDX
-      Pushf
-      Call ShareControl.OldInt21Handler
-     End;
-     Exit;
-    End;
-   End;
-   Asm
-    Iret
-   End;
-  End;
-  Else Begin
-   { Autre fonction - passer … l'ancien gestionnaire }
-   Asm
-    Mov AX, SavedAX
-    Mov BX, SavedBX
-    Mov CX, SavedCX
-    Mov DX, SavedDX
-    Pushf
-    Call ShareControl.OldInt21Handler
-   End;
+ If (Hi(rAX)=$5C) And (Lo(rAX)<=1) Then Begin
+  { verrouillage / deverrouillage de region : accepte }
+  rAX:=ERR_SUCCESS;
+  Flags:=Flags And $FFFE;
+ End
+  Else
+ Begin
+  Old:=ShareControl.OldInt21Handler;
+  Asm
+   MOV AX,rAX
+   MOV BX,rBX
+   MOV CX,rCX
+   MOV DX,rDX
+   MOV SI,rSI
+   MOV DI,rDI
+   MOV ES,rES
+   PUSH rDS
+   POP DS
+   PUSH Flags
+   CALL DWORD PTR Old
+   MOV rAX,AX
+   MOV rBX,BX
+   MOV rCX,CX
+   MOV rDX,DX
+   MOV rSI,SI
+   MOV rDI,DI
+   MOV rES,ES
+   MOV rDS,DS
+   PUSHF
+   POP Flags
   End;
  End;
 End;
-{$ELSE}
-Begin
- { Version simplifi‚e pour Free Pascal }
-End;
-{$ENDIF}
 
-{ Gestionnaire d'interruption INT 2Fh pour SHARE }
-{$F+}
-Procedure ShareInt2FHandler;
-{$F-}
-{$IFNDEF FPC}
+Procedure ShareInt2FHandler(Flags,rCS,rIP,rAX,rBX,rCX,rDX,rSI,rDI,rDS,rES,rBP:Word);Interrupt;
 Var
- SavedAX, SavedBX, SavedCX, SavedDX: Word;
+ Old: Pointer;
 Begin
- Asm
-  Mov SavedAX, AX
-  Mov SavedBX, BX
-  Mov SavedCX, CX
-  Mov SavedDX, DX
- End;
- If (SavedAX Shr 8) = SHARE_MULTIPLEX Then Begin
-  Case (SavedAX And $FF) Of
-   SHARE_INSTALL_CHECK: Begin
-    Asm
-     Mov AL, $FF  { Signaler que SHARE est install‚ }
-    End;
-   End;
-   SHARE_GET_MACHINE_NAME: Begin
-    { Retourner le nom de la machine }
-    Asm
-     Mov AX, ERR_SUCCESS
-    End;
-   End;
-   Else Begin
-    Asm
-     Mov AX, ERR_INVALID_FUNCTION
-    End;
-   End;
+ If Hi(rAX)=SHARE_MULTIPLEX Then Begin
+  Case Lo(rAX) Of
+   SHARE_INSTALL_CHECK:rAX:=(rAX And $FF00) Or $FF;
+   SHARE_GET_MACHINE_NAME:rAX:=ERR_SUCCESS;
+   Else rAX:=ERR_INVALID_FUNCTION;
   End;
+ End
+  Else
+ Begin
+  Old:=ShareControl.OldInt2FHandler;
   Asm
-   Iret
-  End;
- End Else Begin
-  { Autre fonction multiplex - passer … l'ancien gestionnaire }
-  Asm
-   Mov AX, SavedAX
-   Mov BX, SavedBX
-   Mov CX, SavedCX
-   Mov DX, SavedDX
-   Pushf
-   Call ShareControl.OldInt2FHandler
+   MOV AX,rAX
+   MOV BX,rBX
+   MOV CX,rCX
+   MOV DX,rDX
+   MOV SI,rSI
+   MOV DI,rDI
+   MOV ES,rES
+   PUSH rDS
+   POP DS
+   PUSH Flags
+   CALL DWORD PTR Old
+   MOV rAX,AX
+   MOV rBX,BX
+   MOV rCX,CX
+   MOV rDX,DX
+   MOV rSI,SI
+   MOV rDI,DI
+   MOV rES,ES
+   MOV rDS,DS
+   PUSHF
+   POP Flags
   End;
  End;
 End;
 {$ELSE}
-Begin
- { Version simplifi‚e pour Free Pascal }
+Procedure ShareInt21Handler;Begin
+ { Version simplifiee pour Free Pascal }
+End;
+
+Procedure ShareInt2FHandler;Begin
+ { Version simplifiee pour Free Pascal }
 End;
 {$ENDIF}
 

@@ -180,6 +180,7 @@ End;
 {$ELSE}
 Var
  Status: Byte;
+ Timeout: Word;
 Begin
  DetectPS2Mouse := False;
   { V‚rifier si le contr“leur PS/2 existe }
@@ -188,13 +189,18 @@ Begin
   { Envoyer commande de test du port souris }
   PortWriteByte(PS2_COMMAND_PORT, $A9);
    { Attendre la r‚ponse }
+  Timeout := 0;
   Repeat
    Status := PortReadByte(PS2_STATUS_PORT);
-  Until (Status And $01) <> 0;
+   Inc(Timeout);
+  Until ((Status And $01) <> 0) Or (Timeout = $FFFF);
+  { sans reponse du controleur : pas de souris PS/2 }
+  If (Status And $01) <> 0 Then Begin
    { Lire le r‚sultat }
-  Status := PortReadByte(PS2_DATA_PORT);
-  If Status = $00 Then Begin { Test r‚ussi }
-   DetectPS2Mouse := True;
+   Status := PortReadByte(PS2_DATA_PORT);
+   If Status = $00 Then Begin { Test r‚ussi }
+    DetectPS2Mouse := True;
+   End;
   End;
  End;
 End;
