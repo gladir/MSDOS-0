@@ -3,7 +3,7 @@ ETAT DE LA COMPILATION ET DU DEMARRAGE DU NOYAU (TPC + DEVENV /KERNELTEST)
 
 Resume
 ------
-* TPC compile MSDOS.PAS en un IO.SYS de ~64,8 Ko (MAKER.PAS l'ecrit comme prevu :
+* TPC compile MSDOS.PAS en un IO.SYS de ~54 Ko (MAKER.PAS l'ecrit comme prevu :
   BEGIN_KERNEL a l'offset 0). Une unite qui declare "Procedure BEGIN_KERNEL" est
   compilee dans son propre segment : donnees (chaines, constantes) et routines du
   runtime SYSTEM utilisees sont recopiees dans le segment (DS=CS), l'edition de
@@ -37,7 +37,11 @@ Ce qui ne marche pas encore
 * La concatenation "Result := Result + caractere" donne un resultat faux quand elle
   est compilee dans le segment noyau (contournee dans DOS83ToString) : a corriger dans
   TPC (mode noyau) car beaucoup de code du noyau concatene des chaines.
-* IO.SYS fait ~65 285 octets : il reste < 300 octets de marge dans le segment.
+* IO.SYS fait 54 116 octets (65 285 avant les optimisations de TPC, voir DEV-COOLS/DOC/TPC_OPTIMISATIONS.txt) :
+  il reste ~11 Ko de marge dans le segment de 64 Ko.
+* Pile : le noyau s'execute sur la pile du programme appelant (COMMAND.EXE : {$M 8192}) ; FindFirst/FindNext
+  (MatchFileName recursif, chaines de 256 octets passees par valeur) consomment ~6 Ko. A terme : pile privee du
+  noyau (comme MS-DOS) pour ne plus dependre de la pile de l'appelant.
 
 Corrections de TPC (resume)
 ---------------------------
@@ -47,6 +51,8 @@ segment noyau avec recopie du runtime, donnees en ligne, appel du hook Crt, etc.
 
 Corrections du noyau (resume)
 -----------------------------
+DS restaure apres les blocs ASM "LDS SI,..." (SetFindState : DS restait ecrase, le noyau lisait ses donnees dans
+le segment de pile de l'appelant), ordre POP ES/POP DS (TranslateBPBtoDPB),
 EXEC reel + terminaison, gestionnaire de memoire (decoupe/fusion), disque INT 13h,
 recherche de fichiers, handles 0-based, CurrentDir 67 octets, dispatcher INT 21h
 qui conserve BX, propagation de CF dans les FLAGS, STI, PSP (DOSCall en 50h),
