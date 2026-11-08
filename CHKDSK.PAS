@@ -92,7 +92,8 @@ End;
 
 Function ByteHex2Str(value:Byte):String;
 Const
- matrix:Array[0..15]of Char = ('0','1','2','3','4','5','6','7','8','9','A','B','C','D','E','F');
+ matrix:Array[0..15]of Char = ('0','1','2','3','4','5','6','7','8','9','A','B',
+   'C','D','E','F');
 Begin
  ByteHex2Str:=matrix[(value shr 4) and $0F]+matrix[value and $F];
 End;
@@ -298,7 +299,8 @@ Begin
  TotPistes:=TempLong;
  If(TempLong-TotPistes > 0)Then Inc(TotPistes);
  If BufferSector0[$0D]=0Then TempLong:=0
-                        Else TempLong:=(LongInt(TotSects)-LongInt(PremData)) div LongInt(BufferSector0[$0D]);
+                        Else TempLong:=(LongInt(TotSects)-LongInt(PremData)) div
+                          LongInt(BufferSector0[$0D]);
  TotClusters:=TempLong;
  GetNumberCluster:=TotClusters;
 End;
@@ -335,7 +337,8 @@ Begin
  If BufferLoaded Then Begin
   NumFATSector:=(GetNumberCluster shl 1)shr 9;
   FatPOS:=GetFATPos;
-  If(GetNumberCluster>0)and(NumFATSector>0)Then For J:=0 to NumFATSector-1 do Begin
+  If(GetNumberCluster>0)and(NumFATSector>0)Then For J:=0 to NumFATSector-1 do
+    Begin
    If FileName<>''Then Begin
     {$I-}Assign(FileSource,FileName);
     Reset(FileSource,1);{$I+}
@@ -347,11 +350,11 @@ Begin
     End
     Else
    If CurrDisk=0 Then Begin
-    Int25h(Ord(UpCase(GetCurrentDisk))-(Ord('A')-1),FatPOS+J,1,Buffer,Erreur);
+    Int25h(Ord(UpCase(GetCurrentDisk))-Ord('A'),FatPOS+J,1,Buffer,Erreur);
    End
      Else
    Begin
-    Int25h(CurrDisk+1,FatPOS+J,1,Buffer,Erreur);
+    Int25h(CurrDisk-1,FatPOS+J,1,Buffer,Erreur);
    End;
    For I:=0 to 255 do Begin
     If BufWord[I]=0 Then Inc(FreeSize,GetClusterSize);
@@ -362,8 +365,10 @@ Begin
 End;
 
 Function GetSerialNumber:String;Begin
- GetSerialNumber:=ByteHex2Str(BufferSector0[$27])+ByteHex2Str(BufferSector0[$28])+'-'+
-                  ByteHex2Str(BufferSector0[$29])+ByteHex2Str(BufferSector0[$2A]);
+ GetSerialNumber:=ByteHex2Str(BufferSector0[$27])+
+   ByteHex2Str(BufferSector0[$28])+'-'+
+                  ByteHex2Str(BufferSector0[$29])+
+                    ByteHex2Str(BufferSector0[$2A]);
 End;
 
 Function GetDirectDiskLabel:String;
@@ -372,11 +377,13 @@ Var
 Begin
  S:='';
  If BufferSector0[$2B]<32 Then Begin
-  For I:=1 to 11 do If BufferSector0[$2B+I]<>0 Then S:=S+Char(BufferSector0[$2B+I]);
+  For I:=1 to 11 do If BufferSector0[$2B+I]<>0 Then
+    S:=S+Char(BufferSector0[$2B+I]);
  End
   Else
  Begin
-  For I:=0 to 10 do If BufferSector0[$2B+I]<>0 Then S:=S+Char(BufferSector0[$2B+I]);
+  For I:=0 to 10 do If BufferSector0[$2B+I]<>0 Then
+    S:=S+Char(BufferSector0[$2B+I]);
  End;
  GetDirectDiskLabel:=S;
 End;
@@ -458,14 +465,14 @@ BEGIN
   End
    Else
   If CurrDisk=0 Then Begin
-   Int25h(Ord(UpCase(GetCurrentDisk))-(Ord('A')-1),0,1,BufferSector0,Erreur);
+   Int25h(Ord(UpCase(GetCurrentDisk))-Ord('A'),0,1,BufferSector0,Erreur);
    {$IFNDEF Windows}
     BufferLoaded:=True;
    {$ENDIF}
   End
    Else
   Begin
-   Int25h(CurrDisk+1,0,1,BufferSector0,Erreur);
+   Int25h(CurrDisk-1,0,1,BufferSector0,Erreur);
    {$IFNDEF Windows}
     BufferLoaded:=True;
    {$ENDIF}
@@ -523,7 +530,8 @@ BEGIN
    Else
   Case Language of
    _Germany:Begin
-    WriteLn(SizeHiddenFile(CurrDisk):13,'Byte in ',NumberHiddenFile,' versteckten Dateien');
+    WriteLn(SizeHiddenFile(CurrDisk):13,'Byte in ',NumberHiddenFile,
+      ' versteckten Dateien');
    End;
    _English:Begin
     WriteLn(SizeHiddenFile(CurrDisk):13,' bytes in ',NumberHiddenFile,

@@ -165,6 +165,7 @@ Begin
   { Copier les fichiers }
  For i:=1 to FileCount do Begin
   Assign(SourceFile, Files[i].Path+Files[i].Name);
+  FileMode:=0;
   Reset(SourceFile, 1);
   If LogFileName<>''Then
    WriteLn(LogFile, 'Copie de sauvegarde: ', Files[i].Path, Files[i].Name);

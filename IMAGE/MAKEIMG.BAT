@@ -1,0 +1,9 @@
+@ECHO OFF
+REM Reconstruit DOS144A.IMG (+ DOS144B.IMG si besoin) et DOSCD.ISO.
+REM usage : MAKEIMG [dossier_des_commandes]     (defaut : ..\BIN16)
+REM Les outils FORMAT, SYS, DISKPC et UNDISKPC doivent se trouver dans TOOLS
+REM (ou dans le PATH) : compiler d'abord TOOLS\MAKEDISK.PAS, TOOLS\DISKPC.PAS,
+REM TOOLS\UNDISKPC.PAS, ..\FORMAT.PAS et ..\SYS.PAS.
+SET CMDS=%1
+IF "%CMDS%"=="" SET CMDS=..\BIN16
+..\TOOLS\MAKEDISK DOS144A.IMG /FLOPPY:1440 /KERNEL:SYSTEM /CMDS:%CMDS% /TOOLS:..\TOOLS /ISO:DOSCD.ISO

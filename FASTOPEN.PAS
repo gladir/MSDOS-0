@@ -13,7 +13,9 @@ Uses DOS;
 
 Const
  MAX_DRIVES=26;
- DEFAULT_ENTRIES=24;
+ DEFAULT_ENTRIES=22;
+   { 26 lecteurs x 22 entrees : tient dans le segment de donnees de 64 Ko avec
+     les donnees internes de TPC }
  ENTRY_SIZE=32;  { Taille d'une entr‚e de r‚pertoire DOS }
   { XMS }
  XMS_INT = $2F;
@@ -119,44 +121,65 @@ Begin
  End;
 End;
 
-Procedure InstallHandler;Interrupt;
+Procedure InstallHandler(Flags,rCS,rIP,rAX,rBX,rCX,rDX,rSI,rDI,rDS,rES,
+  rBP:Word);Interrupt;
 Var
- Regs:Registers;
  DriveIndex: Integer;
  FileName: string;
  i: Integer;
  Found: Boolean;
+ Old: Pointer;
 Begin
- If Regs.AH=$0F Then Begin
-  DriveIndex := Ord(Char(Regs.DL)) - Ord('A');
+ Found:=False;
+ If Hi(rAX)=$0F Then Begin
+  DriveIndex := Ord(Char(Lo(rDX))) - Ord('A');
   If(DriveIndex>=0)and(DriveIndex<MAX_DRIVES)Then Begin
-    { Construire le nom du fichier … partir des registres }
+    { Construire le nom du fichier a partir des registres }
    FileName := '';
-   For i:=0 to 7 do FileName:=FileName+Char(Mem[Regs.DS:Regs.SI+i]);
-   Found:=False;
+   For i:=0 to 7 do FileName:=FileName+Char(Mem[rDS:rSI+i]);
    With DriveCache[DriveIndex] do Begin
     { Chercher dans le cache }
     For i := 1 to CurrentEntries do Begin
      If Entries[i].Path+Entries[i].DirEntry.Name = FileName Then Begin
-      { Trouv‚ - copier les informations dans les registres }
-     Regs.AX := 0;  { SuccŠs }
-     Move(Entries[i].DirEntry, Mem[Regs.ES:Regs.DI], SizeOf(TDirEntry));
-     Entries[i].LastAccess := MemL[$40:$6C];  { Compteur de tic de minuterie }
-     Found:=True;
-     Break;
+      { Trouve - copier les informations dans les registres }
+      rAX := 0;  { Succes }
+      Move(Entries[i].DirEntry, Mem[rES:rDI], SizeOf(TDirEntry));
+      Entries[i].LastAccess := MemL[$40:$6C];  { Compteur de tic de minuterie }
+      Found:=True;
+      Break;
+     End;
     End;
    End;
   End;
-  If Not(Found)Then  Regs.AX:=1;  { Non trou‚ }
- End
-  Else
-  Regs.AX:=2;  { Lecteur invalide }
- End
+ End;
+ If Found Then Flags:=Flags And $FFFE
   Else
  Begin
   { Appeler le gestionnaire original }
-  Inline($9C);     { PUSHF }
-  Inline($FF/$1E/  { CALL DWORD PTR } OldInt21);
+  Old:=OldInt21;
+  Asm
+   MOV AX,rAX
+   MOV BX,rBX
+   MOV CX,rCX
+   MOV DX,rDX
+   MOV SI,rSI
+   MOV DI,rDI
+   MOV ES,rES
+   PUSH rDS
+   POP DS
+   PUSH Flags
+   CALL DWORD PTR Old
+   MOV rAX,AX
+   MOV rBX,BX
+   MOV rCX,CX
+   MOV rDX,DX
+   MOV rSI,SI
+   MOV rDI,DI
+   MOV rES,ES
+   MOV rDS,DS
+   PUSHF
+   POP Flags
+  End;
  End;
 End;
 
@@ -172,7 +195,9 @@ Begin
   { Initialiser le TSR }
  Regs.AH:=$31;           { Fonction TSR }
  Regs.AL:=0;             { Code de sortie }
- Regs.DX:=(Ofs(InstallHandler) + 15) shr 4;  { Paragraphes … converv‚ }
+ Regs.DX:=SSeg+$400-PrefixSeg;
+   { paragraphes conserves : du PSP a la fin de la pile (code,
+     donnees et pile) }
  Intr($21,Regs);
  InstallFastOpen:=True;
 End;

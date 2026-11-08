@@ -6,6 +6,8 @@
 
 Program FORMAT;
 
+{$M 32768,0,655360}
+
 {$A-,F-,O-}
 
 Uses DOS;
@@ -677,7 +679,8 @@ Begin
   WriteLn('Le nom de volume ne peut pas etre vide.');Exit
  End;
  For I:=1to Length(S)do Begin
-  If(Ord(S[I])<32)or(S[I]in['"','*','+',',','.','/',':',';','<','=','>','?','[','\',']',
+  If(Ord(S[I])<32)or(S[I]in['"','*','+',',','.','/',':',';','<','=','>','?','[',
+    '\',']',
   '|'])Then Begin
    WriteLn('Caractere interdit dans le nom de volume: ',S[I]);Exit
   End;
@@ -697,7 +700,8 @@ Procedure SetupSystemFamily(Family:Byte);Begin
  End;
  DOS_PCDOS,DOS_DRDOS:
  Begin
-  SysFiles[1]:='IBMBIO.COM';SysFiles[2]:='IBMDOS.COM';SysFiles[3]:='COMMAND.COM';
+  SysFiles[1]:='IBMBIO.COM';SysFiles[2]:='IBMDOS.COM';
+    SysFiles[3]:='COMMAND.COM';
   SysFileCount:=3
  End;
  DOS_FREEDOS:
@@ -706,21 +710,25 @@ Procedure SetupSystemFamily(Family:Byte);Begin
  End;
  DOS_RXDOS:
  Begin
-  SysFiles[1]:='RXDOSBIO.SYS';SysFiles[2]:='RXDOS.SYS';SysFiles[3]:='COMMAND.COM';
+  SysFiles[1]:='RXDOSBIO.SYS';SysFiles[2]:='RXDOS.SYS';
+    SysFiles[3]:='COMMAND.COM';
   SysFileCount:=3
  End;
  DOS_PTSDOS:
  Begin
-  SysFiles[1]:='PTSBIO.SYS';SysFiles[2]:='PTSDOS.SYS';SysFiles[3]:='COMMAND.COM';
+  SysFiles[1]:='PTSBIO.SYS';SysFiles[2]:='PTSDOS.SYS';
+    SysFiles[3]:='COMMAND.COM';
   SysFileCount:=3
  End;
  DOS_OS2:
  Begin
-  SysFiles[1]:='OS2BOOT';SysFiles[2]:='OS2LDR';SysFiles[3]:='OS2KRNL';SysFileCount:=3
+  SysFiles[1]:='OS2BOOT';SysFiles[2]:='OS2LDR';SysFiles[3]:='OS2KRNL';
+    SysFileCount:=3
  End;
  DOS_WINNT:
  Begin
-  SysFiles[1]:='NTLDR';SysFiles[2]:='NTDETECT.COM';SysFiles[3]:='BOOT.INI';SysFileCount:=3
+  SysFiles[1]:='NTLDR';SysFiles[2]:='NTDETECT.COM';SysFiles[3]:='BOOT.INI';
+    SysFileCount:=3
  End
 End
 End;
@@ -731,7 +739,8 @@ Var
 Begin
  U:=StrToUpper(S);ParseSystemFamily:=True;
  If(U='MS-DOS')or(U='MSDOS')or(U='MS')Then SetupSystemFamily(DOS_MSDOS)
- Else If(U='PC-DOS')or(U='PCDOS')or(U='PC')or(U='IBM')Then SetupSystemFamily(DOS_PCDOS)
+ Else If(U='PC-DOS')or(U='PCDOS')or(U='PC')or(U='IBM')Then
+   SetupSystemFamily(DOS_PCDOS)
  Else If(U='DR-DOS')or(U='DRDOS')or(U='DR')Then SetupSystemFamily(DOS_DRDOS)
  Else If(U='FREEDOS')or(U='FREE')or(U='FDOS')Then SetupSystemFamily(DOS_FREEDOS)
  Else If(U='RXDOS')or(U='RX')Then SetupSystemFamily(DOS_RXDOS)
@@ -760,12 +769,16 @@ Var
  CreateValue:LongInt;
  S,U,N:String;
 Begin
- ParseOptions:=False;FormatSize:='';ForceFormat:=False;NoVerify:=False;VolumeLabel:='';
- UnconditionalFormat:=False;QuickFormat:=False;TracksSpecified:=False;RequestedTracks:=0;
+ ParseOptions:=False;FormatSize:='';ForceFormat:=False;NoVerify:=False;
+   VolumeLabel:='';
+ UnconditionalFormat:=False;QuickFormat:=False;TracksSpecified:=False;
+   RequestedTracks:=0;
  SectorsSpecified:=False;RequestedSectors:=0;SystemTransfer:=False;
- SingleSide:=False;Format360In1200:=False;EightSectors:=False;BootReserve:=False;
+ SingleSide:=False;Format360In1200:=False;EightSectors:=False;
+   BootReserve:=False;
  SetupSystemFamily(DOS_MSDOS);
- CreateImage:=False;CreateSizeMB:=0;ImageContainer:=IC_RAW;ImageTypeSpecified:=False;
+ CreateImage:=False;CreateSizeMB:=0;ImageContainer:=IC_RAW;
+   ImageTypeSpecified:=False;
  AllocationSizeSpecified:=False;RequestedAllocationSize:=0;
  RequestedFileSystem:=FS_AUTO;ActiveFATBits:=12;
  For I:=First to ParamCount do Begin
@@ -775,7 +788,8 @@ Begin
    If(Code<>0)or(CreateValue<512)or(CreateValue>32768)or
    ((CreateValue mod 512)<>0)or
    ((CreateValue and(CreateValue-1))<>0)Then Begin
-    WriteLn('/A doit etre une puissance de deux entre 512 et 32768 octets.');Exit
+    WriteLn('/A doit etre une puissance de deux entre 512 et 32768 octets.');
+      Exit
    End;
    AllocationSizeSpecified:=True;RequestedAllocationSize:=CreateValue
   End Else If U='/CREATE'Then CreateImage:=True
@@ -823,7 +837,8 @@ Begin
   End Else If Copy(U,1,3)='/N:'Then Begin
    N:=Copy(S,4,255);Val(N,NumericValue,Code);
    If(Code<>0)or(NumericValue<1)or(NumericValue>36)Then Begin
-    WriteLn('Le nombre de secteurs par piste doit etre compris entre 1 et 36.');Exit
+    WriteLn('Le nombre de secteurs par piste doit etre compris entre 1 et 36.');
+      Exit
    End;
    If SectorsSpecified Then Begin
     WriteLn('Le nombre de secteurs est indique plusieurs fois.');Exit
@@ -949,14 +964,16 @@ Begin
   ExFatFatOffset:=24;ExFatFatLength:=1;ExFatHeapOffset:=32;
   For I:=1to 32do Begin
    ExFatHeapOffset:=ExFatFatOffset+ExFatFatLength;
-   ExFatHeapOffset:=((ExFatHeapOffset+LData.Cluster-1)div LData.Cluster)*LData.Cluster;
+   ExFatHeapOffset:=((ExFatHeapOffset+LData.Cluster-1)div
+     LData.Cluster)*LData.Cluster;
    ExFatClusterCount:=(TotalSectors-ExFatHeapOffset)div LData.Cluster;
    OldFat:=ExFatFatLength;
    ExFatFatLength:=((ExFatClusterCount+2)*4+511)div 512;
    If ExFatFatLength=OldFat Then Break
   End;
   ExFatHeapOffset:=ExFatFatOffset+ExFatFatLength;
-  ExFatHeapOffset:=((ExFatHeapOffset+LData.Cluster-1)div LData.Cluster)*LData.Cluster;
+  ExFatHeapOffset:=((ExFatHeapOffset+LData.Cluster-1)div
+    LData.Cluster)*LData.Cluster;
   ExFatClusterCount:=(TotalSectors-ExFatHeapOffset)div LData.Cluster;
   If(ExFatClusterCount<3)or(ExFatClusterCount>$0FFFFFF5)or
    (ExFatFatLength>65535)Then Begin
@@ -968,7 +985,8 @@ Begin
   If TotalSectors<8192Then Begin
    WriteLn('NTFS exige une partition d''au moins 4 Mo.');Exit
   End;
-  If AllocationSizeSpecified Then NtfsClusterSectors:=RequestedAllocationSize div 512
+  If AllocationSizeSpecified Then NtfsClusterSectors:=RequestedAllocationSize
+    div 512
   Else NtfsClusterSectors:=8;
   NtfsClusterCount:=TotalSectors div NtfsClusterSectors;
   NtfsMFTCluster:=4;
@@ -998,7 +1016,8 @@ Begin
   DataSectors:=TotalSectors-32-FatSectors*2;
   Clusters:=DataSectors div LData.Cluster;
   If(Clusters<65525)or(Clusters>$0FFFFFF5)or(FatSectors>65535)Then Begin
-   WriteLn('La geometrie ne convient pas a FAT32 (au moins 65525 clusters requis).');Exit
+   WriteLn('La geometrie ne convient pas a FAT32 (au moins 65525 clusters ' +
+     'requis).');Exit
   End;
   LData.FAT:=FatSectors;ActiveFATBits:=32;ConfigureFileSystem:=True;Exit
  End;
@@ -1031,7 +1050,8 @@ If ActiveFATBits=16 Then Begin
  LData.Cluster:=LData.Cluster*2
  Until LData.Cluster>64;
  If(Clusters<4085)or(Clusters>=65525)or(FatSectors>65535)Then Begin
-  WriteLn('La geometrie ne convient pas a FAT16 (4085 a 65524 clusters requis).');Exit
+  WriteLn('La geometrie ne convient pas a FAT16 (4085 a 65524 clusters ' +
+    'requis).');Exit
  End;LData.FAT:=FatSectors
 End;
 ConfigureFileSystem:=True
@@ -1049,7 +1069,8 @@ Begin
  If SingleSide Then PData.Faces:=1;
  If(PData.Tracks=40)and(PData.Sec=8)Then Begin
   If PData.Faces=1Then LData:=LOG160 Else LData:=LOG320
- End Else If(PData.Tracks=40)and(PData.Sec=9)and(PData.Faces=1)Then LData:=LOG180;
+ End Else If(PData.Tracks=40)and(PData.Sec=9)and(PData.Faces=1)Then
+   LData:=LOG180;
  If not ConfigureFileSystem(PData,LData)Then Exit;
  If VolumeTotalSectors>0Then TotalSectors:=VolumeTotalSectors
  Else TotalSectors:=LongInt(PData.Tracks)*PData.Faces*PData.Sec;
@@ -1062,7 +1083,8 @@ Begin
  If ActiveFATBits=12 Then FatEntries:=(LongInt(LData.FAT)*512*2)div 3-2
  Else FatEntries:=LongInt(LData.FAT)*512 div 2-2;
  If Clusters>FatEntries Then Begin
-  WriteLn('Le nombre de pistes depasse la capacite de la FAT12 de ce format.');Exit
+  WriteLn('Le nombre de pistes depasse la capacite de la FAT12 de ce format.');
+    Exit
  End;
  If TotalSectors>65535Then Begin
   WriteLn('Le disque depasse 65535 secteurs.');Exit
@@ -1077,11 +1099,13 @@ Var LData:LogDataType):Boolean;Begin
   PData:=PHYS160;LData:=LOG160
  End
  Else Get4matParam:=False
- Else If S='180'Then  If(DrvType=dtHD525)or(DrvType=dtDD525)or ForceFormat Then Begin
+ Else If S='180'Then  If(DrvType=dtHD525)or(DrvType=dtDD525)or ForceFormat Then
+   Begin
   PData:=PHYS180;LData:=LOG180
  End
  Else Get4matParam:=False
- Else If S='320'Then  If(DrvType=dtHD525)or(DrvType=dtDD525)or ForceFormat Then Begin
+ Else If S='320'Then  If(DrvType=dtHD525)or(DrvType=dtDD525)or ForceFormat Then
+   Begin
   PData:=PHYS320;LData:=LOG320
  End
  Else Get4matParam:=False
@@ -1302,7 +1326,8 @@ Begin
  If(Header[64]<>$7F)or(Header[65]<>$10)or(Header[66]<>$DA)or
  (Header[67]<>$BE)Then Exit;
  If GetLongLE(Header,76)<>2Then Begin
-  WriteLn('Seules les images VDI fixes sont actuellement prises en charge.');Exit
+  WriteLn('Seules les images VDI fixes sont actuellement prises en charge.');
+    Exit
  End;
  ImageDataOffset:=GetLongLE(Header,344);
  If GetLongLE(Header,372)<>0Then Begin
@@ -1350,7 +1375,8 @@ Begin
   PutLongLE(Header,388,Blocks);
   GetDate(Y,Mo,D,Dow);GetTime(H,Mi,Se,S100);Randomize;
   For I:=0to 15do Header[392+I]:=Byte(Random(256));
-  Header[398]:=(Header[398]and $0F)or $40;Header[400]:=(Header[400]and $3F)or $80;
+  Header[398]:=(Header[398]and $0F)or $40;
+    Header[400]:=(Header[400]and $3F)or $80;
   BlockWrite(FileImg,Header,512,Count);If(Count<>512)or(IOResult<>0)Then Begin
    Close(FileImg);Exit
   End;
@@ -1409,7 +1435,8 @@ Begin
   WriteLn('L''image de disque dur ne contient pas un MBR valide.');Exit
  End;
  PartStart:=GetLongLE(MBR,454);PartSize:=GetLongLE(MBR,458);
- If(PartStart<1)or(PartSize<1)or(PartStart+PartSize>ImageVirtualSectors)Then Begin
+ If(PartStart<1)or(PartSize<1)or(PartStart+PartSize>ImageVirtualSectors)Then
+   Begin
   WriteLn('La premiere partition de l''image est absente ou invalide.');Exit
  End;
  ImageVolumeStart:=PartStart;VolumeHiddenSectors:=PartStart;
@@ -1466,7 +1493,8 @@ Var
 Begin
  PrepareHardDisk:=False;
  If not ReadLogicalSector(0,Boot)Then Begin
-  WriteLn('Impossible de lire le secteur de demarrage de ',Chr(Drive+65),':.');Exit
+  WriteLn('Impossible de lire le secteur de demarrage de ',Chr(Drive+65),':.');
+    Exit
  End;
  ExistingExFAT:=(Boot[3]=Ord('E'))and(Boot[4]=Ord('X'))and
  (Boot[5]=Ord('F'))and(Boot[6]=Ord('A'))and(Boot[7]=Ord('T'))and
@@ -1476,17 +1504,20 @@ Begin
  (Boot[8]=Ord(' '))and(Boot[9]=Ord(' '))and(Boot[10]=Ord(' '));
  If(not ExistingExFAT)and(GetWordLE(Boot,11)<>512)Then Begin
   WriteLn(
-  'La partition doit d''abord etre creee par FDISK avec des secteurs de 512 octets.');Exit
+  'La partition doit d''abord etre creee par FDISK avec des secteurs de 512 ' +
+    'octets.');Exit
  End;
  If ExistingExFAT Then Begin
   If(Boot[108]<>9)or(GetLongLE(Boot,76)<>0)Then Begin
-   WriteLn('Le volume exFAT doit utiliser des secteurs de 512 octets et faire moins de 2 Go.');
+   WriteLn('Le volume exFAT doit utiliser des secteurs de 512 octets et ' +
+     'faire moins de 2 Go.');
    Exit
   End;
   Total:=GetLongLE(Boot,72);VolumeHiddenSectors:=GetLongLE(Boot,64)
  End Else If ExistingNTFS Then Begin
   If GetLongLE(Boot,44)<>0Then Begin
-   WriteLn('Le volume NTFS fait plus de 2 Go et depasse les limites de cette version.');Exit
+   WriteLn('Le volume NTFS fait plus de 2 Go et depasse les limites de cette ' +
+     'version.');Exit
   End;
   Total:=GetLongLE(Boot,40);VolumeHiddenSectors:=GetLongLE(Boot,28)
  End Else Begin
@@ -1500,7 +1531,8 @@ Begin
  If not(RequestedFileSystem in[FS_HPFS,FS_FAT32,FS_EXFAT,FS_NTFS])and
  ((GetWordLE(Boot,17)=0)or(GetWordLE(Boot,22)=0))Then Begin
   WriteLn('Cette partition utilise FAT32 ou un BPB non pris en charge.');
-  WriteLn('Seules les partitions FAT12/FAT16 existantes peuvent etre reformatees.');Exit
+  WriteLn('Seules les partitions FAT12/FAT16 existantes peuvent etre ' +
+    'reformatees.');Exit
  End;
  PData:=PHYS1440;
  If ExistingExFAT Then GeometryValue:=63 Else GeometryValue:=GetWordLE(Boot,24);
@@ -1540,7 +1572,8 @@ Begin
  For I:=1to 11do Buffer[I-1]:=Ord(VolumeLabel[I]);
  Buffer[11]:=$08; { Entree de repertoire FAT: attribut volume. }
  RootSector:=1+2*LData.FAT;
- If HardDiskMode Then  WriteVolumeLabel:=WriteLogicalSector(PData,RootSector,Buffer)
+ If HardDiskMode Then  WriteVolumeLabel:=WriteLogicalSector(PData,RootSector,
+   Buffer)
  Else If InFile Then Begin
   Seek(FileImg,ImageSectorOffset(RootSector));
   If IOResult<>0Then Begin
@@ -1558,7 +1591,8 @@ Begin
  End
 End;
 
-Function WriteLogicalSector(PData:PhysDataType;SectorNumber:LongInt;Var Buffer):Boolean;
+Function WriteLogicalSector(PData:PhysDataType;SectorNumber:LongInt;
+  Var Buffer):Boolean;
 Var
  Remaining:LongInt;
  Track,Face,Sector,Status:Byte;
@@ -1673,9 +1707,11 @@ Begin
  TransferSystemFiles:=False;
  If not SystemFilesAvailable Then Exit;
  If LongInt(LData.FAT)*512>MaxFormatFATBytes Then Begin
-  WriteLn('La FAT est trop grande pour le tampon de transfert systeme Turbo Pascal.');Exit
+  WriteLn('La FAT est trop grande pour le tampon de transfert systeme Turbo ' +
+    'Pascal.');Exit
  End;
- If BootReserve Then WriteLn('Reservation pour le systeme ',SystemFamilyName,'.')
+ If BootReserve Then WriteLn('Reservation pour le systeme ',SystemFamilyName,
+   '.')
  Else WriteLn('Transfert du systeme ',SystemFamilyName,'.');
  GetMem(FAT,MaxFormatFATBytes);If FAT=Nil Then Begin
   WriteLn('Memoire insuffisante pour la FAT.');Exit
@@ -1695,7 +1731,8 @@ Begin
  TotalSectors:=LongInt(PData.Tracks)*PData.Faces*PData.Sec;
  MaximumClusters:=(TotalSectors-DataStart)div LData.Cluster;
  ClusterBytes:=LongInt(LData.Cluster)*512;NextCluster:=2;
- FilesToInstall:=SysFileCount;If BootReserve and(FilesToInstall>2)Then FilesToInstall:=2;
+ FilesToInstall:=SysFileCount;
+   If BootReserve and(FilesToInstall>2)Then FilesToInstall:=2;
  For I:=1to FilesToInstall do Begin
   Assign(Src,SysFiles[I]);Reset(Src,1);
   If IOResult<>0Then Begin
@@ -1729,7 +1766,8 @@ Begin
      End
     End;
     If(Got=0)and(Remaining>0)Then Begin
-     Close(Src);FreeMem(FAT,MaxFormatFATBytes);WriteLn('Erreur de lecture: ',SysFiles[I]);
+     Close(Src);FreeMem(FAT,MaxFormatFATBytes);WriteLn('Erreur de lecture: ',
+       SysFiles[I]);
      Exit
     End;
     SectorNumber:=DataStart+LongInt(CurrentCluster-2)*LData.Cluster+CopyNumber;
@@ -1763,7 +1801,8 @@ Begin
   End
  End;
  If not WriteLogicalSector(PData,1+LongInt(LData.FAT)*2,Root)Then Begin
-  FreeMem(FAT,MaxFormatFATBytes);WriteLn('Erreur d''ecriture du repertoire racine.');Exit
+  FreeMem(FAT,MaxFormatFATBytes);
+    WriteLn('Erreur d''ecriture du repertoire racine.');Exit
  End;
  FreeMem(FAT,MaxFormatFATBytes);TransferSystemFiles:=True
 End;
@@ -1877,10 +1916,12 @@ Var
    PutResidentAttribute($B0,8);Rec[AttrPos+24]:=$FF;Rec[AttrPos+25]:=$FF;
    Inc(AttrPos,AttrLen)
   End Else If Number=1Then Begin
-   PutNonResidentData(NtfsMFTMirrCluster,MirrorClusters,4096);Inc(AttrPos,AttrLen)
+   PutNonResidentData(NtfsMFTMirrCluster,MirrorClusters,4096);Inc(AttrPos,
+     AttrLen)
   End Else If Number=3Then Begin
    LabelValue:=VolumeLabel;While(Length(LabelValue)>0)and
-    (LabelValue[Length(LabelValue)]=' ')do Delete(LabelValue,Length(LabelValue),1);
+    (LabelValue[Length(LabelValue)]=' ')do Delete(LabelValue,Length(LabelValue),
+      1);
    If LabelValue<>''Then Begin
     PutResidentAttribute($60,Length(LabelValue)*2);P:=AttrPos+24;
     For N:=1to Length(LabelValue)do PutRecWord(P+(N-1)*2,Ord(LabelValue[N]));
@@ -1896,7 +1937,8 @@ Var
    Inc(AttrPos,AttrLen)
   End Else If Number=6Then Begin
    PutNonResidentData((BitmapSector div NtfsClusterSectors),
-    (BitmapBytes+NtfsClusterSectors*512-1)div(NtfsClusterSectors*512),BitmapBytes);
+    (BitmapBytes+NtfsClusterSectors*512-1)div(NtfsClusterSectors*512),
+      BitmapBytes);
    Inc(AttrPos,AttrLen)
   End Else If Number=7Then Begin
    PutNonResidentData(0,1,NtfsClusterSectors*512);Inc(AttrPos,AttrLen)
@@ -2013,7 +2055,8 @@ Begin
  UpCaseClusters:=(60+ClusterBytes-1)div ClusterBytes;
  BitmapFirst:=2;UpCaseFirst:=BitmapFirst+BitmapClusters;
  RootCluster:=UpCaseFirst+UpCaseClusters;UsedClusters:=RootCluster-1;
- If UsedClusters>ExFatClusterCount Then Begin WriteLn('Volume exFAT trop petit.');Exit End;
+ If UsedClusters>ExFatClusterCount Then Begin
+   WriteLn('Volume exFAT trop petit.');Exit End;
 
  FillChar(Sec,SizeOf(Sec),0);BootChecksum:=0;
  Sec[0]:=$EB;Sec[1]:=$76;Sec[2]:=$90;Signature:='EXFAT   ';
@@ -2116,7 +2159,8 @@ Begin
   WriteLn('Volume trop petit pour FAT32.');Exit
  End;
  FillChar(Sec,SizeOf(Sec),0);
- For SectorNumber:=0to 31do  If not WriteLogicalSector(PData,SectorNumber,Sec)Then Exit;
+ For SectorNumber:=0to 31do  If not WriteLogicalSector(PData,SectorNumber,
+   Sec)Then Exit;
  Sec[0]:=$EB;Sec[1]:=$58;Sec[2]:=$90;
  FSSignature:='MSWIN4.1';
  For I:=1to 8do Sec[2+I]:=Ord(FSSignature[I]);
@@ -2157,7 +2201,8 @@ Begin
  End;
  If not WriteLogicalSector(PData,DataStart,Sec)Then Exit;
  FillChar(Sec,SizeOf(Sec),0);
- For I:=1to LData.Cluster-1do  If not WriteLogicalSector(PData,DataStart+I,Sec)Then Exit;
+ For I:=1to LData.Cluster-1do  If not WriteLogicalSector(PData,DataStart+I,
+   Sec)Then Exit;
  FormatFAT32:=True
 End;
 
@@ -2221,7 +2266,8 @@ Var
  A:Array[0..2047]of Byte Absolute B;
 Begin
  WriteFour:=False;
- For K:=0to 3do   If not WriteLogicalSector(PData,StartSector+K,A[K*512])Then Exit;
+ For K:=0to 3do   If not WriteLogicalSector(PData,StartSector+K,
+   A[K*512])Then Exit;
  WriteFour:=True
 End;
 Begin
@@ -2304,7 +2350,8 @@ Begin
   If not WriteFour(BitmapSectorForBand(Band),Bitmap)Then Exit
  End;
  FillChar(Bitmap,SizeOf(Bitmap),$FF);ClearBitmapBit(Bitmap,0);
- For BitNo:=DirBandSectors div 4to HPFSBandSectors-1do  ClearBitmapBit(Bitmap,BitNo);
+ For BitNo:=DirBandSectors div 4to HPFSBandSectors-1do  ClearBitmapBit(Bitmap,
+   BitNo);
  If not WriteFour(DirBitmap,Bitmap)Then Exit;
  FillChar(Sec,SizeOf(Sec),0);
  PutLongLE(Sec,0,LongInt($F7E40AAE));Sec[12]:=1;Sec[13]:=Ord('\');
@@ -2485,25 +2532,31 @@ BEGIN
    WriteLn;
    WriteLn('Syntax: FORMAT Laufwerk: [Format] [NV] [/F:Groesse] [/V:Name]');
    WriteLn('               [/T:n] [/N:n] [/Q] [/U] [/S]');
-   WriteLn('        FORMAT Datei [160|180|320|360|720|1200|1440|2880] [Optionen]');
-   WriteLn('        FORMAT Platte.img /CREATE:GroesseMB [/TYPE:RAW|VDI] [/FS:FAT16]');
+   WriteLn('        FORMAT Datei [160|180|320|360|720|1200|1440|2880] ' +
+     '[Optionen]');
+   WriteLn('        FORMAT Platte.img /CREATE:GroesseMB [/TYPE:RAW|VDI] ' +
+     '[/FS:FAT16]');
    WriteLn;
    WriteLn(' Datei        Verwendet die angegebene Datei als Diskettenabbild');
    WriteLn(' C: bis Z:    Formatiert unter echtem DOS eine FAT12/FAT16/FAT32-');
-   WriteLn('              oder HPFS-Partition; das aktive Laufwerk wird abgelehnt');
+   WriteLn('              oder HPFS-Partition; das aktive Laufwerk wird ' +
+     'abgelehnt');
    WriteLn(' NV           Deaktiviert die Ueberpruefung');
    WriteLn(' /1           Formatiert nur eine Diskettenseite');
    WriteLn(' /4           Formatiert 360 KB in einem 1,2-MB-Laufwerk');
    WriteLn(' /8           Verwendet acht Sektoren pro Spur');
    WriteLn(' /A:Groesse   Groesse der Zuordnungseinheit: 512 bis 32768 Byte');
-   WriteLn(' /B           Reserviert zusammenhaengenden Platz fuer Startdateien');
+   WriteLn(' /B           Reserviert zusammenhaengenden Platz fuer ' +
+     'Startdateien');
    WriteLn('              und kann nicht gemeinsam mit /S verwendet werden');
    WriteLn(' /CREATE      Erstellt ein neues Diskettenabbild');
-   WriteLn(' /CREATE:MB   Erstellt ein Festplattenabbild mit MBR und Partition');
+   WriteLn(' /CREATE:MB   Erstellt ein Festplattenabbild mit MBR und ' +
+     'Partition');
    WriteLn(' /F           Erzwingt das angegebene Diskettenformat');
    WriteLn(' /F:Groesse   160, 180, 320, 360, 720, 1200, 1440 oder 2880 KB');
    WriteLn(' /FS:System   FAT, FAT12, FAT16, FAT32, exFAT, NTFS oder HPFS');
-   WriteLn('              FAT32, exFAT, NTFS und HPFS benoetigen eine Festplatte/Abbild');
+   WriteLn('              FAT32, exFAT, NTFS und HPFS benoetigen eine ' +
+     'Festplatte/Abbild');
    WriteLn(' /N:n         Anzahl der Sektoren pro Spur');
    WriteLn(' /Q           Schnellformatierung der Dateisystemtabellen');
    WriteLn(' /S           Kopiert IO.SYS, MSDOS.SYS und COMMAND.COM');
@@ -2528,64 +2581,84 @@ BEGIN
    WriteLn('Formats a disk for use with DOS.');
    WriteLn;
    WriteLn(
-   'Syntax: FORMAT drive: [format] [NV] [/F:size] [/V:label] [/T:n] [/N:n] [/Q] [/U] [/S]');
+   'Syntax: FORMAT drive: [format] [NV] [/F:size] [/V:label] [/T:n] [/N:n] ' +
+     '[/Q] [/U] [/S]');
    WriteLn(
-   '        FORMAT file [360|720|1200|1440] [/V:label] [/T:n] [/N:n] [/Q] [/U] [/S]');
-   WriteLn('        FORMAT disk.img /CREATE:sizeMB [/TYPE:RAW|VDI] [/FS:FAT16]');
-   WriteLn('  C:..Z:    Under real DOS, logically formats an existing FAT12/FAT16');
+   '        FORMAT file [360|720|1200|1440] [/V:label] [/T:n] [/N:n] [/Q] ' +
+     '[/U] [/S]');
+   WriteLn('        FORMAT disk.img /CREATE:sizeMB [/TYPE:RAW|VDI] ' +
+     '[/FS:FAT16]');
+   WriteLn('  C:..Z:    Under real DOS, logically formats an existing ' +
+     'FAT12/FAT16');
    WriteLn('             partition. The active DOS drive is always refused.');
    WriteLn('  /1        Formats one side only.');
    WriteLn('  /4        Formats a 360 KB disk in a 1.2 MB drive.');
    WriteLn('  /8        Uses eight sectors per track.');
-   WriteLn('  /A:size   Specifies the allocation-unit size: 512 to 32768 bytes.');
+   WriteLn('  /A:size   Specifies the allocation-unit size: 512 to 32768 ' +
+     'bytes.');
    WriteLn('  /B        Reserves contiguous space for the two system files.');
    WriteLn('  /CREATE[:MB] Creates a new floppy image or hard-disk image.');
    WriteLn('  /F:size   Selects floppy size: 160, 180, 320, 360, 720,');
    WriteLn('             1200, 1440 or 2880 KB (floppy drives only).');
-   WriteLn('  /FS:name  Selects FAT, FAT12, FAT16, FAT32, exFAT, NTFS or HPFS.');
-   WriteLn('             FAT32, exFAT, NTFS and HPFS require a hard-disk image.');
+   WriteLn('  /FS:name  Selects FAT, FAT12, FAT16, FAT32, exFAT, NTFS or ' +
+     'HPFS.');
+   WriteLn('             FAT32, exFAT, NTFS and HPFS require a hard-disk ' +
+     'image.');
    WriteLn('  /N:n      Specifies the number of sectors per track.');
    WriteLn('  /Q        Performs a quick format of filesystem tables only.');
    WriteLn('  /S        Copies IO.SYS, MSDOS.SYS and COMMAND.COM.');
    WriteLn('  /S:family Selects MS-DOS, PC-DOS, DR-DOS, FreeDOS, RxDOS,');
    WriteLn('             Win95, PTS-DOS, OS/2 or WinNT.');
    WriteLn('  /T:n      Specifies the number of tracks.');
-   WriteLn('  /TYPE:VDI Creates a fixed VirtualBox VDI image; RAW is the default.');
+   WriteLn('  /TYPE:VDI Creates a fixed VirtualBox VDI image; RAW is the ' +
+     'default.');
    WriteLn('  /U        Performs an unconditional full format.');
    WriteLn('  /V:label  Specifies the volume label (11 characters maximum).');
   End;
   Else
   Begin
-   WriteLn('FORMAT - Cette commande permet de formater un unit'+#130+' de disquette.');
+   WriteLn('FORMAT - Cette commande permet de formater un unit'+
+     #130+' de disquette.');
    WriteLn;
    WriteLn(
-   'Syntaxe: FORMAT unite: [format] [NV] [/F:taille] [/V:nom] [/T:n] [/N:n] [/Q] [/U] [/S]');
+   'Syntaxe: FORMAT unite: [format] [NV] [/F:taille] [/V:nom] [/T:n] [/N:n] ' +
+     '[/Q] [/U] [/S]');
    WriteLn(
-   '         FORMAT fichier [360|720|1200|1440] [/V:nom] [/T:n] [/N:n] [/Q] [/U] [/S]');
-   WriteLn('         FORMAT disque.img /CREATE:tailleMo [/TYPE:RAW|VDI] [/FS:FAT16]');
+   '         FORMAT fichier [360|720|1200|1440] [/V:nom] [/T:n] [/N:n] [/Q] ' +
+     '[/U] [/S]');
+   WriteLn('         FORMAT disque.img /CREATE:tailleMo [/TYPE:RAW|VDI] ' +
+     '[/FS:FAT16]');
    WriteLn;
-   WriteLn('fichier       Utiliser le fichier sp'+#130+'cifi'+#130+' comme disquette');
-   WriteLn(' C: a Z:      Sous DOS reel, formate logiquement une partition FAT12/FAT16');
+   WriteLn('fichier       Utiliser le fichier sp'+#130+'cifi'+
+     #130+' comme disquette');
+   WriteLn(' C: a Z:      Sous DOS reel, formate logiquement une partition ' +
+     'FAT12/FAT16');
    WriteLn('              existante; le lecteur DOS actif est toujours refuse');
    WriteLn('  NV          Pas de v'+#130+'rification');
    WriteLn(' /1           Formate une seule face de la disquette');
    WriteLn(' /4           Formate une disquette 360 Ko dans un lecteur 1,2 Mo');
    WriteLn(' /8           Utilise huit secteurs par piste');
    WriteLn(' /A:taille    Taille d''unite d''allocation: 512 a 32768 octets');
-   WriteLn(' /B           Reserve des clusters contigus pour les deux fichiers');
+   WriteLn(' /B           Reserve des clusters contigus pour les deux ' +
+     'fichiers');
    WriteLn('              de demarrage; cette option est incompatible avec /S');
    WriteLn(' /CREATE      Cree explicitement une nouvelle image de disquette');
-   WriteLn(' /CREATE:Mo   Cree une image de disque dur avec MBR et partition FAT');
+   WriteLn(' /CREATE:Mo   Cree une image de disque dur avec MBR et partition ' +
+     'FAT');
    WriteLn(' /F           Force a utiliser ce format');
    WriteLn(' /F:taille    Format de disquette: 160, 180, 320, 360, 720,');
    WriteLn('              1200, 1440 ou 2880 Ko (lecteur seulement)');
    WriteLn(' /FS:systeme  FAT, FAT12, FAT16, FAT32, exFAT, NTFS ou HPFS');
-   WriteLn('              FAT32, exFAT, NTFS et HPFS exigent un disque dur ou une image');
+   WriteLn('              FAT32, exFAT, NTFS et HPFS exigent un disque dur ' +
+     'ou une image');
    WriteLn(' /N:n         Indique le nombre de secteurs par piste');
-   WriteLn(' /Q           Reinitialise rapidement le secteur de demarrage, les FAT');
-   WriteLn('              et le repertoire racine sans parcourir toutes les pistes');
+   WriteLn(' /Q           Reinitialise rapidement le secteur de demarrage, ' +
+     'les FAT');
+   WriteLn('              et le repertoire racine sans parcourir toutes les ' +
+     'pistes');
    WriteLn(' /S           Copie IO.SYS, MSDOS.SYS et COMMAND.COM');
-   WriteLn(' /S:famille   S'+#130+'lectionne la famille DOS (defaut: MS-DOS) :');
+   WriteLn(' /S:famille   S'+
+     #130+'lectionne la famille DOS (defaut: MS-DOS) :');
    WriteLn('               MS-DOS   -> IO.SYS, MSDOS.SYS, COMMAND.COM');
    WriteLn('               PC-DOS   -> IBMBIO.COM, IBMDOS.COM, COMMAND.COM');
    WriteLn('               DR-DOS   -> IBMBIO.COM, IBMDOS.COM, COMMAND.COM');
@@ -2620,17 +2693,20 @@ If ParamCount>=1Then Begin
   If AktDrv>=2Then Begin
    HardDiskMode:=True;
    {$IFDEF FPC}
-    WriteLn('Le formatage direct de C: a Z: est disponible uniquement sous DOS reel');
+    WriteLn('Le formatage direct de C: a Z: est disponible uniquement sous ' +
+      'DOS reel');
     WriteLn('avec la version compilee par Turbo Pascal.');
     Halt(3)
    {$ELSE}
     If GetCurrentDOSDrive=AktDrv Then Begin
      WriteLn('Refus de formater le lecteur DOS actif ',Chr(AktDrv+65),':.');
-     WriteLn('Demarrez depuis une autre unite pour formater cette partition.');Halt(5)
+     WriteLn('Demarrez depuis une autre unite pour formater cette partition.');
+       Halt(5)
     End;
     If not ParseOptions(2,Param)Then Halt(4);
     If(Param<>'')or ForceFormat Then Begin
-     WriteLn('Les tailles et formats physiques ne s''appliquent pas aux disques durs.');
+     WriteLn('Les tailles et formats physiques ne s''appliquent pas aux ' +
+       'disques durs.');
      Halt(4)
     End;
     If not PrepareHardDisk(AktDrv,PData,LData)Then Halt(3);
@@ -2643,9 +2719,12 @@ If ParamCount>=1Then Begin
      WriteLn('Formatage annule.');Halt(5)
     End;
     If QuickFormat Then WriteLn('Formatage logique rapide de la partition.')
-    Else WriteLn('Formatage logique DOS de la partition (aucun formatage physique).');
+    Else
+      WriteLn('Formatage logique DOS de la partition (aucun formatage ' +
+        'physique).');
     Ok:=Logical4mat(AktDrv,PData,LData);
-    If Ok and(SystemTransfer or BootReserve)Then Ok:=TransferSystemFiles(PData,LData);
+    If Ok and(SystemTransfer or BootReserve)Then Ok:=TransferSystemFiles(PData,
+      LData);
     If not Ok Then Begin
      WriteLn('Une erreur a interrompu le formatage du disque dur.');Halt(1)
     End;
@@ -2657,12 +2736,14 @@ If ParamCount>=1Then Begin
   If AktDrvType>0Then Begin
    If not ParseOptions(2,Param)Then Halt(4);
    If Param=''Then Case AktDrvType of
-   dtDD525:Param:='360';dtHD525:Param:='1200';dtDD35:Param:='720';dtHD35:Param:='1440'
+   dtDD525:Param:='360';dtHD525:Param:='1200';dtDD35:Param:='720';
+     dtHD35:Param:='1440'
   End;
   If Format360In1200 and(AktDrvType<>dtHD525)Then Begin
    WriteLn('/4 exige un lecteur 5 1/4 de 1,2 Mo.');Halt(4)
   End;
-  If Get4matParam(Param,AktDrvType,PData,LData)and ApplyTrackOption(PData,LData)Then Begin
+  If Get4matParam(Param,AktDrvType,PData,LData)and ApplyTrackOption(PData,
+    LData)Then Begin
    If(SystemTransfer or BootReserve)and not SystemFilesAvailable Then Halt(6);
    If UnconditionalFormat Then WriteLn('Formatage complet et inconditionnel.');
    InitDsk(AktDrv,PData);
@@ -2676,7 +2757,8 @@ If ParamCount>=1Then Begin
     WriteLn;
     Writeln('Ecriture du secteur de demarrage et des FAT ');
     Ok:=Logical4mat(AktDrv,PData,LData);
-    If Ok and(SystemTransfer or BootReserve)Then Ok:=TransferSystemFiles(PData,LData)
+    If Ok and(SystemTransfer or BootReserve)Then Ok:=TransferSystemFiles(PData,
+      LData)
    End;
    If(Ok)Then Begin
     WriteLn;
@@ -2692,7 +2774,8 @@ If ParamCount>=1Then Begin
   End
   else
   Begin
-   WriteLn('Le format demande ne peut etre utilise sur cette unite de disque !');
+   WriteLn('Le format demande ne peut etre utilise sur cette unite de disque ' +
+     '!');
    Halt(2);
   End;
  End
@@ -2709,18 +2792,21 @@ Begin
  KS:=1440;
  ImageName:=Param;
  If not ParseOptions(2,Param)Then Halt(4);
- If not ImageTypeSpecified Then  If StrToUpper(Copy(ImageName,Length(ImageName)-3,4))=
+ If not ImageTypeSpecified Then  If StrToUpper(Copy(ImageName,
+   Length(ImageName)-3,4))=
  '.VDI'Then ImageContainer:=IC_VDI;
  If(SystemTransfer or BootReserve)and not SystemFilesAvailable Then Halt(6);
  WriteLn('Formatage du fichier d''image : ',ImageName);
  ImageDataOffset:=0;ImageVolumeStart:=0;ImageVirtualSectors:=0;
  If(ImageContainer=IC_VDI)and(CreateImage)and(CreateSizeMB=0)Then Begin
-  WriteLn('/CREATE:taille_en_Mo est obligatoire pour creer une image VDI.');Halt(4)
+  WriteLn('/CREATE:taille_en_Mo est obligatoire pour creer une image VDI.');
+    Halt(4)
  End;
  If CreateSizeMB>0Then Begin
   {$I-}Assign(FileImg,ImageName);Reset(FileImg,1);{$I+}
   If IOResult=0Then Begin
-   Close(FileImg);WriteLn('Le fichier existe deja; /CREATE refuse de l''ecraser.');Halt(5)
+   Close(FileImg);
+     WriteLn('Le fichier existe deja; /CREATE refuse de l''ecraser.');Halt(5)
   End;
   Assign(FileImg,ImageName);
   If not CreateDiskImageContainer(CreateSizeMB)Then Begin
@@ -2734,7 +2820,8 @@ Begin
   WriteLn('Image de disque dur creee: ',CreateSizeMB,' Mo, conteneur ',
   StrToUpper(Copy(ImageName,Length(ImageName)-3,4)),'.');
   Ok:=Logical4mat(AktDrv,PData,LData);
-  If Ok and(SystemTransfer or BootReserve)Then Ok:=TransferSystemFiles(PData,LData);
+  If Ok and(SystemTransfer or BootReserve)Then Ok:=TransferSystemFiles(PData,
+    LData);
   Close(FileImg);
   If not Ok Then Begin
    WriteLn('Erreur pendant le formatage de l''image.');Halt(1)
@@ -2753,19 +2840,26 @@ Begin
    Close(FileImg);Halt(4)
   End;
   If(RequestedFileSystem=FS_HPFS)and not UpdateImagePartitionType($07)Then Begin
-   Close(FileImg);WriteLn('Impossible de modifier le type de partition HPFS.');Halt(5)
+   Close(FileImg);WriteLn('Impossible de modifier le type de partition HPFS.');
+     Halt(5)
   End;
-  If(RequestedFileSystem=FS_FAT32)and not UpdateImagePartitionType($0C)Then Begin
-   Close(FileImg);WriteLn('Impossible de modifier le type de partition FAT32.');Halt(5)
+  If(RequestedFileSystem=FS_FAT32)and not UpdateImagePartitionType($0C)Then
+    Begin
+   Close(FileImg);WriteLn('Impossible de modifier le type de partition FAT32.');
+     Halt(5)
   End;
-  If(RequestedFileSystem=FS_EXFAT)and not UpdateImagePartitionType($07)Then Begin
-   Close(FileImg);WriteLn('Impossible de modifier le type de partition exFAT.');Halt(5)
+  If(RequestedFileSystem=FS_EXFAT)and not UpdateImagePartitionType($07)Then
+    Begin
+   Close(FileImg);WriteLn('Impossible de modifier le type de partition exFAT.');
+     Halt(5)
   End;
   If(RequestedFileSystem=FS_NTFS)and not UpdateImagePartitionType($07)Then Begin
-   Close(FileImg);WriteLn('Impossible de modifier le type de partition NTFS.');Halt(5)
+   Close(FileImg);WriteLn('Impossible de modifier le type de partition NTFS.');
+     Halt(5)
   End;
   Ok:=Logical4mat(AktDrv,PData,LData);
-  If Ok and(SystemTransfer or BootReserve)Then Ok:=TransferSystemFiles(PData,LData);
+  If Ok and(SystemTransfer or BootReserve)Then Ok:=TransferSystemFiles(PData,
+    LData);
   Close(FileImg);
   If not Ok Then Begin
    WriteLn('Erreur pendant le formatage VDI.');Halt(1)
@@ -2783,20 +2877,29 @@ Begin
     If not ConfigureFileSystem(PData,LData)Then Begin
      Close(FileImg);Halt(4)
     End;
-    If(RequestedFileSystem=FS_HPFS)and not UpdateImagePartitionType($07)Then Begin
-     Close(FileImg);WriteLn('Impossible de modifier le type de partition HPFS.');Halt(5)
+    If(RequestedFileSystem=FS_HPFS)and not UpdateImagePartitionType($07)Then
+      Begin
+     Close(FileImg);
+       WriteLn('Impossible de modifier le type de partition HPFS.');Halt(5)
     End;
-    If(RequestedFileSystem=FS_FAT32)and not UpdateImagePartitionType($0C)Then Begin
-     Close(FileImg);WriteLn('Impossible de modifier le type de partition FAT32.');Halt(5)
+    If(RequestedFileSystem=FS_FAT32)and not UpdateImagePartitionType($0C)Then
+      Begin
+     Close(FileImg);
+       WriteLn('Impossible de modifier le type de partition FAT32.');Halt(5)
     End;
-    If(RequestedFileSystem=FS_EXFAT)and not UpdateImagePartitionType($07)Then Begin
-     Close(FileImg);WriteLn('Impossible de modifier le type de partition exFAT.');Halt(5)
+    If(RequestedFileSystem=FS_EXFAT)and not UpdateImagePartitionType($07)Then
+      Begin
+     Close(FileImg);
+       WriteLn('Impossible de modifier le type de partition exFAT.');Halt(5)
     End;
-    If(RequestedFileSystem=FS_NTFS)and not UpdateImagePartitionType($07)Then Begin
-     Close(FileImg);WriteLn('Impossible de modifier le type de partition NTFS.');Halt(5)
+    If(RequestedFileSystem=FS_NTFS)and not UpdateImagePartitionType($07)Then
+      Begin
+     Close(FileImg);
+       WriteLn('Impossible de modifier le type de partition NTFS.');Halt(5)
     End;
     Ok:=Logical4mat(AktDrv,PData,LData);
-    If Ok and(SystemTransfer or BootReserve)Then Ok:=TransferSystemFiles(PData,LData);
+    If Ok and(SystemTransfer or BootReserve)Then Ok:=TransferSystemFiles(PData,
+      LData);
     Close(FileImg);
     If not Ok Then Begin
      WriteLn('Erreur pendant le formatage RAW.');Halt(1)
@@ -2860,7 +2963,8 @@ Begin
  End;
  KS:=LongInt(PData.Tracks)*PData.Faces*PData.Sec div 2;
  If ExistingQuickImage and(FileSize(FileImg)<>LongInt(KS)*1024)Then Begin
-  WriteLn('La taille de l''image existante ne correspond pas a la geometrie /T et /N.');
+  WriteLn('La taille de l''image existante ne correspond pas a la geometrie ' +
+    '/T et /N.');
   Close(FileImg);Halt(4)
  End;
  If QuickFormat Then WriteLn('Formatage rapide des tables de l''image.');
@@ -2868,12 +2972,14 @@ Begin
  Seek(FileImg,0);
  WriteLn('Ecriture du secteur de d'+#130+'marrage et des FAT');
  Ok:=Logical4mat(AktDrv,PData,LData);
- If Ok and(SystemTransfer or BootReserve)Then Ok:=TransferSystemFiles(PData,LData);
- Seek(FileImg,KS*1024);
+ If Ok and(SystemTransfer or BootReserve)Then Ok:=TransferSystemFiles(PData,
+   LData);
+ Seek(FileImg,LongInt(KS)*1024);
  Truncate(FileImg);
  Close(FileImg);
  If not Ok Then Begin
-  WriteLn('Une erreur a interrompu le formatage ou le transfert systeme.');Halt(1)
+  WriteLn('Une erreur a interrompu le formatage ou le transfert systeme.');
+    Halt(1)
  End;
 End;
 End

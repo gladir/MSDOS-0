@@ -1,0 +1,151 @@
+ETAT DE LA COMPILATION ET DU DEMARRAGE DU NOYAU (TPC + DEVENV /KERNELTEST /KTBOOT, Start-KernelDos)
+=================================================================================================
+
+Resume
+------
+* TPC compile MSDOS.PAS en un IO.SYS d'environ 62 Ko (MAKER.PAS l'ecrit comme prevu : BEGIN_KERNEL a l'offset 0).
+  Une unite qui declare "Procedure BEGIN_KERNEL" est compilee dans son propre segment : donnees (chaines, constantes)
+  et routines du runtime SYSTEM utilisees sont recopiees dans le segment (DS=CS), l'edition de liens intelligente
+  retire les routines inutilisees. Limite du segment : 64 Ko (marge actuelle ~3 Ko : voir "Taille").
+* Demarrage REEL valide : MBR -> VBR (3 secteurs d'IO.SYS) -> chargeur d'IO.SYS (debut de BEGIN_KERNEL) -> noyau ->
+  C:\COMMAND.EXE. Fonctionne dans le banc headless (DEVENV /KERNELTEST,dossier /KTBOOT) et dans un onglet
+  emulateur de DEVENV (Start-KernelDos -Path dossier [-ImagePath img]).
+* Message de demarrage : "Demarrage du MSDOS-0..." (plus de copyright).
+* Si COMMAND se termine (EXIT), le noyau le relance ; s'il est introuvable, message et arret.
+
+Chargeur / memoire
+------------------
+* IO.SYS (> 30 Ko) recouvre la pile du VBR (0000:7C00) et le BPB : le chargeur copie les champs du BPB en local puis
+  passe sur la pile privee 9000:FFF0 d'ou le noyau continue l'initialisation. Arene memoire : 1080h..9000h.
+* INT 21h s'execute sur une pile privee 9000:xxxx (sommet KSP, DataMOS+FxBase+124) : le point d'entree Intr21h
+  sauvegarde le cadre utilisateur (CX BX AX BP ES DS IP CS FLAGS), bascule sur la pile du noyau, appelle Intr21hCore
+  et rend les registres de sortie dans le cadre utilisateur. EXEC (ExecEnter/ExecReturn) memorise/restaure KSP.
+  Un programme avec une pile de 1,5 Ko ({$M 1500,0,0}) passe tous les tests (TESTS.EXE).
+
+Handles : SFT et JFT par processus
+----------------------------------
+* La table FileTable (20 entrees, 0..4 = peripheriques) est la SFT partagee, avec un compteur de references (SftRef,
+  DataMOS+FxBase+104). Chaque PSP porte sa JFT (20 octets, PSP:18h) ; un handle de programme est un index de JFT.
+* 45h DUP, 46h FORCEDUP, heritage de la JFT par EXEC (BuildPSP/JftInherit), fermeture de tous les handles et des
+  verrous a la terminaison. Le premier processus est son propre parent (comme sous MS-DOS : SetEnv de COMMAND remonte
+  la chaine de PSP).
+* 01h/07h/08h/0Ah lisent l'entree standard redirigee ; 02h/06h/09h ecrivent sur la sortie standard redirigee.
+
+Fonctions INT 21h reelles (FAT12/FAT16, couche Fx* dans MSDOS.PAS)
+------------------------------------------------------------------
+39h MD, 3Ah RD, 3Bh CD, 3Ch/3Dh/3Eh/3Fh/40h, 41h, 42h (reecrit : depuis le debut/position/fin, trou comble par
+des zeros a l'ecriture), 40h avec 0 octet = troncature, 43h attributs, 44h IOCTL minimal, 45h/46h, 47h, 4Bh (EXE et
+COM), 4Ch, 4Eh/4Fh (etat de la recherche dans la DTA : recherches imbriquees possibles), 56h, 57h date/heure,
+5Ah temporaire, 5Bh creer, 5Ch verrous (AL=0 verrouiller, AL=1 deverrouiller), 36h (espace libre FAT16 rapide),
+FCB complets : 0Fh 10h 11h 12h 13h 14h 15h 16h 17h 21h 22h 23h 24h 27h 28h 29h. INT 20h (RET d'un .COM) = 4C00h.
+Date/heure des fichiers : INT 1Ah/02h-04h (DEVENV fournit la RTC de l'hote) ; 1980-01-01 sans RTC. Les noms
+invalides (jokers, caracteres interdits) sont refuses a la creation.
+
+Tests (tous dans KERNEL/ ou reproduits par /tmp)
+------------------------------------------------
+* TESTH.PAS : handles, DUP/FORCEDUP, 43h, 44h, 57h, 5Ah, 5Bh, 5Ch, FCB (47 verifications) - a executer sous le noyau
+  (pauses : taper "go" six fois). TSTRESS.PAS : fichiers de 200 Ko, ajout, Truncate, trou, 120 fichiers dans un
+  repertoire, suppression, renommage, RD/MD, texte. TUP.PAS : filtre stdin->stdout pour les tuyaux et redirections.
+* TDOS.PAS : 30h 2Ah 2Ch 38h 54h/2Eh 58h 59h 62h 51h/50h 34h 19h 36h 48h/49h/4Ah 25h/35h 0Bh 67h 68h. TVER.PAS : 2Eh/54h.
+* DOSBox donne les memes resultats que le noyau pour TSTRESS (sauf constantes 30*4096 : voir TPC).
+* fatchk.py (outil de test local) verifie la coherence d'un volume FAT16 : chaines, clusters partages ou perdus,
+  FAT1 = FAT2, '.' et '..' ; aucune erreur apres les scenarios.
+* GUI : Start-KernelDos dans l'onglet emulateur de DEVENV (Xvfb, frappes XTEST) : ver, dir, md, copy, echo > fichier,
+  type, dir | tup, testh.
+
+COMMAND.PAS
+-----------
+Redirections > >> < et tuyaux | pour toutes les commandes (internes : Output reassigne au fichier ; externes : 45h/46h
+sur les handles 0/1), programmes .COM/.EXE/.BAT recherches dans le repertoire courant puis PATH, DEL/REN/COPY avec
+jokers et repertoires, SET VAR= supprime la variable, fichiers batch (%0..%9, %VAR%, IF, GOTO, CALL, SHIFT, @,
+ERRORLEVEL). Le segment de code de COMMAND approche 64 Ko.
+
+Taille
+------
+IO.SYS ~ 62 Ko sur 64 Ko : toute nouvelle fonction doit etre compensee (TPC compile mal les chaines de Or :
+InList() dans MSDOS.PAS reduit FxBadName/FcbIsSep ; voir DEV-COOLS/DOC/TPC_OPTIMISATIONS.txt).
+
+CONFIG.SYS (lu par IO.SYS au demarrage, avant le lancement du processeur de commandes)
+--------------------------------------------------------------------------------------
+Prises en charge (une commande par ligne, mots-cles en majuscules ou minuscules, reconnus par leurs deux premieres lettres) :
+  FILES=n        nombre d'entrees de la table des fichiers ouverts (5 peripheriques + fichiers) : 8 a 20 (20 = maximum du noyau)
+  BUFFERS=n      accepte et memorise (le noyau n'a pas d'antememoire disque : sans effet)
+  LASTDRIVE=x    derniere unite (C: a F: ; F: est le maximum du noyau) : fonction 0Eh de INT 21h
+  SHELL=chemin [arguments]   interpreteur de commandes lance a la place de C:\COMMAND.EXE (variable COMSPEC et ligne de
+                 commande du PSP en tiennent compte) ; s'il est introuvable, COMMAND.COM / COMMAND.EXE sont essayes
+  DEVICE=pilote [arguments]  (DEVICEHIGH= identique) charge un pilote de peripherique par C:\DEVLOAD.EXE : le pilote est lu en
+                 memoire, ses commandes strategie / interruption INIT sont appelees, sa taille residente est celle de l'adresse
+                 de rupture rendue, et il est chaine apres le pilote NUL (liste des listes, INT 21h/52h, en-tete NUL en LoL+22h)
+  INSTALL=programme [arguments]   lance un programme residant (fonction 31h) avant le processeur de commandes
+  REM, BREAK, DOS, STACKS, FCBS, COUNTRY, SWITCHES : acceptes sans effet.
+Toute autre commande : message "Commande incorrecte dans CONFIG.SYS".
+Limites : pilotes de bloc non pris en charge (refuses), pas d'ouverture des pilotes caracteres par leur nom depuis INT 21h
+(utile pour les pilotes qui accrochent des interruptions : souris, XMS, EMS...), un seul CONFIG.SYS (C:\), pas de AUTOEXEC.BAT
+automatique. Tests : KERNEL/TCFG.PAS, TCHAIN.PAS, MKTESTDRV.PY (pilote de test), DEVLOAD.PAS (racine du depot).
+Taille : pour tenir dans les 64 Ko du noyau, la table des repertoires courants est reduite a 6 unites (A: a F:), le pilote
+pays ne connait que les Etats-Unis, le Canada, la France et l'Espagne (table compacte), INT 21h/5Ah est reecrit plus court.
+Corrections de bogues decouvertes au passage : l'ecriture de la position / des attributs / du cluster courant des entrees de la
+table des fichiers visait un decalage constant hors de la table (code de 64 Ko tres serre) ; INT 21h/52h rendait 0:0 (fonction
+Pascal a corps assembleur qui perdait son resultat) et expose maintenant la vraie liste des listes.
+
+Limites connues
+---------------
+* COPY a+b (concatenation) et COPY de plusieurs sources vers un fichier unique ne concatenent pas.
+* Pas de fichiers a noms longs, pas de FAT32, pas de partitions etendues, une seule partition C:.
+* Les programmes qui ecrivent par l'unite CRT (video directe) ne sont pas redirigeables (comme sous TP7).
+* TPC : une expression constante entiere qui deborde 16 bits (30*4096) est tronquee a 16 bits au lieu de devenir LongInt.
+
+Corrections de TPC (resume)
+---------------------------
+interrupt, assembler sans cadre, ABI TP7 (pas de lien statique), @Proc/Ofs/Seg, assembleur integre etendu, references
+en avant, edition de liens intelligente, segment noyau avec recopie du runtime, donnees en ligne, appel du hook Crt,
+optimisations de taille (DOC/TPC_OPTIMISATIONS.txt), Write/WriteLn d'une chaine globale sans push/pop ds.
+
+Lancement des programmes de MSDOS-0 sous le noyau (emulateur DEVENV, sans argument)
+------------------------------------------------------------------------------------
+Les 60 programmes de MSDOS-0 se compilent avec TPC (code de plus de 64 Ko : mode multi-segments, unite Graph integree,
+objets, Single/Double...) et se lancent sans plantage du noyau ni erreur d'execution : une partie rend la main au prompt,
+les autres attendent une saisie (BASIC, GWBASIC, DEBUG, EDLIN, EDIT, DOSSHELL, MORE, SORT, CHOICE, MSD, EXPAND, RESTORE,
+FDISK, SCANDISK, MSAV, menus) ou affichent une longue aide (LINK).
+Bogues de programmes corriges : CHKDSK (numero de lecteur INT 25h decale), BACKUP (FileMode:=0 sur un fichier en lecture
+seule), SHARE et FASTOPEN (gestionnaires INT 21h qui ne se terminaient pas par IRET ; FASTOPEN ne laissait pas son code,
+ses donnees et sa pile residents), MSMOUSE (delai maximal de detection PS/2), MSAV (types DirStr/NameStr/ExtStr),
+FASTOPEN (22 entrees par lecteur au lieu de 24 : le segment de donnees de TPC contient ~5 Ko de donnees internes).
+UNDELETE ne trouve pas de disquette (lecture BIOS du lecteur A:, absent de l'emulateur).
+Noyau : INT 25h/26h reecrits (passent par les fonctions internes F2h/F3h de INT 21h), 31h (TSR), 42h sur les
+peripheriques (CON, AUX...) rend 0 comme MS-DOS, EXEC .EXE avec MaxAlloc.
+TPC : procedures interrupt a corps Pascal comme TP7, System.Nom masque, chaine/tableau de Char, objets (sans heritage
+ni virtuelles), transtypages de variables structurees, Single/Double, 'chaine'[i], SEG @Data, PByte/PWord, unite Graph,
+code multi-segments (voir DOC/TPC_OPTIMISATIONS.txt).
+
+Corrections de TPC (resume)
+---------------------------
+interrupt, assembler sans cadre, ABI TP7 (pas de lien statique), @Proc/Ofs/Seg, assembleur integre etendu, references
+en avant, edition de liens intelligente, segment noyau avec recopie du runtime, donnees en ligne, appel du hook Crt,
+optimisations de taille (DOC/TPC_OPTIMISATIONS.txt), Write/WriteLn d'une chaine globale sans push/pop ds.
+
+Lancement des programmes de MSDOS-0 sous le noyau (emulateur DEVENV, sans argument puis avec /?)
+-----------------------------------------------------------------------------------------------
+49 programmes sur 60 compilent avec TPC ; les 11 autres (FASTOPEN, FDISK, FORMAT, GWBASIC, INTERLNK, INTERSVR, LINK,
+MSAV, SCANDISK, TYPE, UNDELETE) sont refuses par TPC (limites du compilateur, pas du noyau).
+Sur les 49 : 36 rendent la main au prompt, 11 attendent une saisie (BASIC, DEBUG, EDLIN, EDIT, DOSSHELL, MORE, SORT,
+CHOICE, MSD, EXPAND, RESTORE : lecture du clavier / de l'entree standard), MSMOUSE sonde un materiel souris absent de
+l'emulateur, aucune erreur d'execution.
+Seul plantage : SHARE s'installe en accrochant INT 21h avec une procedure ordinaire qui ne se termine pas par IRET
+(bogue du programme SHARE.PAS, pas du noyau) : le premier appel INT 21h suivant s'echappe en memoire.
+Bogues de programmes corriges : CHKDSK (numero de lecteur INT 25h decale), BACKUP (Reset en lecture/ecriture sur IO.SYS
+en lecture seule : FileMode:=0).
+Noyau : INT 25h/26h reecrits (passent par les fonctions internes F2h/F3h de INT 21h), 31h (TSR), 42h sur les
+peripheriques (CON, AUX...) rend 0 comme MS-DOS, EXEC .EXE avec MaxAlloc.
+
+Demarrage depuis une disquette et images disque (IMAGE\, TOOLS\MAKEDISK.PAS)
+----------------------------------------------------------------------------
+Le noyau memorise l'unite d'amorcage (DL transmis a IO.SYS) : lecteur courant au demarrage = A: (00h) ou C: (80h) ;
+CONFIG.SYS, DEVLOAD.EXE, COMMAND.COM / COMMAND.EXE et COMSPEC/PATH sont cherches sur ce lecteur.
+SYS.PAS ecrit le vrai secteur de boot MS-DOS 6.22 (BPB conserve) et, pour un disque dur, un chargeur MBR minimal ;
+FORMAT.PAS : correction du depassement 16 bits de la taille finale des images (Seek KS*1024) et {$M} pour la pile/tas.
+IMAGE\DOS144A.IMG + DOS144B.IMG (1 474 560 octets chacune ; les 62 commandes TPC occupent 1,8 Mo, MAKEDISK les repartit) et
+IMAGE\DOSCD.ISO (ISO 9660 + El Torito, ecrit par MAKEDISK /ISO) ; DOS144A.IMG = IO.SYS + MSDOS.SYS + COMMAND.COM + commandes ; demarre dans l'emulateur
+DEVENV (/KERNELTEST,... /KTBOOTIMG:IMAGE\DOS144A.IMG) jusqu'a l'invite A:\>, VER et DIR fonctionnent. Image disque dur
+(MAKEDISK /HD:64) : MBR -> VBR -> IO.SYS -> invite C:\>.
+Limite : SYS ne traite que des FAT <= 64 Ko ; MAKEDISK choisit donc des unites d'allocation assez grandes (/HD 1..1000 Mo).

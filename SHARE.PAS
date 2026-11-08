@@ -46,7 +46,8 @@ Const
  SHARE_SET_MACHINE_NAME = $05;   { D‚finir nom de machine }
 
   { Valeurs par d‚faut }
- DEFAULT_FILE_SPACE = 2048;      { Espace par d‚faut pour informations de partage (octets) }
+ DEFAULT_FILE_SPACE = 2048;
+   { Espace par d‚faut pour informations de partage (octets) }
  DEFAULT_LOCK_COUNT = 20;        { Nombre maximal de verrous par d‚faut }
  MAX_FILENAME_LENGTH = 128;      { Longueur maximale du nom de fichier }
  MAX_MACHINE_NAME = 15;          { Longueur maximale du nom de machine }
@@ -64,7 +65,8 @@ Const
 Type
  { Structure d'entr‚e de fichier partag‚ }
  TSharedFileEntry = Record
-  FileName: Array[0..MAX_FILENAME_LENGTH-1] of Char; { Nom de fichier canonique }
+  FileName: Array[0..MAX_FILENAME_LENGTH-1] of Char;
+    { Nom de fichier canonique }
   ShareMode: Byte;              { Mode de partage }
   AccessMode: Byte;             { Mode d'accŠs }
   ProcessID: Word;              { ID du processus propriÃ©taire }
@@ -101,7 +103,8 @@ Type
  End;
 
 Var
- Language:(_French,_English,_Germany,_Italian,_Spain,_Albanian,_Portuguese,_Swedish,_Danish,_Japanese);
+ Language:(_French,_English,_Germany,_Italian,_Spain,_Albanian,_Portuguese,
+   _Swedish,_Danish,_Japanese);
  TmpLanguage: String;
  ShareControl: TShareControl;
  IsInstalled: Boolean;
@@ -206,7 +209,8 @@ Begin
 End;
 
  { Ajouter une nouvelle entr‚e de fichier partag‚ }
-Function AddSharedFile(FileName: String; ShareMode, AccessMode: Byte;ProcessID: Word): Pointer;
+Function AddSharedFile(FileName: String; ShareMode, AccessMode: Byte;
+  ProcessID: Word): Pointer;
 Var
  NewEntry: Pointer;
  Entry: TSharedFileEntry;
@@ -233,7 +237,8 @@ Begin
 End;
 
  { V‚rifier les conflits de partage }
-Function CheckShareConflict(FileName: String; ShareMode, AccessMode: Byte): Boolean;
+Function CheckShareConflict(FileName: String; ShareMode,
+  AccessMode: Byte): Boolean;
 Var
  FileEntry: Pointer;
  Entry: TSharedFileEntry;
@@ -245,11 +250,14 @@ Begin
    { V‚rifier les conflits selon les modes de partage }
   Case Entry.ShareMode Of
    SHARE_DENY_ALL: CheckShareConflict := True;
-   SHARE_DENY_READ: CheckShareConflict := (AccessMode And $03) <> 1; { Pas lecture seule }
-   SHARE_DENY_WRITE: CheckShareConflict := (AccessMode And $03) <> 0; { Pas ‚criture }
+   SHARE_DENY_READ: CheckShareConflict := (AccessMode And $03) <> 1;
+     { Pas lecture seule }
+   SHARE_DENY_WRITE: CheckShareConflict := (AccessMode And $03) <> 0;
+     { Pas ‚criture }
    SHARE_DENY_NONE: CheckShareConflict := False;
    Else { Mode de compatibilit‚ }
-    CheckShareConflict := (Entry.ProcessID <> GetPID) Or (AccessMode <> Entry.AccessMode);
+    CheckShareConflict := (Entry.ProcessID <> GetPID) Or (AccessMode <>
+      Entry.AccessMode);
   End;
  End;
 End;
@@ -285,7 +293,8 @@ Begin
 End;
 
  { V‚rifier les conflits de verrous }
-Function CheckLockConflict(FileEntry: Pointer; StartOffset, Length: LongInt;LockType: Byte): Boolean;
+Function CheckLockConflict(FileEntry: Pointer; StartOffset, Length: LongInt;
+  LockType: Byte): Boolean;
 Var
  Current: Pointer;
  Lock: TFileLock;
@@ -299,7 +308,8 @@ Begin
   If Lock.FileEntry = FileEntry Then Begin
    LockEndOffset := Lock.StartOffset + Lock.Length - 1;
     { V‚rifier le chevauchement }
-   If Not ((EndOffset < Lock.StartOffset) Or (StartOffset > LockEndOffset)) Then Begin
+   If Not ((EndOffset < Lock.StartOffset) Or (StartOffset > LockEndOffset)) Then
+     Begin
     { Il y a chevauchement - v‚rifier le type de conflit }
     If (LockType = 1) And (Lock.LockType = 1) Then Begin
      { Deux verrous en lecture - pas de conflit }
@@ -318,122 +328,97 @@ Begin
 End;
 
  { Gestionnaire d'interruption INT 21h pour intercepter les appels de partage }
-{$F+}
-Procedure ShareInt21Handler;
-{$F-}
 {$IFNDEF FPC}
+{ Gestionnaires d'interruption (procedures Interrupt : registres sauves,
+  IRET) : les fonctions traitees
+  par SHARE sont rendues directement,
+    les autres sont transmises a l'ancien gestionnaire. }
+Procedure ShareInt21Handler(Flags,rCS,rIP,rAX,rBX,rCX,rDX,rSI,rDI,rDS,rES,
+  rBP:Word);Interrupt;
 Var
- SavedAX, SavedBX, SavedCX, SavedDX: Word;
+ Old: Pointer;
 Begin
- Asm
-  Mov SavedAX, AX
-  Mov SavedBX, BX
-  Mov SavedCX, CX
-  Mov SavedDX, DX
- End;
-  { V‚rifier les fonctions de verrouillage de fichier }
- Case SavedAX Shr 8 Of
-  $5C: Begin { Verrouiller/D‚verrouiller r‚gion de fichier }
-   Case SavedAX And $FF Of
-    $00: Begin { Verrouiller }
-     { Impl‚menter la logique de verrouillage }
-     Asm
-      Mov AX, ERR_SUCCESS
-     End;
-    End;
-    $01: Begin { D‚verrouiller }
-     { Impl‚menter la logique de d‚verrouillage }
-     Asm
-      Mov AX, ERR_SUCCESS
-     End;
-    End;
-    Else Begin
-     { Passer … l'ancien gestionnaire }
-     Asm
-      Mov AX, SavedAX
-      Mov BX, SavedBX
-      Mov CX, SavedCX
-      Mov DX, SavedDX
-      Pushf
-      Call ShareControl.OldInt21Handler
-     End;
-     Exit;
-    End;
-   End;
-   Asm
-    Iret
-   End;
-  End;
-  Else Begin
-   { Autre fonction - passer … l'ancien gestionnaire }
-   Asm
-    Mov AX, SavedAX
-    Mov BX, SavedBX
-    Mov CX, SavedCX
-    Mov DX, SavedDX
-    Pushf
-    Call ShareControl.OldInt21Handler
-   End;
+ If (Hi(rAX)=$5C) And (Lo(rAX)<=1) Then Begin
+  { verrouillage / deverrouillage de region : accepte }
+  rAX:=ERR_SUCCESS;
+  Flags:=Flags And $FFFE;
+ End
+  Else
+ Begin
+  Old:=ShareControl.OldInt21Handler;
+  Asm
+   MOV AX,rAX
+   MOV BX,rBX
+   MOV CX,rCX
+   MOV DX,rDX
+   MOV SI,rSI
+   MOV DI,rDI
+   MOV ES,rES
+   PUSH rDS
+   POP DS
+   PUSH Flags
+   CALL DWORD PTR Old
+   MOV rAX,AX
+   MOV rBX,BX
+   MOV rCX,CX
+   MOV rDX,DX
+   MOV rSI,SI
+   MOV rDI,DI
+   MOV rES,ES
+   MOV rDS,DS
+   PUSHF
+   POP Flags
   End;
  End;
 End;
-{$ELSE}
-Begin
- { Version simplifi‚e pour Free Pascal }
-End;
-{$ENDIF}
 
-{ Gestionnaire d'interruption INT 2Fh pour SHARE }
-{$F+}
-Procedure ShareInt2FHandler;
-{$F-}
-{$IFNDEF FPC}
+Procedure ShareInt2FHandler(Flags,rCS,rIP,rAX,rBX,rCX,rDX,rSI,rDI,rDS,rES,
+  rBP:Word);Interrupt;
 Var
- SavedAX, SavedBX, SavedCX, SavedDX: Word;
+ Old: Pointer;
 Begin
- Asm
-  Mov SavedAX, AX
-  Mov SavedBX, BX
-  Mov SavedCX, CX
-  Mov SavedDX, DX
- End;
- If (SavedAX Shr 8) = SHARE_MULTIPLEX Then Begin
-  Case (SavedAX And $FF) Of
-   SHARE_INSTALL_CHECK: Begin
-    Asm
-     Mov AL, $FF  { Signaler que SHARE est install‚ }
-    End;
-   End;
-   SHARE_GET_MACHINE_NAME: Begin
-    { Retourner le nom de la machine }
-    Asm
-     Mov AX, ERR_SUCCESS
-    End;
-   End;
-   Else Begin
-    Asm
-     Mov AX, ERR_INVALID_FUNCTION
-    End;
-   End;
+ If Hi(rAX)=SHARE_MULTIPLEX Then Begin
+  Case Lo(rAX) Of
+   SHARE_INSTALL_CHECK:rAX:=(rAX And $FF00) Or $FF;
+   SHARE_GET_MACHINE_NAME:rAX:=ERR_SUCCESS;
+   Else rAX:=ERR_INVALID_FUNCTION;
   End;
+ End
+  Else
+ Begin
+  Old:=ShareControl.OldInt2FHandler;
   Asm
-   Iret
-  End;
- End Else Begin
-  { Autre fonction multiplex - passer … l'ancien gestionnaire }
-  Asm
-   Mov AX, SavedAX
-   Mov BX, SavedBX
-   Mov CX, SavedCX
-   Mov DX, SavedDX
-   Pushf
-   Call ShareControl.OldInt2FHandler
+   MOV AX,rAX
+   MOV BX,rBX
+   MOV CX,rCX
+   MOV DX,rDX
+   MOV SI,rSI
+   MOV DI,rDI
+   MOV ES,rES
+   PUSH rDS
+   POP DS
+   PUSH Flags
+   CALL DWORD PTR Old
+   MOV rAX,AX
+   MOV rBX,BX
+   MOV rCX,CX
+   MOV rDX,DX
+   MOV rSI,SI
+   MOV rDI,DI
+   MOV rES,ES
+   MOV rDS,DS
+   PUSHF
+   POP Flags
   End;
  End;
 End;
 {$ELSE}
-Begin
- { Version simplifi‚e pour Free Pascal }
+Procedure ShareInt21Handler;Begin
+ { Version simplifiee pour Free Pascal }
+End;
+
+Procedure ShareInt2FHandler;Begin
+ { Version simplifiee pour Free Pascal }
 End;
 {$ENDIF}
 
@@ -542,11 +527,14 @@ BEGIN
   If StrToUpper(Copy(TmpLanguage, 1, 2)) = 'IT' Then Language := _Italian Else
   If StrToUpper(Copy(TmpLanguage, 1, 2)) = 'SP' Then Language := _Spain Else
   If (StrToUpper(Copy(TmpLanguage, 1, 2)) = 'SQ') or
-     (StrToUpper(Copy(TmpLanguage, 1, 3)) = 'ALB') Then Language := _Albanian Else
+     (StrToUpper(Copy(TmpLanguage, 1,
+       3)) = 'ALB') Then Language := _Albanian Else
   If (StrToUpper(Copy(TmpLanguage, 1, 2)) = 'PT') or
-     (StrToUpper(Copy(TmpLanguage, 1, 3)) = 'PRT') Then Language := _Portuguese Else
+     (StrToUpper(Copy(TmpLanguage, 1,
+       3)) = 'PRT') Then Language := _Portuguese Else
   If (StrToUpper(Copy(TmpLanguage, 1, 2)) = 'SE') or
-     (StrToUpper(Copy(TmpLanguage, 1, 3)) = 'SWE') Then Language := _Swedish Else
+     (StrToUpper(Copy(TmpLanguage, 1,
+       3)) = 'SWE') Then Language := _Swedish Else
   If (StrToUpper(Copy(TmpLanguage, 1, 2)) = 'DK') or
      (StrToUpper(Copy(TmpLanguage, 1, 3)) = 'DNK') Then Language := _Danish Else
   If (StrToUpper(Copy(TmpLanguage, 1, 2)) = 'JP') or
@@ -560,18 +548,22 @@ BEGIN
   { Traitement des paramÃ¨tres de ligne de commande }
  For I := 1 to ParamCount do Begin
   Param := StrToUpper(ParamStr(I));
-   If (Param = '/?') Or (Param = '/H') Or (Param = '-H') Or (Param = '--HELP') Then Begin
+   If (Param = '/?') Or (Param = '/H') Or (Param = '-H') Or (Param = '--HELP')
+     Then Begin
    Case Language Of
     _English: Begin
      WriteLn('SHARE - File Sharing and Locking');
      WriteLn;
-     WriteLn('Installs file-sharing and locking capabilities on your hard disk.');
+     WriteLn('Installs file-sharing and locking capabilities on your hard ' +
+       'disk.');
      WriteLn;
      WriteLn('SHARE [/F:space] [/L:locks]');
      WriteLn;
-     WriteLn('  /F:space   Allocates file space (in bytes) for file-sharing information');
+     WriteLn('  /F:space   Allocates file space (in bytes) for file-sharing ' +
+       'information');
      WriteLn('             (default: ', DEFAULT_FILE_SPACE, ')');
-     WriteLn('  /L:locks   Sets the number of files that can be locked at one time');
+     WriteLn('  /L:locks   Sets the number of files that can be locked at ' +
+       'one time');
      WriteLn('             (default: ', DEFAULT_LOCK_COUNT, ')');
      WriteLn;
      WriteLn('Options:');
@@ -582,13 +574,16 @@ BEGIN
     _Germany: Begin
      WriteLn('SHARE - Dateifreigabe und -sperrung');
      WriteLn;
-     WriteLn('Installiert Dateifreigabe- und Sperrfunktionen auf Ihrer Festplatte.');
+     WriteLn('Installiert Dateifreigabe- und Sperrfunktionen auf Ihrer ' +
+       'Festplatte.');
      WriteLn;
      WriteLn('SHARE [/F:speicher] [/L:sperren]');
      WriteLn;
-     WriteLn('  /F:speicher  Weist Dateispeicher (in Bytes) fr Dateifreigabe zu');
+     WriteLn('  /F:speicher  Weist Dateispeicher (in Bytes) fr ' +
+       'Dateifreigabe zu');
      WriteLn('               (Standard: ', DEFAULT_FILE_SPACE, ')');
-     WriteLn('  /L:sperren   Setzt die Anzahl der Dateien, die gleichzeitig gesperrt werden k”nnen');
+     WriteLn('  /L:sperren   Setzt die Anzahl der Dateien, die gleichzeitig ' +
+       'gesperrt werden k”nnen');
      WriteLn('               (Standard: ', DEFAULT_LOCK_COUNT, ')');
      WriteLn;
      WriteLn('Optionen:');
@@ -599,14 +594,17 @@ BEGIN
     Else Begin { Fran‡ais }
      WriteLn('SHARE - Partage et verrouillage de fichiers');
      WriteLn;
-     WriteLn('Cette commande permet d''effectuer la gestion du partage des fichiers');
+     WriteLn('Cette commande permet d''effectuer la gestion du partage des ' +
+       'fichiers');
      WriteLn('entre logiciel et programme multitƒche.');
      WriteLn;
      WriteLn('SHARE [/F:espace] [/L:verrous]');
      WriteLn;
-     WriteLn('  /F:espace   Alloue l''espace (en octets) pour les informations de partage');
+     WriteLn('  /F:espace   Alloue l''espace (en octets) pour les ' +
+       'informations de partage');
      WriteLn('              (d‚faut: ', DEFAULT_FILE_SPACE, ')');
-     WriteLn('  /L:verrous  D‚finit le nombre de fichiers pouvant ˆtre verrouill‚s');
+     WriteLn('  /L:verrous  D‚finit le nombre de fichiers pouvant ˆtre ' +
+       'verrouill‚s');
      WriteLn('              simultan‚ment (d‚faut: ', DEFAULT_LOCK_COUNT, ')');
      WriteLn;
      WriteLn('Options:');

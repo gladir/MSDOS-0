@@ -17,7 +17,7 @@ Var
 BEGIN
  SourceKernel:=@BEGIN_KERNEL;
  {$I-}Assign(KernelFile,'IO.SYS');
- Rewrite(KernelFile);{$I+}
+ Rewrite(KernelFile,1);{$I+}
  If IOResult<>0 Then Begin
   Write('Impossible d''‚crire IO.SYS');
   Halt(1);
