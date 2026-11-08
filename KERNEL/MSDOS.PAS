@@ -2915,6 +2915,8 @@ Procedure Intr21h;Assembler;ASM
  PUSH CX
  PUSH SI
  PUSH DI
+ PUSH ES
+ PUSH DX
  PUSH DS
  PUSH DS
  PUSH DX
@@ -2929,6 +2931,8 @@ Procedure Intr21h;Assembler;ASM
 @3AhOk:
  CLC
 @3AhEnd:
+ POP DX
+ POP ES
  POP DI
  POP SI
  POP CX
@@ -2943,6 +2947,8 @@ Procedure Intr21h;Assembler;ASM
  PUSH CX
  PUSH SI
  PUSH DI
+ PUSH ES
+ PUSH DX
  PUSH DS
  PUSH DS
  PUSH DX
@@ -2957,6 +2963,8 @@ Procedure Intr21h;Assembler;ASM
 @3BhOk:
  CLC
 @3BhEnd:
+ POP DX
+ POP ES
  POP DI
  POP SI
  POP CX
@@ -2971,6 +2979,8 @@ Procedure Intr21h;Assembler;ASM
  PUSH CX
  PUSH SI
  PUSH DI
+ PUSH ES
+ PUSH DX
  PUSH DS
  PUSH DS
  PUSH DX
@@ -2990,6 +3000,8 @@ Procedure Intr21h;Assembler;ASM
 @3ChOk:
  CLC
 @3ChEnd:
+ POP DX
+ POP ES
  POP DI
  POP SI
  POP CX
@@ -3004,6 +3016,8 @@ Procedure Intr21h;Assembler;ASM
  PUSH CX
  PUSH SI
  PUSH DI
+ PUSH ES
+ PUSH DX
  PUSH DS
  PUSH DS
  PUSH DX
@@ -3025,6 +3039,8 @@ Procedure Intr21h;Assembler;ASM
 @3DhOk:
  CLC
 @3DhEnd:
+ POP DX
+ POP ES
  POP DI
  POP SI
  POP CX
@@ -3039,6 +3055,8 @@ Procedure Intr21h;Assembler;ASM
  PUSH CX
  PUSH SI
  PUSH DI
+ PUSH ES
+ PUSH DX
  PUSH DS
  PUSH BX
  PUSH CS
@@ -3052,6 +3070,8 @@ Procedure Intr21h;Assembler;ASM
 @3EhOk:
  CLC
 @3EhEnd:
+ POP DX
+ POP ES
  POP DI
  POP SI
  POP CX
@@ -3066,6 +3086,8 @@ Procedure Intr21h;Assembler;ASM
  PUSH CX
  PUSH SI
  PUSH DI
+ PUSH ES
+ PUSH DX
  PUSH DS
  XOR AX,AX
  PUSH AX
@@ -3089,6 +3111,8 @@ Procedure Intr21h;Assembler;ASM
  MOV AX,BX
  CLC
 @3FhEnd:
+ POP DX
+ POP ES
  POP DI
  POP SI
  POP CX
@@ -3103,6 +3127,8 @@ Procedure Intr21h;Assembler;ASM
  PUSH CX
  PUSH SI
  PUSH DI
+ PUSH ES
+ PUSH DX
  PUSH DS
  XOR AX,AX
  PUSH AX
@@ -3126,6 +3152,8 @@ Procedure Intr21h;Assembler;ASM
  MOV AX,BX
  CLC
 @40hEnd:
+ POP DX
+ POP ES
  POP DI
  POP SI
  POP CX
@@ -3140,6 +3168,8 @@ Procedure Intr21h;Assembler;ASM
  PUSH CX
  PUSH SI
  PUSH DI
+ PUSH ES
+ PUSH DX
  PUSH DS
  PUSH DS
  PUSH DX
@@ -3154,6 +3184,8 @@ Procedure Intr21h;Assembler;ASM
 @41hOk:
  CLC
 @41hEnd:
+ POP DX
+ POP ES
  POP DI
  POP SI
  POP CX
@@ -3168,6 +3200,7 @@ Procedure Intr21h;Assembler;ASM
  PUSH CX
  PUSH SI
  PUSH DI
+ PUSH ES
  PUSH DS
  PUSH BX
  PUSH CX
@@ -3192,6 +3225,7 @@ Procedure Intr21h;Assembler;ASM
 @42hOk:
  CLC
 @42hEnd:
+ POP ES
  POP DI
  POP SI
  POP CX
@@ -3339,6 +3373,8 @@ Procedure Intr21h;Assembler;ASM
  PUSH CX
  PUSH SI
  PUSH DI
+ PUSH ES
+ PUSH DX
  PUSH DS
  XOR DH,DH
  PUSH DX
@@ -3355,6 +3391,8 @@ Procedure Intr21h;Assembler;ASM
 @47hOk:
  CLC
 @47hEnd:
+ POP DX
+ POP ES
  POP DI
  POP SI
  POP CX
@@ -3368,6 +3406,8 @@ Procedure Intr21h;Assembler;ASM
  PUSH CX
  PUSH SI
  PUSH DI
+ PUSH ES
+ PUSH DX
  PUSH DS
  PUSH BX
  PUSH CS
@@ -3388,6 +3428,8 @@ Procedure Intr21h;Assembler;ASM
 @48hOk:
  CLC
 @48hEnd:
+ POP DX
+ POP ES
  POP DI
  POP SI
  POP CX
@@ -3401,6 +3443,8 @@ Procedure Intr21h;Assembler;ASM
  PUSH CX
  PUSH SI
  PUSH DI
+ PUSH ES
+ PUSH DX
  PUSH DS
  PUSH ES
  PUSH CS
@@ -3414,6 +3458,8 @@ Procedure Intr21h;Assembler;ASM
 @49hOk:
  CLC
 @49hEnd:
+ POP DX
+ POP ES
  POP DI
  POP SI
  POP CX
@@ -3428,6 +3474,8 @@ Procedure Intr21h;Assembler;ASM
  PUSH CX
  PUSH SI
  PUSH DI
+ PUSH ES
+ PUSH DX
  PUSH DS
  PUSH ES
  PUSH BX
@@ -3442,6 +3490,8 @@ Procedure Intr21h;Assembler;ASM
 @4AhOk:
  CLC
 @4AhEnd:
+ POP DX
+ POP ES
  POP DI
  POP SI
  POP CX
@@ -3538,6 +3588,8 @@ Procedure Intr21h;Assembler;ASM
  PUSH CX
  PUSH SI
  PUSH DI
+ PUSH ES
+ PUSH DX
  PUSH DS
  PUSH DS
  PUSH DX
@@ -3553,6 +3605,8 @@ Procedure Intr21h;Assembler;ASM
 @4EhOk:
  CLC
 @4EhEnd:
+ POP DX
+ POP ES
  POP DI
  POP SI
  POP CX
@@ -3567,6 +3621,8 @@ Procedure Intr21h;Assembler;ASM
  PUSH CX
  PUSH SI
  PUSH DI
+ PUSH ES
+ PUSH DX
  PUSH DS
  PUSH CS
  POP DS
@@ -3579,6 +3635,8 @@ Procedure Intr21h;Assembler;ASM
 @4FhOk:
  CLC
 @4FhEnd:
+ POP DX
+ POP ES
  POP DI
  POP SI
  POP CX
@@ -9035,6 +9093,7 @@ Begin
    Else If C=8 Then Begin ConPutChar(8); ConPutChar(32); ConPutChar(8); End
    Else If C>=32 Then ConPutChar(C);
   End;
+{$IFDEF KDEBUG}DbgW('r',Mem[S:O]);{$ENDIF}
   Got:=1;
   ReadInt21:=0;
   Exit;
@@ -9070,6 +9129,7 @@ Begin
   Exit;
  End;
  BufParts(Buf,S,O);
+{$IFDEF KDEBUG}DbgW('w',S);DbgW('o',O);DbgW('m',Mem[S:O]);DbgW('n',Count);{$ENDIF}
  For I:=0 To Count-1 Do ConPutChar(Mem[S:O+I]);
  Got:=Count;
  WriteInt21:=0;
