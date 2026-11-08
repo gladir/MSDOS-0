@@ -805,8 +805,19 @@ Begin
  { Chargeur de la suite d'IO.SYS : le secteur de boot (MS-DOS 5/6) ne charge que les 3 premiers secteurs
    du fichier en 0070:0000 (DL = unite de boot, BPB en 0000:7C00). On relit ici le reste depuis la racine
    du volume (fichier contigu) ; sous /KERNELTEST (fichier deja entierement charge) la relecture est sans
-   effet. Ce code doit rester dans les 1536 premiers octets du fichier. }
+   effet. Ce code doit rester dans les 1536 premiers octets du fichier. Comme IO.SYS (> 30 Ko) recouvre la pile
+   du secteur de boot (0000:7C00) et le BPB, le chargeur copie ce dont il a besoin et passe sur une pile privee
+   9000:FFF0 sur laquelle le noyau continue de s'executer. }
  ASM
+  MOV BX,SS
+  MOV CX,SP
+  CLI
+  MOV AX,9000h
+  MOV SS,AX
+  MOV SP,0FFF0h
+  STI
+  PUSH BX
+  PUSH CX
   PUSH BP
   MOV BP,SP
   SUB SP,24
@@ -821,14 +832,14 @@ Begin
   PUSH BX
   PUSH CX
   PUSH DX
-  MOV CX,[7C18h]
+  MOV CX,[BP-20]
   CMP DX,CX
   JAE @RdErr
   DIV CX
   INC DL
   MOV [BP-18],DL
   XOR DX,DX
-  MOV CX,[7C1Ah]
+  MOV CX,[BP-22]
   DIV CX
   MOV DH,DL
   MOV CH,AL
@@ -870,6 +881,12 @@ Begin
   INT 13h
   JC @Done
 @HaveBPB:
+  MOV AX,[7C18h]
+  MOV [BP-20],AX
+  MOV AX,[7C1Ah]
+  MOV [BP-22],AX
+  MOV AL,[7C0Dh]
+  MOV [BP-24],AL
   MOV AL,[7C10h]
   XOR AH,AH
   MOV CX,[7C16h]
@@ -961,7 +978,7 @@ Begin
   MOV [BP-16],DX
   MOV AX,[BP-10]
   SUB AX,2
-  MOV CL,[7C0Dh]
+  MOV CL,[BP-24]
   XOR CH,CH
   MUL CX
   ADD AX,[BP-14]
@@ -992,7 +1009,9 @@ Begin
   POP ES
   POP DS
   MOV SP,BP
-  POP BP
+  ADD SP,6
+  MOV BP,SP
+  SUB SP,16
  END;
  { Le noyau est chargé comme IO.SYS : DS=CS pour les chaînes et constantes que le
    compilateur place dans le segment du noyau (pas de segment de données séparé). }
