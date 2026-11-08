@@ -501,6 +501,8 @@ End;
 Procedure Intr1Ah;{$IFNDEF FPC}Interrupt;{$ENDIF}Forward;
 Procedure Intr20h;{$IFNDEF FPC}Interrupt;{$ENDIF}Forward;
 Procedure Intr21h;{$IFNDEF FPC}Interrupt;{$ENDIF}Forward;
+Procedure Intr20hEntry;{$IFNDEF FPC}Interrupt;{$ENDIF}Forward;
+Procedure Intr21hCore;{$IFNDEF FPC}Interrupt;{$ENDIF}Forward;
 Procedure Intr25h;{$IFNDEF FPC}Interrupt;{$ENDIF}Forward;
 Procedure Intr26h;{$IFNDEF FPC}Interrupt;{$ENDIF}Forward;
 Procedure Intr28h;{$IFNDEF FPC}Interrupt;{$ENDIF}Forward;
@@ -564,6 +566,9 @@ Function DOS39h_MakeDirectory(PathPtr:Pointer):Word;Near;Forward;
 Function DOS36h_DiskFree(Drive:Byte;Var R:TFxFree):Word;Near;Forward;
 Procedure InitPartition;Near;Forward;
 Procedure SftRefSet(I,V:Byte);Near;Forward;
+Procedure CharOut21(C:Byte);Near;Forward;
+Function CharIn21(Echo:Word):Word;Near;Forward;
+Procedure StrOut21(P:Pointer);Near;Forward;
 Function GetDTASeg:Word;Near;Forward;
 Function GetDTAOfs:Word;Near;Forward;
 Function OpenInt21(PathPtr:Pointer;Mode:Byte):Word;Near;Forward;
@@ -1082,7 +1087,7 @@ Begin
   SetIntVec($1A, CSeg, Ofs(Intr1Ah));
  End;
 
- SetIntVec($20,CSeg,Ofs(Intr21h));
+ SetIntVec($20,CSeg,Ofs(Intr20hEntry));
  SetIntVec($21,CSeg,Ofs(Intr21h));
  SetIntVec($25,CSeg,Ofs(Intr25h));
  SetIntVec($26,CSeg,Ofs(Intr26h));
@@ -1254,6 +1259,8 @@ Procedure Data;Assembler;ASM
  DB 0,0,0,0
  { SftRef : compteur de references de chaque entree de la table des fichiers ouverts (20 octets) }
  DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ { KSP : sommet de la pile privee du noyau (segment 9000h) }
+ DW 0F000h
 
  { Structure Liste des Listes pour fonction 52h - séparée de DataMOS }
 @DOSListOfLists:
@@ -1446,7 +1453,7 @@ Begin
  END;
 End;
 
-Procedure Intr21h;Assembler;ASM
+Procedure Intr21hCore;Assembler;ASM
  STI
  INC Data.DataMOS.InDos
 @CallFunc:
@@ -1732,6 +1739,34 @@ Procedure Intr21h;Assembler;ASM
  { Interruption 21h - Fonction 01h: Entree de caractere avec echo              }
  {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
 @01h:
+ PUSH BX
+ PUSH CX
+ PUSH DX
+ PUSH SI
+ PUSH DI
+ PUSH ES
+ PUSH DS
+ MOV AX,1
+ PUSH AX
+ PUSH CS
+ POP DS
+ CALL CharIn21
+ POP DS
+ POP ES
+ POP DI
+ POP SI
+ POP DX
+ POP CX
+ POP BX
+ CMP AX,0FFFEh
+ JE @01hCon
+ CMP AX,0FFFFh
+ JNE @01hGot
+ MOV AX,1Ah
+@01hGot:
+ CLC
+ JMP @Xit
+@01hCon:
  MOV AL,Data.DataMOS.Key
  OR  AL,AL
  JE  @01GetInt16h
@@ -1757,10 +1792,27 @@ Procedure Intr21h;Assembler;ASM
  { Interruption 21h - Fonction 02h: Sortie de caractere                        }
  {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
 @02h:
+ PUSH BX
+ PUSH CX
+ PUSH DX
+ PUSH SI
+ PUSH DI
+ PUSH ES
+ PUSH DS
+ XOR DH,DH
+ PUSH DX
+ PUSH CS
+ POP DS
+ CALL CharOut21
+ POP DS
+ POP ES
+ POP DI
+ POP SI
+ POP DX
+ POP CX
+ POP BX
  MOV AL,DL
- MOV AH,0Eh                 { BIOS - Sortie caractere }
- XOR BX,BX                  { Page 0, couleur par defaut }
- INT 10h
+ CLC
  JMP @Xit
 
  {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
@@ -1824,16 +1876,43 @@ Procedure Intr21h;Assembler;ASM
  JMP @Xit
 @06Output:
  { Fonction de sortie }
+ MOV AH,02h
+ INT 21h
  MOV AL,DL
- MOV AH,0Eh                 { BIOS - Sortie caractere }
- XOR BX,BX                  { Page 0, couleur par defaut }
- INT 10h
  JMP @Xit
 
  {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
  { Interruption 21h - Fonction 07h: Entree de caractere directe sans sortie }
  {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
 @07h:
+ PUSH BX
+ PUSH CX
+ PUSH DX
+ PUSH SI
+ PUSH DI
+ PUSH ES
+ PUSH DS
+ MOV AX,0
+ PUSH AX
+ PUSH CS
+ POP DS
+ CALL CharIn21
+ POP DS
+ POP ES
+ POP DI
+ POP SI
+ POP DX
+ POP CX
+ POP BX
+ CMP AX,0FFFEh
+ JE @07hCon
+ CMP AX,0FFFFh
+ JNE @07hGot
+ MOV AX,1Ah
+@07hGot:
+ CLC
+ JMP @Xit
+@07hCon:
  MOV AL,Data.DataMOS.Key
  OR  AL,AL
  JE  @GetInt16h
@@ -1850,6 +1929,34 @@ Procedure Intr21h;Assembler;ASM
  { Interruption 21h - Fonction 08h: Entree de caractere sans sortie }
  {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
 @08h:
+ PUSH BX
+ PUSH CX
+ PUSH DX
+ PUSH SI
+ PUSH DI
+ PUSH ES
+ PUSH DS
+ MOV AX,0
+ PUSH AX
+ PUSH CS
+ POP DS
+ CALL CharIn21
+ POP DS
+ POP ES
+ POP DI
+ POP SI
+ POP DX
+ POP CX
+ POP BX
+ CMP AX,0FFFEh
+ JE @08hCon
+ CMP AX,0FFFFh
+ JNE @08hGot
+ MOV AX,1Ah
+@08hGot:
+ CLC
+ JMP @Xit
+@08hCon:
  MOV AL,Data.DataMOS.Key
  OR  AL,AL
  JE  @08GetInt16h
@@ -1870,24 +1977,27 @@ Procedure Intr21h;Assembler;ASM
  { Interruption 21h - Fonction 09h: Affichage de chaine terminee par $         }
  {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
 @09h:
- PUSH SI                    { Sauver registres }
+ PUSH BX
+ PUSH CX
+ PUSH DX
+ PUSH SI
+ PUSH DI
+ PUSH ES
  PUSH DS
- MOV SI,DX                  { DS:DX pointe sur la chaine }
-@09Loop:
- LODSB                      { Charger AL depuis DS:SI et incrementer SI }
- CMP AL,'$'                 { Caractere de fin ? }
- JE @09End
- MOV DL,AL                  { Preparer caractere pour sortie }
- PUSH AX                    { Sauver AX }
- PUSH SI                    { Sauver SI }
- MOV AH,02h                 { Fonction 02h - Sortie caractere }
- INT 21h
- POP SI                     { Restaurer SI }
- POP AX                     { Restaurer AX }
- JMP @09Loop
-@09End:
- POP DS                     { Restaurer registres }
+ PUSH DS
+ PUSH DX
+ PUSH CS
+ POP DS
+ CALL StrOut21
+ POP DS
+ POP ES
+ POP DI
  POP SI
+ POP DX
+ POP CX
+ POP BX
+ MOV AL,24h
+ CLC
  JMP @Xit
 
  {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
@@ -1918,6 +2028,8 @@ Procedure Intr21h;Assembler;ASM
  POP BX
  POP AX                     { Restaurer AX original }
  XCHG AX,DI                 { Recuperer le caractere dans AX }
+ CMP AL,1Ah                 { Fin de fichier (entree redirigee) ? }
+ JE @0AEnd
  CMP AL,0Dh                 { Entree (CR) ? }
  JE @0AEnd
  CMP AL,08h                 { Backspace ? }
@@ -4403,6 +4515,96 @@ Procedure Intr21h;Assembler;ASM
  OR WORD PTR [BP+6],1
 @XitDone:
  POP BP
+END;
+
+{ Point d'entree de INT 21h : le noyau s'execute sur une pile privee (9000:0000..KSP), hors de l'arene
+  memoire, pour ne pas dependre de la pile (parfois minuscule) du programme appelant. Cadre utilisateur
+  sauvegarde : CX BX AX BP ES DS IP CS FLAGS (de bas en haut). Les registres de sortie sont rendus
+  dans ces emplacements avant de revenir sur la pile utilisateur. Un appel imbrique (deja sur la pile
+  privee) va directement au coeur. }
+Procedure Intr21h;Assembler;ASM
+ PUSH DS
+ PUSH ES
+ PUSH BP
+ PUSH AX
+ PUSH BX
+ PUSH CX
+ MOV AX,CS
+ MOV DS,AX
+ MOV AX,SS
+ CMP AX,9000h
+ JNE @Switch
+ POP CX
+ POP BX
+ POP AX
+ POP BP
+ POP ES
+ POP DS
+ JMP Intr21hCore
+@Switch:
+ MOV AX,SP
+ MOV BX,SS
+ MOV CX,9000h
+ CLI
+ MOV SS,CX
+ MOV SP,WORD PTR [Data + FxBase + 124]
+ STI
+ PUSH BX
+ PUSH AX
+ MOV DS,BX
+ MOV BX,AX
+ MOV AX,[BX+10]
+ PUSH AX
+ MOV AX,[BX+4]
+ MOV CX,[BX]
+ MOV BP,[BX+6]
+ MOV ES,[BX+8]
+ MOV BX,[BX+2]
+ POP DS
+ PUSHF
+ CALL Intr21hCore
+ PUSH BP
+ MOV BP,SP
+ PUSH ES
+ PUSH BX
+ MOV BX,[BP+4]
+ MOV ES,BX
+ MOV BX,[BP+2]
+ MOV ES:[BX+4],AX
+ MOV AX,[BP-4]
+ MOV ES:[BX+2],AX
+ MOV ES:[BX],CX
+ MOV AX,[BP-2]
+ MOV ES:[BX+8],AX
+ MOV AX,[BP]
+ MOV ES:[BX+6],AX
+ MOV ES:[BX+10],DS
+ JC @Cf1
+ MOV AX,ES:[BX+16]
+ AND AX,0FFFEh
+ JMP @Cf2
+@Cf1:
+ MOV AX,ES:[BX+16]
+ OR AX,1
+@Cf2:
+ MOV ES:[BX+16],AX
+ CLI
+ MOV AX,ES
+ MOV SS,AX
+ MOV SP,BX
+ POP CX
+ POP BX
+ POP AX
+ POP BP
+ POP ES
+ POP DS
+ IRET
+END;
+
+{ INT 20h (terminaison de programme, par exemple RET depuis un .COM) : AX=4C00h puis INT 21h }
+Procedure Intr20hEntry;Assembler;ASM
+ MOV AX,4C00h
+ JMP Intr21h
 END;
 
 Procedure Intr25h;Assembler;ASM
@@ -10101,6 +10303,17 @@ ASM
  PUSH DS
  PUSH ES
  MOV ES,ChildPSP
+ MOV AX,CS
+ MOV DS,AX
+ MOV AX,WORD PTR [Data + FxBase + 124]
+ MOV ES:[3Ah],AX
+ MOV AX,SS
+ CMP AX,9000h
+ JNE @NoK
+ MOV AX,SP
+ SUB AX,24
+ MOV WORD PTR [Data + FxBase + 124],AX
+@NoK:
  MOV ES:[2Eh],SP
  MOV ES:[30h],SS
  MOV AX,StackSeg
@@ -10129,6 +10342,10 @@ END;
 Procedure ExecReturn(ChildPSP:Word);Assembler;
 ASM
  MOV ES,ChildPSP
+ MOV AX,CS
+ MOV DS,AX
+ MOV AX,ES:[3Ah]
+ MOV WORD PTR [Data + FxBase + 124],AX
  MOV AX,ES:[2Eh]
  MOV BX,ES:[30h]
  CLI
@@ -10260,6 +10477,59 @@ Begin
 End;
 
 { Fonction principale 4Bh - EXEC (type 00h : charger et executer) }
+{ Chargement d'un programme .COM : image a PSP:0100, tout le bloc libre alloue (64 Ko au plus),
+  pile en haut du segment avec un mot nul (le RET termine par INT 20h du PSP) }
+Function ExecCom(Handle:Word;ProgramPath:String;CmdLine:Pointer):Word;
+Var
+ Size,Left,ImgBytes: LongInt;
+ Need,Avail,EnvSeg,Block,Parent,Chunk,Got,N,Sp: Word;
+Begin
+ ExecCom:=11;
+ Size:=DOS42h_SeekFile(Handle,0,0,2);
+ If (Size=LongInt($FFFFFFFF)) Or (Size<1) Or (Size>65280) Then Begin
+  DOS3Eh_CloseFile(Handle);
+  Exit;
+ End;
+ EnvSeg:=BuildEnvironment(0,ProgramPath);
+ Avail:=LargestFreeBlock;
+ Need:=Avail;
+ If Need>4096 Then Need:=4096;
+ If Need<Word((Size+15) Div 16)+32 Then Begin
+  DOS3Eh_CloseFile(Handle);
+  ExecCom:=8;
+  Exit;
+ End;
+ Parent:=GetCurrentPSP;
+ Block:=DOS48h_AllocateMemory(Need);
+ If Block=0 Then Begin
+  DOS3Eh_CloseFile(Handle);
+  ExecCom:=8;
+  Exit;
+ End;
+ SetBlockOwner(Block,Block);
+ If EnvSeg<>0 Then SetBlockOwner(EnvSeg,Block);
+ BuildPSP(Block,Parent,Block+Need,EnvSeg,CmdLine);
+ DOS42h_SeekFile(Handle,0,0,0);
+ ImgBytes:=Size;
+ N:=0;
+ While ImgBytes>0 Do Begin
+  If ImgBytes>8192 Then Chunk:=8192 Else Chunk:=Word(ImgBytes);
+  Got:=0;
+  DOS3Fh_ReadFile(Handle,Ptr(Block+16+N*512,0),Chunk,Got);
+  If Got=0 Then Break;
+  Dec(ImgBytes,Got);
+  Inc(N);
+ End;
+ DOS3Eh_CloseFile(Handle);
+ SetCurrentPSP(Block);
+ SetDTA(Block,$80);
+ If Need>=4096 Then Sp:=$FFFE Else Sp:=Need*16-2;
+ MemW[Block:Sp]:=0;
+ ExecCom:=0;
+ ExecEnter(Block,Block,$100,Block,Sp);
+ ExecCom:=0;
+End;
+
 Function DOS4Bh_ExecProgram(ExecType:Byte;ProgramPath:String;ParamBlock:ExecParameterBlock):Word;
 Var
  Hdr: ExeHeader;
@@ -10280,8 +10550,14 @@ Begin
  DOS3Fh_ReadFile(Handle,@Hdr,SizeOf(Hdr),Got);
 {$IFDEF KDEBUG}DbgW('g',Got);DbgW('m',Hdr.Signature);DbgW('p',Hdr.PagesInFile);{$ENDIF}
  If (Got<SizeOf(Hdr)) Or ((Hdr.Signature<>$5A4D) And (Hdr.Signature<>$4D5A)) Then Begin
+  { fichier .COM : image brute }
+  If (Length(ProgramPath)>=4) And (UpCase(ProgramPath[Length(ProgramPath)-2])='C') And
+     (UpCase(ProgramPath[Length(ProgramPath)-1])='O') And (UpCase(ProgramPath[Length(ProgramPath)])='M') Then Begin
+   DOS4Bh_ExecProgram:=ExecCom(Handle,ProgramPath,ParamBlock.CommandLine);
+   Exit;
+  End;
   DOS3Eh_CloseFile(Handle);
-  DOS4Bh_ExecProgram:=11; { format incorrect (seuls les EXE sont charges) }
+  DOS4Bh_ExecProgram:=11; { format incorrect }
   Exit;
  End;
  If Hdr.BytesInLastPage=0 Then FileLen:=LongInt(Hdr.PagesInFile)*512
@@ -10525,6 +10801,45 @@ Begin
  HM:=Word(R);
  SC:=Word(R Shr 16);
  TimeInt21:=LongInt(Bcd(Hi(HM))*256+Bcd(Lo(HM)))+LongInt(Bcd(Hi(SC))*256)*65536;
+End;
+
+{ Sortie sur la sortie standard (handle 1, redirigeable) }
+Procedure CharOut21(C:Byte);
+Var Got:Word;
+ B:Byte;
+Begin
+ B:=C;
+ WriteInt21(1,@B,1,Got);
+End;
+
+{ Entree depuis l'entree standard quand elle est redirigee vers un fichier :
+  $FFFE = console (a traiter par le clavier), $FFFF = fin de fichier, sinon l'octet lu }
+Function CharIn21(Echo:Word):Word;
+Var C:Byte;
+ Got,S:Word;
+Begin
+ S:=JftGet(0);
+ If (S=$FFFF) Or (S<5) Then Begin
+  CharIn21:=$FFFE;
+  Exit;
+ End;
+ Got:=0;
+ DOS3Fh_ReadFile(S,@C,1,Got);
+ If Got=0 Then CharIn21:=$FFFF
+ Else Begin
+  CharIn21:=C;
+  If Echo<>0 Then CharOut21(C);
+ End;
+End;
+
+{ 09h : chaine terminee par $ }
+Procedure StrOut21(P:Pointer);
+Var S,O,N,Got:Word;
+Begin
+ BufParts(P,S,O);
+ N:=0;
+ While (Mem[S:O+N]<>36) And (N<65000) Do Inc(N);
+ If N>0 Then WriteInt21(1,P,N,Got);
 End;
 
 { Lecture : poignees 0..4 = console (ligne editee, terminee par CR LF) }

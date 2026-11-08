@@ -1862,10 +1862,23 @@ Begin
   Exit;
  End;
  InOk:=False;OutOk:=False;
- If RedirIn<>''Then InOk:=DosRedirect(0,RedirIn,0,SavedIn);
+ If RedirIn<>''Then Begin
+  InOk:=DosRedirect(0,RedirIn,0,SavedIn);
+  If Not(InOk)Then Begin
+   WriteLn('Fichier introuvable : ',RedirIn);
+   WriteLn;
+   Exit;
+  End;
+ End;
  If RedirOut<>''Then Begin
   If RedirAppend Then OutOk:=DosRedirect(1,RedirOut,2,SavedOut)
                  Else OutOk:=DosRedirect(1,RedirOut,1,SavedOut);
+  If Not(OutOk)Then Begin
+   If InOk Then DosRestore(0,SavedIn);
+   WriteLn('Redirection invalide : ',RedirOut);
+   WriteLn;
+   Exit;
+  End;
  End;
  Exec(Prog,ParamList);
  Err:=DosError;
