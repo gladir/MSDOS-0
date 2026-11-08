@@ -626,7 +626,11 @@ Function AllocInt21(Size:Word):Word;Near;Forward;
 Function FindFirstInt21(NamePtr:Pointer;Attr:Word):Word;Near;Forward;
 Function FindNextInt21:Word;Near;Forward;
 Function LargestFreeBlock:Word;Near;Forward;
+Procedure DowTable;Near;Forward;
 Procedure SetDTA(S,O:Word);Near;Forward;
+Function DateInt21:LongInt;Near;Forward;
+Function WdayInt21:Word;Near;Forward;
+Function TimeInt21:LongInt;Near;Forward;
 Function PendingLFSet:Boolean;Near;Forward;
 Procedure ClearPendingLF;Near;Forward;
 Procedure SetPendingLF;Near;Forward;
@@ -2351,8 +2355,30 @@ Procedure Intr21h;Assembler;ASM
  { Interruption 21h - Fonction 2Ah: Lire la date   }
  {- - - - - - - - - - - - - - - - - - - - - - - - -}
 @2Ah:
- MOV AH,04h
- INT 1Ah
+ PUSH BX
+ PUSH SI
+ PUSH DI
+ PUSH ES
+ PUSH DS
+ PUSH CS
+ POP DS
+ CALL DateInt21
+ POP DS
+ MOV CX,AX
+ PUSH CX
+ PUSH DX
+ PUSH DS
+ PUSH CS
+ POP DS
+ CALL WdayInt21
+ POP DS
+ POP DX
+ POP CX
+ CLC
+ POP ES
+ POP DI
+ POP SI
+ POP BX
  JMP @Xit
 
  {- - - - - - - - - - - - - - - - - - - - - - - - -}
@@ -2367,19 +2393,22 @@ Procedure Intr21h;Assembler;ASM
  { Interruption 21h - Fonction 2Ch: Lire l'heure système                       }
  {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
 @2Ch:
- { Lire l'heure courante du système }
- { Retour : CH = heures (0-23), CL = minutes (0-59), DH = secondes (0-59), DL = centièmes (0-99) }
- PUSH AX                    { Sauver AX }
- MOV AH,02h                 { Fonction BIOS - Lire l'heure }
- INT 1Ah                    { Appel BIOS temps réel }
- { Le BIOS retourne l'heure dans CH:CL:DH format BCD }
- { Convertir du BCD vers binaire si nécessaire }
- { Pour simplifier, on simule une heure fixe 12:34:56.78 }
- MOV CH,12h                 { 12 heures }
- MOV CL,34h                 { 34 minutes }
- MOV DH,56h                 { 56 secondes }
- MOV DL,78h                 { 78 centièmes }
- POP AX                     { Restaurer AX }
+ PUSH BX
+ PUSH SI
+ PUSH DI
+ PUSH ES
+ PUSH DS
+ PUSH CS
+ POP DS
+ CALL TimeInt21
+ POP DS
+ MOV CX,AX
+ MOV DL,0
+ CLC
+ POP ES
+ POP DI
+ POP SI
+ POP BX
  JMP @Xit
 
  {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
@@ -9068,6 +9097,69 @@ Procedure SetPendingLF;Assembler;
 ASM
  MOV Data.DataMOS.PendingLF,1
 END;
+
+Procedure DowTable;Assembler;
+ASM
+ DB 0,3,2,5,0,3,5,1,4,6,2,4
+END;
+
+Function BiosDateRaw:LongInt;Assembler;
+ASM
+ MOV AH,04h
+ INT 1Ah
+ MOV AX,CX
+END;
+
+Function BiosTimeRaw:LongInt;Assembler;
+ASM
+ MOV AH,02h
+ INT 1Ah
+ MOV AX,CX
+END;
+
+Function Bcd(B:Byte):Word;
+Begin
+ Bcd:=(B Shr 4)*10+(B And 15);
+End;
+
+{ INT 21h/2Ah : DX:AX = annee ; (mois << 8 | jour) }
+Function DateInt21:LongInt;
+Var
+ R: LongInt;
+ CY,MD: Word;
+Begin
+ R:=BiosDateRaw;
+ CY:=Word(R);
+ MD:=Word(R Shr 16);
+ DateInt21:=LongInt(Bcd(Hi(CY))*100+Bcd(Lo(CY)))+LongInt(Bcd(Hi(MD))*256+Bcd(Lo(MD)))*65536;
+End;
+
+{ Jour de la semaine (0=dimanche) par la formule de Sakamoto }
+Function WdayInt21:Word;
+Var
+ R: LongInt;
+ Y,M,D: Word;
+Begin
+ R:=DateInt21;
+ Y:=Word(R);
+ M:=Hi(Word(R Shr 16));
+ D:=Lo(Word(R Shr 16));
+ If (M<1) Or (M>12) Then M:=1;
+ If M<3 Then Dec(Y);
+ WdayInt21:=(Y+Y Div 4-Y Div 100+Y Div 400+Word(Mem[CSeg:Ofs(DowTable)+M-1])+D) Mod 7;
+End;
+
+{ INT 21h/2Ch : DX:AX = (heures << 8 | minutes) ; (secondes << 8 | centiemes) }
+Function TimeInt21:LongInt;
+Var
+ R: LongInt;
+ HM,SC: Word;
+Begin
+ R:=BiosTimeRaw;
+ HM:=Word(R);
+ SC:=Word(R Shr 16);
+ TimeInt21:=LongInt(Bcd(Hi(HM))*256+Bcd(Lo(HM)))+LongInt(Bcd(Hi(SC))*256)*65536;
+End;
 
 { Lecture : poignees 0..4 = console (ligne editee, terminee par CR LF) }
 Function ReadInt21(Handle:Word;Buf:Pointer;Count:Word;Var Got:Word):Word;
