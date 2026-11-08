@@ -8189,6 +8189,7 @@ Begin
  FcbDelete:=$FF;
  FcbSegOfs(P,S,O);
  If Not FcbName(S,O,1,Path) Then Exit;
+ FcbWild(Path);
  Any:=False;
  R:=DOS4Eh_FindFirstFile(Path,0,T);
  While R=0 Do Begin
@@ -8223,6 +8224,7 @@ Begin
  FcbRename:=$FF;
  FcbSegOfs(P,S,O);
  If Not FcbName(S,O,1,Path) Then Exit;
+ FcbWild(Path);
  For I:=0 To 10 Do Pat[I]:=Mem[S:O+$11+I];
  Pre:='';
  If Mem[S:O]<>0 Then Begin
