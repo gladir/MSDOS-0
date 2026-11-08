@@ -4614,7 +4614,7 @@ END;
 Function GetCurrentDirPath(Index: Byte): String;
 Var
  Path: String;
- I, Len, Ch: Byte;
+ I, Len, Cc: Byte;
  Base: Word;
 Begin
  Base := Index * CDSize + CDBase + 3;
@@ -4632,9 +4632,9 @@ Begin
    XOR AH,AH
    ADD BX,AX
    MOV AL,BYTE PTR [Data + BX]
-   MOV Ch,AL
+   MOV Cc,AL
   END;
-  Path[I] := Chr(Ch);
+  Path[I] := Chr(Cc);
  End;
  GetCurrentDirPath := Path;
 End;
@@ -4661,7 +4661,7 @@ END;
 
 Procedure SetCurrentDirPath(Index: Byte; Path: String);
 Var
- I, Len, Ch: Byte;
+ I, Len, Cc: Byte;
  Base: Word;
 Begin
  Len := Length(Path);
@@ -4673,13 +4673,13 @@ Begin
   MOV BYTE PTR [Data + BX],AL
  END;
  For I := 1 To Len Do Begin
-  Ch := Ord(Path[I]);
+  Cc := Ord(Path[I]);
   ASM
    MOV BX,Base
    MOV AL,I
    XOR AH,AH
    ADD BX,AX
-   MOV AL,Ch
+   MOV AL,Cc
    MOV BYTE PTR [Data + BX],AL
   END;
  End;
@@ -6625,6 +6625,79 @@ Begin
  FxRmDir:=0;
 End;
 
+Function FxChDir(PathPtr:Pointer):Word;
+Var
+ V:TFxVol;
+ P:PChar;
+ Path,Full,NewP,Comp,Nm:String;
+ Dr,I,J,Idx:Byte;
+ Dir:Word;
+ Sec,FS:LongInt;
+ FI:Integer;
+ E:TFxEnt;
+Begin
+ FxChDir:=3;
+ P:=PChar(PathPtr);
+ Path:='';
+ I:=0;
+ While (P^<>#0) And (I<255) Do Begin
+  Path:=Path+P^;
+  Inc(P);
+  Inc(I);
+ End;
+ Dr:=GetCurrentDrive;
+ Full:=Path;
+ If (Length(Path)>=2) And (Path[2]=':') Then Begin
+  Dr:=Ord(UpCase(Path[1]))-Ord('A');
+  Full:=Copy(Path,3,255);
+ End;
+ If Dr>25 Then Begin FxChDir:=15; Exit End;
+ If Not FxVol(Dr,V) Then Begin FxChDir:=15; Exit End;
+ If Full='' Then Begin
+  SetCurrentDrive(Dr);
+  FxChDir:=0;
+  Exit;
+ End;
+ If Full[1]='\' Then Begin
+  Dir:=0;
+  NewP:='\';
+ End Else Begin
+  Dir:=GetCurrentDirCluster(Dr);
+  NewP:=GetCurrentDirPath(Dr);
+  If NewP='' Then NewP:='\';
+ End;
+ I:=1;
+ While I<=Length(Full) Do Begin
+  If Full[I]='\' Then Inc(I) Else Begin
+   J:=I;
+   While (J<=Length(Full)) And (Full[J]<>'\') Do Inc(J);
+   Comp:=Copy(Full,I,J-I);
+   I:=J;
+   If Comp<>'.' Then Begin
+    FxName11(Comp,Nm);
+    If Not FxScan(V,Dir,Nm,Sec,Idx,FS,FI,E) Then Begin SetStandardError(3); Exit End;
+    If (E.Attr And $10)=0 Then Begin SetStandardError(3); Exit End;
+    Dir:=E.Cluster;
+    If Comp='..' Then Begin
+     { retire le dernier composant du chemin }
+     J:=Length(NewP);
+     While (J>1) And (NewP[J]<>'\') Do Dec(J);
+     If J<=1 Then NewP:='\' Else NewP:=Copy(NewP,1,J-1);
+    End Else Begin
+     If NewP<>'\' Then NewP:=NewP+'\';
+     J:=1;
+     While J<=Length(Comp) Do Begin Comp[J]:=UpCase(Comp[J]); Inc(J) End;
+     NewP:=NewP+Comp;
+    End;
+   End;
+  End;
+ End;
+ SetCurrentDirCluster(Dr,Dir);
+ SetCurrentDirPath(Dr,NewP);
+ SetCurrentDrive(Dr);
+ FxChDir:=0;
+End;
+
 Function DOS3Ah_RemoveDirectory(PathPtr:Pointer):Word;
 Begin
  DOS3Ah_RemoveDirectory:=FxRmDir(PathPtr);
@@ -6723,105 +6796,9 @@ Begin
 End;
 
 Function DOS3Bh_ChangeDirectory(PathPtr:Pointer):Word;
-{ Fonction principale pour changer de répertoire }
-Var
- Path:String;
- Drive:Byte;
- DirName:String;
- FullPath:String;
- BootSec:BootSectorRec;
- DirCluster:Word;
- P:^Char;
- I,J:Byte;
 Begin
- DOS3Bh_ChangeDirectory:=3; { Par défaut: Path not found }
-
- { Convertir pointeur en chaîne Pascal }
- P:=PathPtr;
- Path:='';
- I:=0;
- While (P^ <> #0) and (I < 255) Do Begin
-  Path:=Path + P^;
-  Inc(P);
-  Inc(I);
- End;
-
- { Déterminer le lecteur }
- If (Length(Path) >= 2) and (Path[2] = ':') Then Begin
-  Drive:=Ord(UpCase(Path[1])) - Ord('A');
-  FullPath:=Copy(Path,3,255); { Enlever "C:" }
- End
- Else Begin
-  Drive:=GetCurrentDrive; { Lecteur courant }
-  FullPath:=Path;
- End;
-
- { Vérifier validité du lecteur }
- If Drive > 25 Then Begin
-  DOS3Bh_ChangeDirectory:=15; { Invalid drive }
-  Exit;
- End;
-
- { Lire le secteur de boot }
- If Not ReadBootSector(Drive,BootSec) Then Begin
-  DOS3Bh_ChangeDirectory:=15; { Invalid drive }
-  Exit;
- End;
-
- { Traiter les cas spéciaux }
- If FullPath = '' Then Begin
-  { Pas de chemin = juste changer de lecteur }
-  SetCurrentDrive(Drive);
-  DOS3Bh_ChangeDirectory:=0;
-  Exit;
- End;
-
- { Gérer chemin relatif vs absolu }
- If (Length(FullPath) = 0) or (FullPath[1] <> '\') Then Begin
-  { Chemin relatif - partir du répertoire courant }
-  If GetCurrentDirPath(Drive) <> '\' Then
-   FullPath:=GetCurrentDirPath(Drive) + '\' + FullPath
-  Else
-   FullPath:='\' + FullPath;
- End;
-
- { Gérer ".." (répertoire parent) }
- While Pos('\..\',FullPath) > 0 Do Begin
-  I:=Pos('\..\',FullPath);
-  If I > 1 Then Begin
-   { Trouver le répertoire parent }
-   J:=I-1;
-   While (J > 1) and (FullPath[J] <> '\') Do Dec(J);
-   Delete(FullPath,J+1,I+3-J-1);
-  End
-  Else
-   Delete(FullPath,1,4); { Enlever "\.." au début }
- End;
-
- { Gérer "." (répertoire courant) }
- While Pos('\.\',FullPath) > 0 Do Begin
-  I:=Pos('\.\',FullPath);
-  Delete(FullPath,I,2); { Enlever "\." }
- End;
-
- { Chercher le répertoire }
- If Not FindDirectoryByPath(Drive,BootSec,FullPath,DirCluster) Then Begin
-  DOS3Bh_ChangeDirectory:=3; { Path not found }
-  Exit;
- End;
-
- { Mettre à jour le répertoire courant }
- If Not SetCurrentDirectory(Drive,DirCluster) Then Begin
-  DOS3Bh_ChangeDirectory:=5; { Access denied }
-  Exit;
- End;
-
- { Changer le lecteur courant si nécessaire }
- SetCurrentDrive(Drive);
-
- DOS3Bh_ChangeDirectory:=0; { Succès }
+ DOS3Bh_ChangeDirectory:=FxChDir(PathPtr);
 End;
-
 {==============================================================================}
 { FONCTIONS POUR 3Ch - CREATE OR OPEN FILE                                    }
 {==============================================================================}
@@ -8382,78 +8359,31 @@ End;
 Function DOS47h_GetCurrentDirectory(Drive:Byte;BufferSeg:Word;BufferOfs:Word):Word;
 Var
  CurrentDrive: Byte;
- CurrentCluster: Word;
- PathBuffer: Array[0..63] Of Char;
- PathStr: String;
+ I: Byte;
+ Path: String;
+ Dst: PChar;
 Begin
- DOS47h_GetCurrentDirectory:=15; { Invalid drive par défaut }
-
- { Déterminer le lecteur à utiliser }
+ DOS47h_GetCurrentDirectory:=15; { Invalid drive par defaut }
  If Drive = 0 Then
   CurrentDrive:=GetCurrentDrive
  Else Begin
-  CurrentDrive:=Drive - 1; { 1=A:, 2=B:, etc. -> 0=A:, 1=B:, etc. }
-  If CurrentDrive >= 26 Then Begin
-   DOS47h_GetCurrentDirectory:=15; { Invalid drive }
-   Exit;
-  End;
+  CurrentDrive:=Drive - 1; { 1=A:, 2=B:, ... -> 0=A:, 1=B:, ... }
+  If CurrentDrive >= 26 Then Exit;
  End;
-
- { Obtenir le cluster du répertoire courant pour ce lecteur }
- CurrentCluster:=GetCurrentDirCluster(CurrentDrive);
-
- { Si c'est le répertoire racine, retourner chaîne vide }
- If CurrentCluster = 0 Then Begin
-  { Écrire une chaîne vide dans le buffer }
-  ASM
-   PUSH DS
-   MOV AX,BufferSeg
-   MOV DS,AX
-   MOV SI,BufferOfs
-   MOV BYTE PTR [SI],0     { Terminator null }
-   POP DS
-  END;
-  DOS47h_GetCurrentDirectory:=0;
-  Exit;
+ { chemin courant memorise sans le "\" initial (chaine vide pour la racine) }
+ Path:='';
+ If GetCurrentDirCluster(CurrentDrive) <> 0 Then Begin
+  Path:=GetCurrentDirPath(CurrentDrive);
+  If (Length(Path) > 0) And (Path[1] = '\') Then Delete(Path,1,1);
  End;
-
- { Pour cette implémentation simplifiée, retourner un chemin générique }
- { basé sur le numéro de cluster du répertoire courant }
- PathStr:='SUBDIR';
-
- { Copier le chemin dans le buffer de l'utilisateur }
- ASM
-  PUSH DS
-  PUSH ES
-
-  { Pointer vers notre string PathStr }
-  PUSH SS
-  POP DS
-  LEA SI,PathStr
-  MOV CL,[SI]        { Longueur de la chaîne }
-  INC SI             { Pointer vers le contenu }
-
-  { Pointer vers le buffer utilisateur }
-  MOV AX,BufferSeg
-  MOV ES,AX
-  MOV DI,BufferOfs
-
-  { Copier le chemin }
-  MOV CH,0
-  CLD
-  REP MOVSB
-
-  { Ajouter le terminateur null }
-  MOV AL,0
-  STOSB
-
-  POP ES
-  POP DS
- END;
-
- DOS47h_GetCurrentDirectory:=0; { Succès }
+ Dst:=PChar(Ptr(BufferSeg,BufferOfs));
+ For I:=1 To Length(Path) Do Begin
+  Dst^:=Path[I];
+  Inc(Dst);
+ End;
+ Dst^:=#0;
+ DOS47h_GetCurrentDirectory:=0;
 End;
-
 { Fonctions de gestion de la mémoire }
 
 { Initialise le gestionnaire de mémoire }
