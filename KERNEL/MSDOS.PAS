@@ -10781,8 +10781,12 @@ Begin
    Mem[S:O]:=10;
   End
   Else Begin
-   K:=ConGetKey;
-   C:=Lo(K);
+   { les touches etendues (AL=0, ex. fleches, Maj/Ctrl seuls) ne donnent
+     aucun caractere : elles sont ignorees comme par l'editeur de ligne DOS }
+   Repeat
+    K:=ConGetKey;
+    C:=Lo(K);
+   Until C<>0;
    Mem[S:O]:=C;
    If C=13 Then Begin ConPutChar(13); ConPutChar(10); SetPendingLF; End
    Else If C=8 Then Begin ConPutChar(8); ConPutChar(32); ConPutChar(8); End

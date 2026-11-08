@@ -61,5 +61,6 @@ Demarrage
     devenv /KERNELTEST,dossier /KTBOOTIMG:IMAGE\DOS144A.IMG /KTSCRIPT:t.txt
   (image <= 2,88 Mo : disquette 00h ; sinon disque dur 80h). Le secteur de
   boot est execute en 0000:7C00 : VBR -> IO.SYS -> COMMAND.COM (invite A:\>).
-  Pour tester l'ISO, demarrer sur l'image de boot qu'elle contient
-  (DOS144A.IMG).
+  Pour tester l'ISO : devenv /KERNELTEST,dossier /KTBOOTIMG:IMAGE\DOSCD.ISO ...
+  ou, dans l'IDE : devenv /CDROM:IMAGE\DOSCD.ISO puis la commande BOOT du
+  terminal (emulation disquette El Torito : l'image de boot est montee sur A:).
