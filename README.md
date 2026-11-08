@@ -1,7 +1,9 @@
 # MSDOS-0
 Clone de MS-DOS en langage de programmation Pascal (Turbo Pascal ou Free Pascal) avec un support de la langue française, allemande et anglaise.
 
-![image](https://user-images.githubusercontent.com/11842176/146283572-9ec412c9-cee5-4ba3-ba5d-d9ddfda47e4e.png)
+Le MSDOS-0 est vraiment démarrable à partir d'une disquette et son noyau n'est pas ecrit en assembleur mais pas en Pascal :
+
+<img width="640" height="370" alt="image" src="https://github.com/user-attachments/assets/be0125ce-fbab-4cf0-9392-d8d4a0315b33" />
 
 ![image](https://user-images.githubusercontent.com/11842176/194548244-bede424b-5d85-4808-9cf4-ff997c3ebb16.png)
 
