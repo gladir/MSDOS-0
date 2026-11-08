@@ -293,6 +293,9 @@ Type
   FirstData:LongInt;
  End;
  TFxSec = Array[0..511] of Byte;
+ TFxFree = Record
+  SPC,Free,BPS,Total:Word;
+ End;
  TFxEnt = Record
   Attr:Byte;
   Cluster:Word;
@@ -558,6 +561,7 @@ Function GetClusterSector(Drive:Byte;BootSec:BootSectorRec;Cluster:Word):LongInt
 { Fonctions principales pour 3Ah et 3Bh }
 Function DOS3Ah_RemoveDirectory(PathPtr:Pointer):Word;Near;Forward;
 Function DOS39h_MakeDirectory(PathPtr:Pointer):Word;Near;Forward;
+Function DOS36h_DiskFree(Drive:Byte;Var R:TFxFree):Word;Near;Forward;
 
 { Procédures spécifiques pour fonction 3Bh - Change Directory }
 Function FindDirectoryByPath(Drive:Byte;BootSec:BootSectorRec;Path:String;Var DirCluster:Word):Boolean;Near;Forward;
@@ -723,6 +727,7 @@ Procedure LoadAndExecuteCommandProcessor;Near;Forward;
 
 { Fonctions utilitaires de base }
 Function UpperCase(S:String):String;Near;Forward;
+Function MatchFileName(FileName:String;Mask:String):Boolean;Near;Forward;
 Function Pos(SubStr:String;S:String):Byte;Near;Forward;
 
 { Fonctions utilitaires pour la gestion mémoire }
@@ -2748,49 +2753,37 @@ Procedure Intr21h;Assembler;ASM
  { Interruption 21h - Fonction 36h: Get free disk space                }
  {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
 @36h:
- { Obtenir l'espace libre sur un lecteur spécifié }
- { Entrée : DL = numéro de lecteur (0=défaut, 1=A:, 2=B:, 3=C:, etc.) }
- { Sortie : AX = secteurs par cluster (-1 si erreur) }
- {         BX = clusters libres disponibles }
- {         CX = octets par secteur }
- {         DX = total clusters sur le lecteur }
- PUSH AX                    { Sauver registres }
- PUSH BX
- PUSH CX
-
- { Vérifier le numéro de lecteur }
- CMP DL,0                   { Lecteur par défaut ? }
- JE @36hDefaultDrive
- CMP DL,26                  { Vérifier limite (A-Z) }
- JA @36hError
-
-@36hDefaultDrive:
- { Dans un DOS complet, cette fonction interrogerait le système de fichiers }
- { Pour cette implémentation simplifiée, on simule les valeurs d'une disquette 1.44MB }
-
- { Simuler les paramètres d'une disquette 1.44MB }
- MOV AX,1                   { 1 secteur par cluster }
- MOV BX,1440                { Environ 1440 clusters libres (exemple) }
- MOV CX,512                 { 512 octets par secteur }
- MOV DX,2880                { 2880 clusters total sur disquette 1.44MB }
-
- POP CX                     { Restaurer les registres sauvés }
- POP BX                     { mais on va les écraser avec nos valeurs }
+ PUSH SI
+ PUSH DI
+ PUSH ES
+ PUSH DS
+ SUB SP,8
+ MOV SI,SP
+ XOR DH,DH
+ PUSH DX
+ PUSH SS
+ PUSH SI
+ PUSH CS
+ POP DS
+ CALL DOS36h_DiskFree
+ OR AX,AX
+ JNZ @36hErr
  POP AX
-
- { Remettre nos valeurs calculées }
- MOV AX,1                   { 1 secteur par cluster }
- MOV BX,1440                { 1440 clusters libres }
- MOV CX,512                 { 512 octets par secteur }
- MOV DX,2880                { 2880 clusters total }
- JMP @Xit
-
-@36hError:
- { Lecteur invalide }
- POP CX                     { Restaurer registres }
  POP BX
- POP AX
- MOV AX,0FFFFh              { Code d'erreur : -1 dans AX }
+ POP CX
+ POP DX
+ POP DS
+ POP ES
+ POP DI
+ POP SI
+ JMP @Xit
+@36hErr:
+ ADD SP,8
+ POP DS
+ POP ES
+ POP DI
+ POP SI
+ MOV AX,0FFFFh
  JMP @Xit
 
  {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
@@ -6698,6 +6691,144 @@ Begin
  FxChDir:=0;
 End;
 
+{ Recherche de fichiers (4Eh/4Fh) : repertoire courant ou sous-repertoire, entrees de toute taille de repertoire }
+Function FxFindFrom(Var DTA:DTAStruct):Word;
+Var
+ V:TFxVol;
+ St:FindFileState;
+ Buf:TFxSec;
+ Nm:String;
+ N,P:Word;
+ I,I0,K,L:Byte;
+ S:LongInt;
+Begin
+ FxFindFrom:=18;
+ GetFindState(St);
+ If Not St.Active Then Exit;
+ If Not FxVol(Ord(St.SearchPath[1])-65,V) Then Exit;
+ N:=St.CurrentEntry Div 16;
+ I0:=Byte(St.CurrentEntry Mod 16);
+ While FxDirSec(V,St.CurrentDir,N,S) Do Begin
+  If Not ReadSector(V.Drive,S,@Buf) Then Exit;
+  For I:=I0 To 15 Do Begin
+   P:=I*32;
+   If Buf[P]=0 Then Begin
+    St.Active:=False;
+    SetFindState(St);
+    Exit;
+   End;
+   If (Buf[P]<>$E5) And ((Buf[P+11] And $1E And (Not St.SearchAttr))=0) Then Begin
+    L:=0;
+    For K:=0 To 7 Do
+     If Buf[P+K]<>32 Then Begin Inc(L); Nm[L]:=Chr(Buf[P+K]) End Else Break;
+    If Buf[P+8]<>32 Then Begin
+     Inc(L);
+     Nm[L]:='.';
+     For K:=8 To 10 Do
+      If Buf[P+K]<>32 Then Begin Inc(L); Nm[L]:=Chr(Buf[P+K]) End Else Break;
+    End;
+    Nm[0]:=Chr(L);
+    If MatchFileName(Nm,St.SearchMask) Then Begin
+     FillChar(DTA.Reserved,21,0);
+     DTA.Attribute:=Buf[P+11];
+     DTA.Time:=Word(Buf[P+22])+Word(Buf[P+23])*256;
+     DTA.Date:=Word(Buf[P+24])+Word(Buf[P+25])*256;
+     DTA.Size:=Word(Buf[P+28])+Word(Buf[P+29])*256+(LongInt(Buf[P+30])+LongInt(Buf[P+31])*256)*65536;
+     Move(Nm[1],DTA.Name[0],L);
+     DTA.Name[L]:=#0;
+     St.CurrentEntry:=N*16+I+1;
+     SetFindState(St);
+     FxFindFrom:=0;
+     Exit;
+    End;
+   End;
+  End;
+  I0:=0;
+  Inc(N);
+ End;
+ St.Active:=False;
+ SetFindState(St);
+End;
+
+Function FxFindFirst(Path:String;Attr:Byte;Var DTA:DTAStruct):Word;
+Var
+ V:TFxVol;
+ St:FindFileState;
+ DirP,Mask:String;
+ Dr,Q,L,J:Byte;
+ Dir,Start:Word;
+Begin
+ FxFindFirst:=18;
+ Dr:=GetCurrentDrive;
+ Q:=1;
+ If (Length(Path)>=2) And (Path[2]=':') Then Begin
+  Dr:=Ord(UpCase(Path[1]))-Ord('A');
+  Q:=3;
+ End;
+ L:=0;
+ For J:=Q To Length(Path) Do
+  If (Path[J]='\') Or (Path[J]='/') Then L:=J;
+ If L>0 Then Begin
+  DirP:=Copy(Path,Q,L-Q);
+  Mask:=Copy(Path,L+1,255);
+ End Else Begin
+  DirP:='';
+  Mask:=Copy(Path,Q,255);
+ End;
+ If Mask='' Then Mask:='*.*';
+ If Dr>25 Then Begin FxFindFirst:=3; Exit End;
+ If Not FxVol(Dr,V) Then Begin FxFindFirst:=3; Exit End;
+ If (Q<=Length(Path)) And ((Path[Q]='\') Or (Path[Q]='/')) Then Start:=0 Else Start:=GetCurrentDirCluster(Dr);
+ If Not FxWalk(V,DirP,Start,Dir) Then Begin FxFindFirst:=3; Exit End;
+ GetFindState(St);
+ If Mask='*.*' Then Mask:='*';
+ St.SearchMask:=UpperCase(Mask);
+ St.SearchPath:=Chr(Dr+65);
+ St.SearchAttr:=Attr;
+ St.CurrentDir:=Dir;
+ St.CurrentEntry:=0;
+ St.Active:=True;
+ SetFindState(St);
+ FxFindFirst:=FxFindFrom(DTA);
+End;
+
+{ Fonction 36h : espace disque (clusters libres comptes dans la FAT) }
+Function DOS36h_DiskFree(Drive:Byte;Var R:TFxFree):Word;
+Var
+ V:TFxVol;
+ B:Array[0..1023] of Byte;
+ C,K,O,X,Cnt:Word;
+ Off,S,CS:LongInt;
+Begin
+ DOS36h_DiskFree:=15;
+ If Drive=0 Then Drive:=GetCurrentDrive Else Dec(Drive);
+ If Drive>25 Then Exit;
+ If Not FxVol(Drive,V) Then Exit;
+ CS:=-1;
+ Cnt:=0;
+ For K:=0 To V.Clusters-1 Do Begin
+  C:=K+2;
+  If V.Is16 Then Off:=LongInt(C)*2 Else Off:=LongInt(C)*3 Div 2;
+  S:=V.Res+Off Div 512;
+  If S<>CS Then Begin
+   If Not ReadSector(V.Drive,S,@B) Then Exit;
+   ReadSector(V.Drive,S+1,@B[512]);
+   CS:=S;
+  End;
+  O:=Word(Off Mod 512);
+  X:=Word(B[O])+Word(B[O+1])*256;
+  If Not V.Is16 Then Begin
+   If (C And 1)=0 Then X:=X And $0FFF Else X:=X Shr 4;
+  End;
+  If X=0 Then Inc(Cnt);
+ End;
+ R.SPC:=V.SPC;
+ R.BPS:=512;
+ R.Total:=V.Clusters;
+ R.Free:=Cnt;
+ DOS36h_DiskFree:=0;
+End;
+
 Function DOS3Ah_RemoveDirectory(PathPtr:Pointer):Word;
 Begin
  DOS3Ah_RemoveDirectory:=FxRmDir(PathPtr);
@@ -9794,200 +9925,14 @@ End;
 
 { Fonction 4Eh - Find First File }
 Function DOS4Eh_FindFirstFile(Path:String;Attr:Byte;var DTA:DTAStruct):Word;
-Var
- SearchPath: String;
- SearchName: String;
- DirEntry: DirectoryEntryFAT;
- RootDirSector, Sector: Word;
- EntryIndex: Word;
- Buffer: Array[0..511] of Byte;
- I, Pos: Byte;
- FileName: String;
- FindState: FindFileState;
 Begin
- DOS4Eh_FindFirstFile:=18; { Pas d'autres fichiers par défaut }
-
- { Initialiser l'état de recherche }
- GetFindState(FindState);
- With FindState Do Begin
-  Active:=False;
-  CurrentDir:=0;  { Répertoire racine par défaut }
-  CurrentEntry:=0;
-
-  { Extraire le chemin et le masque de recherche }
-  Pos:=Length(Path);
-  While (Pos > 0) And (Path[Pos] <> '\') And (Path[Pos] <> '/') Do Dec(Pos);
-
-  If Pos > 0 Then Begin
-   SearchPath:=Copy(Path,1,Pos);
-   SearchName:=Copy(Path,Pos+1,Length(Path)-Pos);
-  End Else Begin
-   SearchPath:='';
-   SearchName:=Path;
-  End;
-
-  { Si pas de masque spécifié, utiliser *.* }
-  If SearchName = '' Then SearchName:='*.*';
-  SearchMask:=UpperCase(SearchName);
-  SearchPath:=UpperCase(SearchPath);
-  SearchAttr:=Attr;
- End;
- SetFindState(FindState);
-
- { Commencer la recherche dans le répertoire racine }
- RootDirSector:=GetRootDirectorySector;
- If RootDirSector = 0 Then Exit;
-
- EntryIndex:=0;
- Sector:=RootDirSector;
-
- { Parcourir les entrées du répertoire racine }
- While Sector < (RootDirSector + GetRootDirectorySize) Do Begin
-  If Not ReadSectorSimple(Sector,Buffer) Then Exit;
-
-  For I:=0 To 15 Do Begin { 16 entrées par secteur }
-   Move(Buffer[I * 32],DirEntry,SizeOf(DirectoryEntryFAT));
-
-   { Ignorer les entrées supprimées ou vides }
-   If DirEntry.FileName[0] = #0 Then Break; { Fin des entrées }
-   If DirEntry.FileName[0] = #$E5 Then Begin
-    Inc(EntryIndex);
-    Continue; { Entrée supprimée }
-   End;
-
-   { Vérifier les attributs }
-   { masque d'attributs DOS : fichiers normaux + ceux demandes (cache 02, systeme 04, volume 08, repertoire 10) }
-   If (DirEntry.Attributes And $1E And (Not Attr)) <> 0 Then Begin
-    Inc(EntryIndex);
-    Continue;
-   End;
-
-   { Construire le nom du fichier }
-   FileName:=DOS83ToString(DirEntry.FileName);
-
-   { Vérifier si le nom correspond au masque }
-   If MatchFileName(FileName,FindState.SearchMask) Then Begin
-
-    { Fichier trouvé ! Remplir la DTA }
-    FillChar(DTA.Reserved,21,0);
-    DTA.Attribute:=DirEntry.Attributes;
-    DTA.Time:=DirEntry.Time;
-    DTA.Date:=DirEntry.Date;
-    DTA.Size:=DirEntry.Size;
-
-    { Copier le nom (format 8.3 avec terminateur null) }
-    Move(FileName[1],DTA.Name[0],Length(FileName));
-    DTA.Name[Length(FileName)]:=#0;
-
-    { Mettre à jour l'état pour FindNext }
-    GetFindState(FindState);
-    With FindState Do Begin
-     Active:=True;
-     CurrentEntry:=EntryIndex + 1;
-    End;
-    SetFindState(FindState);
-
-    DOS4Eh_FindFirstFile:=0; { Succès }
-    Exit;
-   End;
-
-   Inc(EntryIndex);
-  End;
-
-  Inc(Sector);
- End;
+ DOS4Eh_FindFirstFile:=FxFindFirst(Path,Attr,DTA);
 End;
-
 { Fonction 4Fh - Find Next File }
 Function DOS4Fh_FindNextFile(var DTA:DTAStruct):Word;
-Var
- DirEntry: DirectoryEntryFAT;
- RootDirSector, Sector: Word;
- Buffer: Array[0..511] of Byte;
- I: Byte;
- FileName: String;
- EntryIndex, SectorEntry: Word;
- FindState: FindFileState;
 Begin
- DOS4Fh_FindNextFile:=18; { Pas d'autres fichiers }
-
- { Vérifier si une recherche est active }
- GetFindState(FindState);
- If Not FindState.Active Then Exit;
-
- RootDirSector:=GetRootDirectorySector;
- If RootDirSector = 0 Then Exit;
-
- EntryIndex:=FindState.CurrentEntry;
- Sector:=RootDirSector + (EntryIndex Div 16);
- SectorEntry:=EntryIndex Mod 16;
-
- { Continuer la recherche depuis la position courante }
- While Sector < (RootDirSector + GetRootDirectorySize) Do Begin
-  If Not ReadSectorSimple(Sector,Buffer) Then Exit;
-
-  For I:=SectorEntry To 15 Do Begin { Continuer depuis la position courante }
-   Move(Buffer[I * 32],DirEntry,SizeOf(DirectoryEntryFAT));
-
-   { Ignorer les entrées supprimées ou vides }
-   If DirEntry.FileName[0] = #0 Then Begin
-    GetFindState(FindState);
-    FindState.Active:=False;
-    SetFindState(FindState);
-    Exit; { Fin des entrées }
-   End;
-
-   If DirEntry.FileName[0] = #$E5 Then Begin
-    Inc(EntryIndex);
-    Continue; { Entrée supprimée }
-   End;
-
-   { Vérifier les attributs }
-   { masque d'attributs DOS : fichiers normaux + ceux demandes (cache 02, systeme 04, volume 08, repertoire 10) }
-   If (DirEntry.Attributes And $1E And (Not FindState.SearchAttr)) <> 0 Then Begin
-    Inc(EntryIndex);
-    Continue;
-   End;
-
-   { Construire le nom du fichier }
-   FileName:=DOS83ToString(DirEntry.FileName);
-
-   { Vérifier si le nom correspond au masque }
-   If MatchFileName(FileName,FindState.SearchMask) Then Begin
-
-    { Fichier trouvé ! Remplir la DTA }
-    FillChar(DTA.Reserved,21,0);
-    DTA.Attribute:=DirEntry.Attributes;
-    DTA.Time:=DirEntry.Time;
-    DTA.Date:=DirEntry.Date;
-    DTA.Size:=DirEntry.Size;
-
-    { Copier le nom (format 8.3 avec terminateur null) }
-    Move(FileName[1],DTA.Name[0],Length(FileName));
-    DTA.Name[Length(FileName)]:=#0;
-
-    { Mettre à jour l'état pour le prochain FindNext }
-    GetFindState(FindState);
-    FindState.CurrentEntry:=EntryIndex + 1;
-    SetFindState(FindState);
-
-    DOS4Fh_FindNextFile:=0; { Succès }
-    Exit;
-   End;
-
-   Inc(EntryIndex);
-  End;
-
-  Inc(Sector);
-  SectorEntry:=0; { Commencer au début du secteur suivant }
- End;
-
- { Plus de fichiers trouvés }
- GetFindState(FindState);
- FindState.Active:=False;
- SetFindState(FindState);
+ DOS4Fh_FindNextFile:=FxFindFrom(DTA);
 End;
-
 { Fonctions 50h et 51h - Gestion PSP (Program Segment Prefix) }
 
 { Fonction 50h - Set PSP Address }

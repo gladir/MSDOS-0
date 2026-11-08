@@ -885,6 +885,8 @@ Begin
     WriteLn(' ',T.Year:4,'-',PadZeroLeft(T.Month,2),'-',
             PadZeroLeft(T.Day,2),' ',T.Hour:2,':',PadZeroLeft(T.Min,2));
    End;
+   Inc(TotalNumFiles);
+   Inc(TotalSize,Info.Size);
    FindNext(Info);
    If(Pause)in(Option)Then Begin
     Inc(P);
@@ -895,8 +897,6 @@ Begin
      P:=0;
     End;
    End;
-   Inc(TotalNumFiles);
-   Inc(TotalSize,Info.Size);
   End;
   If Not((Brief)in(Option))Then Begin
    If(Pipe)Then Begin
