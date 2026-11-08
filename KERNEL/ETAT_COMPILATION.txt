@@ -17,17 +17,27 @@ Resume
 * Script de reproduction : KERNEL/BOOTTEST.sh. Mode de mise au point : compiler
   avec -DKDEBUG (DbgW affiche des valeurs a l'ecran via INT 10h).
 
+Ce qui est valide dans l'emulateur (BOOTTEST.sh, script "type ...")
+------------------------------------------------------------------
+COMMAND.EXE (compile par TPC) tourne sur le noyau et execute : VER, ECHO, DIR
+(fichiers et masque d'attributs DOS), TYPE, COPY (lecture + creation), CD \, DATE/TIME
+(lecture de l'horloge BIOS). La saisie clavier est editee (retour arriere) et
+l'echo passe par le curseur BIOS (0040:0050) comme Crt.
+
 Ce qui ne marche pas encore
 ---------------------------
-* Apres "ver" + Entree, COMMAND.EXE ne produit pas de sortie : les gestionnaires
-  INT 21h qui appellent une fonction Pascal ont ete corriges pour 3B,3A,3C,3D,3E,
-  3F,40,41,42,44,47,48,49,4A,4B,4C,4E,4F ; il reste a refaire de meme (ordre des
-  parametres Pascal, DS=CS pendant l'appel, pas de ADD SP) pour les ~60 autres
-  fonctions (FCB 0F-17/21-24/27-29, 39h mkdir reel, 43h, 45/46h, 56h, 57h, 5Ah...).
-* Entree clavier : mode ligne editee (3Fh avec CX>1) et caractere par caractere
-  (CX=1, RTL de TPC) ; a completer (fleches, Ctrl+C), et fonctions 01/06/07/08/0A.
-* Ecriture sur disque (FAT) non validee ; seule la lecture est testee.
-* La taille d'IO.SYS (64 774 octets) laisse < 1 Ko de marge dans le segment.
+* Ecriture FAT : la creation de fichier (3Ch/5Bh), l'ecriture (40h) et la mise a
+  jour du repertoire ne sont pas persistees sur le disque (COPY affiche
+  "1 fichier copie" mais l'entree n'apparait pas dans la racine), MD est simule
+  (39h), REN (56h) et DEL (41h) non valides.
+* Les ~60 autres passerelles INT 21h (FCB 0F-17/21-24/27-29, 43h, 45h, 46h, 57h, 5Ah...)
+  ont encore les defauts d'ordre de parametres / DS / ADD SP : meme methode de
+  correction que pour 3A-4F (voir @3Dh..@4Fh dans MSDOS.PAS).
+* INT 1Ah de l'emulateur ne fournit pas l'horloge temps reel : DATE/TIME affichent 0.
+* La concatenation "Result := Result + caractere" donne un resultat faux quand elle
+  est compilee dans le segment noyau (contournee dans DOS83ToString) : a corriger dans
+  TPC (mode noyau) car beaucoup de code du noyau concatene des chaines.
+* IO.SYS fait ~65 285 octets : il reste < 300 octets de marge dans le segment.
 
 Corrections de TPC (resume)
 ---------------------------
