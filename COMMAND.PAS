@@ -6,16 +6,16 @@
 
 Program COMMAND;
 
-{$M 12288,0,0}
+{$M 24576,0,0}
 
 Uses Crt,DOS;
 
 Const
- CommandList:Array[0..36]of String[8]=(
+ CommandList:Array[0..37]of String[8]=(
   'BREAK','CALL','CD','CHCP','CHDIR','CLS','COPY','CTTY','DEL','DELETE',
   'DIR','ECHO','ERA','ERASE','EXIT','FOR','IF','LOADHIGH','MD','MKDIR',
   'PATH','PAUSE','PROMPT','RD','REM','REN','RENAME','RMDIR','SET',
-  'SHIFT','TIME','TRUENAME','TYPE','VER','VERIFY','VOL','DATE'
+  'SHIFT','TIME','TRUENAME','TYPE','VER','VERIFY','VOL','DATE','GOTO'
  );
 
 Var
@@ -26,6 +26,10 @@ Var
  RedirOut,RedirIn:String;
  RedirAppend,OutRedir,InRedir:Boolean;
  InCmd:Byte;
+ ErrorLevel:Word;
+ BatDepth:Byte;
+ PendingGoto:String;
+ BatFrames:Array[1..4]of Array[0..9]of String[60];
  Option:(optNone,optCommand);
  Echo:Boolean;
  CommandFound,Terminated:Boolean;
@@ -518,8 +522,8 @@ Begin
   End;
  End
   Else
- If StrToUpper(ParamList)='OFF'Then SetCBreak(False) Else
- If StrToUpper(ParamList)='ON'Then SetCBreak(True)
+ If StrToUpper(Trim(ParamList))='OFF'Then SetCBreak(False) Else
+ If StrToUpper(Trim(ParamList))='ON'Then SetCBreak(True)
   Else
  Begin
   GetCBreak(X);
@@ -537,8 +541,39 @@ Begin
  End;
 End;
 
+{ Premier mot de S et reste (sans espaces de tete) }
+Function FirstWord(Const S:String):String;
+Var
+ I:Byte;
+Begin
+ I:=1;
+ While(I<=Length(S))and(S[I]<>' ')and(S[I]<>#9)do Inc(I);
+ FirstWord:=Copy(S,1,I-1);
+End;
+
+Function AfterWord(Const S:String):String;
+Var
+ I:Byte;
+Begin
+ I:=1;
+ While(I<=Length(S))and(S[I]<>' ')and(S[I]<>#9)do Inc(I);
+ While(I<=Length(S))and((S[I]=' ')or(S[I]=#9))do Inc(I);
+ AfterWord:=Copy(S,I,255);
+End;
+
 Procedure CallCommand;Begin
- WriteLn('Cette commande n''est pas mise en oeuvre');
+ { CALL programme ou fichier batch : execute simplement le reste de la ligne }
+ CmdStr:=ParamList;
+ If CmdStr<>''Then RunCommand;
+End;
+
+Procedure GotoCommand;Begin
+ If BatDepth=0 Then WriteLn('GOTO n''est utilisable que dans un fichier batch')
+  Else
+ Begin
+  PendingGoto:=StrToUpper(FirstWord(ParamList));
+  If(PendingGoto<>'')and(PendingGoto[1]=':')Then Delete(PendingGoto,1,1);
+ End;
 End;
 
 Procedure ChDirCommand;
@@ -1145,8 +1180,8 @@ Begin
  If ParamList='.'Then Begin
   If(Pipe)Then WriteLn(PipeFile)Else WriteLn;
  End Else
- If StrToUpper(ParamList)='OFF'Then Echo:=False Else
- If StrToUpper(ParamList)='ON'Then Echo:=True
+ If StrToUpper(Trim(ParamList))='OFF'Then Echo:=False Else
+ If StrToUpper(Trim(ParamList))='ON'Then Echo:=True
   Else Begin
    If(Pipe)Then WriteLn(PipeFile,ParamList)Else WriteLn(ParamList);
   End;
@@ -1335,8 +1370,55 @@ Begin
  End;
 End;
 
-Procedure IfCommand;Begin
- WriteLn('Cette commande n''est pas mise en oeuvre');
+Procedure IfCommand;
+Var
+ P,A,B,W:String;
+ Neg,Cond:Boolean;
+ N,Err:Integer;
+ K:Byte;
+Begin
+ P:=ParamList;
+ If(P='')or(P='/?')Then Begin
+  WriteLn('IF [NOT] ERRORLEVEL n commande');
+  WriteLn('IF [NOT] chaine1==chaine2 commande');
+  WriteLn('IF [NOT] EXIST fichier commande');
+  Exit;
+ End;
+ Neg:=False;
+ If StrToUpper(FirstWord(P))='NOT'Then Begin
+  Neg:=True;
+  P:=AfterWord(P);
+ End;
+ W:=StrToUpper(FirstWord(P));
+ If W='ERRORLEVEL'Then Begin
+  P:=AfterWord(P);
+  Val(FirstWord(P),N,Err);
+  Cond:=(Err=0)and(ErrorLevel>=N);
+  P:=AfterWord(P);
+ End
+  Else
+ If W='EXIST'Then Begin
+  P:=AfterWord(P);
+  Cond:=FileExist(FirstWord(P));
+  P:=AfterWord(P);
+ End
+  Else
+ Begin
+  K:=Pos('==',P);
+  If K=0 Then Begin
+   WriteLn('Syntaxe incorrecte');
+   Exit;
+  End;
+  A:=Copy(P,1,K-1);
+  P:=Copy(P,K+2,255);
+  B:=FirstWord(P);
+  P:=AfterWord(P);
+  Cond:=A=B;
+ End;
+ If Cond<>Neg Then Begin
+  CmdStr:=P;
+  If CmdStr<>''Then RunCommand;
+ End;
 End;
 
 Procedure LoadHighCommand;Begin
@@ -1668,8 +1750,14 @@ Begin
  End;
 End;
 
-Procedure ShiftCommand;Begin
- WriteLn('Cette commande n''est pas mise en oeuvre');
+Procedure ShiftCommand;
+Var
+ I:Byte;
+Begin
+ If BatDepth>0 Then Begin
+  For I:=1 to 8 do BatFrames[BatDepth][I]:=BatFrames[BatDepth][I+1];
+  BatFrames[BatDepth][9]:='';
+ End;
 End;
 
 Procedure TimeCommand;
@@ -1882,8 +1970,8 @@ Begin
   End;
  End
   Else
- If StrToUpper(ParamList)='OFF'Then SetVerify(False) Else
- If StrToUpper(ParamList)='ON'Then SetVerify(True)
+ If StrToUpper(Trim(ParamList))='OFF'Then SetVerify(False) Else
+ If StrToUpper(Trim(ParamList))='ON'Then SetVerify(True)
   Else
  Begin
   GetVerify(X);
@@ -1979,6 +2067,122 @@ Begin
  MsDos(R);
 End;
 
+{ Remplace %n (parametres du batch), %NOM% (environnement) et %% }
+Function BatSubst(Const L:String):String;
+Var
+ I,J:Byte;
+ R:String;
+Begin
+ R:='';
+ I:=1;
+ While I<=Length(L)do Begin
+  If L[I]='%'Then Begin
+   If(I<Length(L))and(L[I+1]='%')Then Begin
+    R:=R+'%';
+    Inc(I,2);
+   End
+    Else
+   If(I<Length(L))and(L[I+1]in['0'..'9'])Then Begin
+    R:=R+BatFrames[BatDepth][Ord(L[I+1])-48];
+    Inc(I,2);
+   End
+    Else
+   Begin
+    J:=I+1;
+    While(J<=Length(L))and(L[J]<>'%')do Inc(J);
+    If(J<=Length(L))and(J>I+1)Then Begin
+     R:=R+GetEnv(StrToUpper(Copy(L,I+1,J-I-1)));
+     I:=J+1;
+    End
+     Else
+    Begin
+     R:=R+'%';
+     Inc(I);
+    End;
+   End;
+  End
+   Else
+  Begin
+   R:=R+L[I];
+   Inc(I);
+  End;
+ End;
+ BatSubst:=R;
+End;
+
+Procedure RunBatch(Const Path,Args:String);
+Var
+ F:Text;
+ Line,Rest,L2:String;
+ Quiet,SavedEcho,Found:Boolean;
+ K:Byte;
+Begin
+ If BatDepth>=4 Then Begin
+  WriteLn('Limite de 4 fichiers de traitements par lots imbriques.');
+  Exit;
+ End;
+ Assign(F,Path);
+ {$I-}Reset(F);{$I+}
+ If IOResult<>0 Then Begin
+  WriteLn('Probleme de lecture du fichier de traitement par lot');
+  Exit;
+ End;
+ Inc(BatDepth);
+ For K:=0 to 9 do BatFrames[BatDepth][K]:='';
+ BatFrames[BatDepth][0]:=Path;
+ Rest:=Args;
+ K:=1;
+ While(Rest<>'')and(K<=9)do Begin
+  BatFrames[BatDepth][K]:=FirstWord(Rest);
+  Rest:=AfterWord(Rest);
+  Inc(K);
+ End;
+ SavedEcho:=Echo;
+ While Not EOF(F)and Not(Terminated)do Begin
+  ReadLn(F,Line);
+  Line:=Trim(BatSubst(Line));
+  Quiet:=False;
+  While(Length(Line)>0)and(Line[1]='@')do Begin
+   Quiet:=True;
+   Delete(Line,1,1);
+  End;
+  If(Line<>'')and(Line[1]<>':')Then Begin
+   If(Echo)and Not(Quiet)Then Begin
+    ShowPrompt;
+    WriteLn(Line);
+   End;
+   CmdStr:=Line;
+   PendingGoto:='';
+   RunCommand;
+   If PendingGoto<>''Then Begin
+    Close(F);
+    Found:=False;
+    If PendingGoto<>'EOF'Then Begin
+     Reset(F);
+     While Not EOF(F)and Not(Found)do Begin
+      ReadLn(F,L2);
+      L2:=TrimL(L2);
+      If(Length(L2)>1)and(L2[1]=':')and(StrToUpper(FirstWord(Copy(L2,2,255)))=PendingGoto)Then Found:=True;
+     End;
+     If Not(Found)Then Begin
+      WriteLn('Etiquette introuvable : ',PendingGoto);
+      Close(F);
+     End;
+    End;
+    If Not(Found)Then Begin
+     { fin du batch : rouvrir pour que Close final soit valide }
+     Reset(F);
+     While Not EOF(F)do ReadLn(F,L2);
+    End;
+    PendingGoto:='';
+   End;
+  End;
+ End;
+ Close(F);
+ Echo:=SavedEcho;
+ Dec(BatDepth);
+End;
+
 { Recherche d'un programme : nom tel quel s'il a une extension, sinon .COM puis .EXE, dans le
   repertoire courant puis dans PATH }
 Function FindProgram(Const Name:String):String;
@@ -1993,17 +2197,21 @@ Begin
  End;
  R:=FSearch(Name+'.COM',Dirs);
  If R='' Then R:=FSearch(Name+'.EXE',Dirs);
+ If R='' Then R:=FSearch(Name+'.BAT',Dirs);
  FindProgram:=R;
 End;
 
 Procedure UnknownCommand;
 Var
  Err:Word;
- Prog:String;
+ Prog,Tok,Args:String;
  SavedIn,SavedOut:Word;
  InOk,OutOk:Boolean;
 Begin
- Prog:=FindProgram(CurrCommand);
+ Tok:=FirstWord(CmdStr);
+ Args:=AfterWord(CmdStr);
+ If Tok=''Then Exit;
+ Prog:=FindProgram(Tok);
  If Prog=''Then Begin
   WriteLn('Commande ou nom de fichier non reconnu');
   WriteLn;
@@ -2028,8 +2236,16 @@ Begin
    Exit;
   End;
  End;
- Exec(Prog,ParamList);
+ If(Length(Prog)>=4)and(StrToUpper(Copy(Prog,Length(Prog)-3,4))='.BAT')Then Begin
+  RunBatch(Prog,Args);
+  If OutOk Then DosRestore(1,SavedOut);
+  If InOk Then DosRestore(0,SavedIn);
+  If BatDepth=0 Then WriteLn;
+  Exit;
+ End;
+ Exec(Prog,Args);
  Err:=DosError;
+ If Err=0 Then ErrorLevel:=DosExitCode;
  If OutOk Then DosRestore(1,SavedOut);
  If InOk Then DosRestore(0,SavedIn);
  Case Err of
@@ -2037,7 +2253,7 @@ Begin
   2:WriteLn('Commande ou nom de fichier non reconnu');
   Else Write(GetErrorMessage(Err));
  End;
- WriteLn;
+ If BatDepth=0 Then WriteLn;
 End;
 
 { Redirection des commandes internes : le handle du Text Output est remplace par celui du fichier
@@ -2141,11 +2357,12 @@ Restart:
     34:VerifyCommand;
     35:VolCommand;
     36:DateCommand;
+    37:GotoCommand;
    End;
    EndRedirect;
    If J<=High(CommandList)Then Begin
     CommandFound:=True;
-    WriteLn;
+    If BatDepth=0 Then WriteLn;
     Break;
    End;
   End;
@@ -2155,29 +2372,6 @@ Restart:
    For I:=Low(CommandList) to High(CommandList) do Write(PadRight(CommandList[I],10));
    WriteLn;
    WriteLn;
-  End
-   Else
-  If FileExist(CmdStr+'.BAT')Then Begin
-   Inc(InCmd);
-   If InCmd>20Then Begin
-    WriteLn('Limite de 20 fichiers de traitements par lots maximum.');
-    Exit;
-   End;
-   LastEcho:=Echo;
-   Assign(FileBat,CmdStr+'.BAT');
-   {$I-}Reset(FileBat);{$I+}
-   If IOResult=0Then Begin
-    While Not EOF(FileBat)do Begin
-     ReadLn(FileBat,CmdStr);
-     If(Echo)Then WriteLn(CmdStr);
-     RunCommand;
-    End;
-   End
-    Else
-   WriteLn('Probleme de lecture du fichier de traitement par lot');
-   Close(FileBat);
-   Echo:=LastEcho;
-   Dec(InCmd);
   End
    Else
   UnknownCommand;
@@ -2233,7 +2427,7 @@ End;
 { Commande complete : tuyaux (|) et redirections (> >> <) }
 Procedure RunCommand;
 Var
- Segs:Array[1..6]of String;
+ Segs:Array[1..4]of String;
  N,I,K:Byte;
  Q:Boolean;
  Whole:String;
@@ -2243,7 +2437,7 @@ Begin
  N:=1;Segs[1]:='';Q:=False;
  For K:=1 to Length(Whole)do Begin
   If Whole[K]='"'Then Q:=Not Q;
-  If(Whole[K]='|')and Not(Q)and(N<6)Then Begin
+  If(Whole[K]='|')and Not(Q)and(N<4)Then Begin
    Inc(N);
    Segs[N]:='';
   End

@@ -760,7 +760,7 @@ Function SetupEnvironment(EnvSeg:Word;ParentPSP:Word):Word;Near;Forward;
 Function RelocateExe(LoadSeg:Word;ExeHdr:ExeHeader;FileName:String):Boolean;Near;Forward;
 
 { Fonction pour charger le processeur de commandes }
-Procedure LoadAndExecuteCommandProcessor;Near;Forward;
+Function LoadAndExecuteCommandProcessor:Boolean;Near;Forward;
 
 { Fonctions utilitaires de base }
 Function UpperCase(S:String):String;Near;Forward;
@@ -836,7 +836,7 @@ Procedure ConPutChar(C:Byte);Near;Forward;
 Procedure BEGIN_KERNEL;
 Var
  I:Byte;
- Msg:String[30];
+ Msg:String[60];
  IntSeg, IntOfs: Word;
 Begin
  { Chargeur de la suite d'IO.SYS : le secteur de boot (MS-DOS 5/6) ne charge que les 3 premiers secteurs
@@ -1103,8 +1103,12 @@ Begin
  InitializeMemoryManager;
 
  { Charger et exécuter COMMAND.COM ou COMMAND.EXE }
- LoadAndExecuteCommandProcessor;
- { Plus de processeur de commandes : le noyau s'arrête }
+ { Le processeur de commandes est relance s'il se termine (EXIT) ; absent, le noyau s'arrête }
+ While LoadAndExecuteCommandProcessor Do;
+ Msg:='Interpreteur de commandes introuvable (COMMAND.EXE)';
+ ConPutChar(13);
+ ConPutChar(10);
+ For I:=1 To Length(Msg) Do ConPutChar(Ord(Msg[I]));
  ASM
  @Halt:
   CLI
@@ -11039,7 +11043,7 @@ Begin
 End;
 
 { Charge et exécute le processeur de commandes }
-Procedure LoadAndExecuteCommandProcessor;
+Function LoadAndExecuteCommandProcessor:Boolean;
 Var
  ParamBlock: ExecParameterBlock;
  Result: Word;
@@ -11077,8 +11081,7 @@ Begin
   End;
  End;
 
- { Si aucun processeur de commandes n'est trouvé, continuer quand même }
- { Le système restera en mode noyau }
+ LoadAndExecuteCommandProcessor:=Result=0;
 End;
 
 { Fonctions utilitaires de base pour éviter les dépendances SYSTEM.PAS }
@@ -11412,8 +11415,14 @@ Begin
  Parent:=MemW[Cur:$16];
  SetLastReturnCode(ExitCode);
  JftReleaseAll(Cur);
- SetCurrentPSP(Parent);
- SetDTA(Parent,$80);
+ If Parent=Cur Then Begin
+  { processeur de commandes principal : plus de processus courant (le noyau relancera COMMAND) }
+  SetCurrentPSP(0);
+  SetDTA($9000,0);
+ End Else Begin
+  SetCurrentPSP(Parent);
+  SetDTA(Parent,$80);
+ End;
  FreeProcessMemory(Cur);
  ASM
   DEC Data.DataMOS.InDos

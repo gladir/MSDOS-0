@@ -1,81 +1,78 @@
-ETAT DE LA COMPILATION ET DU DEMARRAGE DU NOYAU (TPC + DEVENV /KERNELTEST)
-==========================================================================
+ETAT DE LA COMPILATION ET DU DEMARRAGE DU NOYAU (TPC + DEVENV /KERNELTEST /KTBOOT, Start-KernelDos)
+=================================================================================================
 
 Resume
 ------
-* TPC compile MSDOS.PAS en un IO.SYS de ~50 Ko (MAKER.PAS l'ecrit comme prevu :
-  BEGIN_KERNEL a l'offset 0). Une unite qui declare "Procedure BEGIN_KERNEL" est
-  compilee dans son propre segment : donnees (chaines, constantes) et routines du
-  runtime SYSTEM utilisees sont recopiees dans le segment (DS=CS), l'edition de
-  liens intelligente retire les routines inutilisees.
-* DEVENV /KERNELTEST (headless) charge IO.SYS en 0070:0000. Le noyau :
-  - initialise memoire (arene MCB apres le noyau) et vecteurs,
-  - lit le disque par INT 13h, trouve C:\COMMAND.EXE (FAT12), le charge
-    (relocalisations, PSP, environnement) et lui donne la main (INT 21h/4Bh),
-  - COMMAND.EXE affiche sa banniere et son invite "C:\>" et recoit la frappe
-    clavier (INT 21h/3Fh sur la console) ; la fin de programme (4Ch) revient au noyau.
-* Script de reproduction : KERNEL/BOOTTEST.sh. Mode de mise au point : compiler
-  avec -DKDEBUG (DbgW affiche des valeurs a l'ecran via INT 10h).
+* TPC compile MSDOS.PAS en un IO.SYS d'environ 62 Ko (MAKER.PAS l'ecrit comme prevu : BEGIN_KERNEL a l'offset 0).
+  Une unite qui declare "Procedure BEGIN_KERNEL" est compilee dans son propre segment : donnees (chaines, constantes)
+  et routines du runtime SYSTEM utilisees sont recopiees dans le segment (DS=CS), l'edition de liens intelligente
+  retire les routines inutilisees. Limite du segment : 64 Ko (marge actuelle ~3 Ko : voir "Taille").
+* Demarrage REEL valide : MBR -> VBR (3 secteurs d'IO.SYS) -> chargeur d'IO.SYS (debut de BEGIN_KERNEL) -> noyau ->
+  C:\COMMAND.EXE. Fonctionne dans le banc headless (DEVENV /KERNELTEST,dossier /KTBOOT) et dans un onglet
+  emulateur de DEVENV (Start-KernelDos -Path dossier [-ImagePath img]).
+* Message de demarrage : "Demarrage du MSDOS-0..." (plus de copyright).
+* Si COMMAND se termine (EXIT), le noyau le relance ; s'il est introuvable, message et arret.
 
-Ce qui est valide dans l'emulateur (BOOTTEST.sh, script "type ...")
+Chargeur / memoire
+------------------
+* IO.SYS (> 30 Ko) recouvre la pile du VBR (0000:7C00) et le BPB : le chargeur copie les champs du BPB en local puis
+  passe sur la pile privee 9000:FFF0 d'ou le noyau continue l'initialisation. Arene memoire : 1080h..9000h.
+* INT 21h s'execute sur une pile privee 9000:xxxx (sommet KSP, DataMOS+FxBase+124) : le point d'entree Intr21h
+  sauvegarde le cadre utilisateur (CX BX AX BP ES DS IP CS FLAGS), bascule sur la pile du noyau, appelle Intr21hCore
+  et rend les registres de sortie dans le cadre utilisateur. EXEC (ExecEnter/ExecReturn) memorise/restaure KSP.
+  Un programme avec une pile de 1,5 Ko ({$M 1500,0,0}) passe tous les tests (TESTS.EXE).
+
+Handles : SFT et JFT par processus
+----------------------------------
+* La table FileTable (20 entrees, 0..4 = peripheriques) est la SFT partagee, avec un compteur de references (SftRef,
+  DataMOS+FxBase+104). Chaque PSP porte sa JFT (20 octets, PSP:18h) ; un handle de programme est un index de JFT.
+* 45h DUP, 46h FORCEDUP, heritage de la JFT par EXEC (BuildPSP/JftInherit), fermeture de tous les handles et des
+  verrous a la terminaison. Le premier processus est son propre parent (comme sous MS-DOS : SetEnv de COMMAND remonte
+  la chaine de PSP).
+* 01h/07h/08h/0Ah lisent l'entree standard redirigee ; 02h/06h/09h ecrivent sur la sortie standard redirigee.
+
+Fonctions INT 21h reelles (FAT12/FAT16, couche Fx* dans MSDOS.PAS)
 ------------------------------------------------------------------
-COMMAND.EXE (compile par TPC) tourne sur le noyau et execute : VER, ECHO, DIR (repertoire courant et
-sous-repertoires, totaux, espace libre reel), TYPE, COPY (lecture ET ecriture persistantes, fichiers de
-plusieurs clusters, fichiers de COMMAND vers sous-repertoire), REN, DEL, MD, RD, CD (repertoire courant memorise,
-".." et chemins relatifs), DATE/TIME (lecture de l'horloge BIOS). La saisie clavier est editee.
+39h MD, 3Ah RD, 3Bh CD, 3Ch/3Dh/3Eh/3Fh/40h, 41h, 42h (reecrit : depuis le debut/position/fin, trou comble par
+des zeros a l'ecriture), 40h avec 0 octet = troncature, 43h attributs, 44h IOCTL minimal, 45h/46h, 47h, 4Bh (EXE et
+COM), 4Ch, 4Eh/4Fh (etat de la recherche dans la DTA : recherches imbriquees possibles), 56h, 57h date/heure,
+5Ah temporaire, 5Bh creer, 5Ch verrous (AL=0 verrouiller, AL=1 deverrouiller), 36h (espace libre FAT16 rapide),
+FCB complets : 0Fh 10h 11h 12h 13h 14h 15h 16h 17h 21h 22h 23h 24h 27h 28h 29h. INT 20h (RET d'un .COM) = 4C00h.
+Date/heure des fichiers : INT 1Ah/02h-04h (DEVENV fournit la RTC de l'hote) ; 1980-01-01 sans RTC. Les noms
+invalides (jokers, caracteres interdits) sont refuses a la creation.
 
-Couche FAT en ecriture (Fx*, dans MSDOS.PAS) : FAT12/FAT16 (entree FAT12 a cheval sur deux secteurs geree),
-volume compact (TFxVol) au lieu du secteur de boot de 512 octets passe par valeur, entrees de repertoire
-manipulees dans le tampon du secteur. Fonctions : 39h MD, 3Ah RD, 3Bh CD, 3Ch creer/tronquer, 3Dh ouvrir,
-3Eh fermer (met a jour taille et premier cluster), 40h ecrire, 41h supprimer, 47h repertoire courant,
-4Eh/4Fh recherche, 56h renommer, 5Bh creer (echec si existe), 36h espace libre. L'emplacement de l'entree
-de repertoire de chaque handle est memorise dans Data.DataMOS (FxBase = 2486, 20 x 5 octets).
-Verification : python3 KERNEL/FATLS.py /tmp/kerneltest.img [FICHIER1 FICHIER2] liste l'image FAT12 ecrite par
-l'emulateur et compare deux fichiers.
+Tests (tous dans KERNEL/ ou reproduits par /tmp)
+------------------------------------------------
+* TESTH.PAS : handles, DUP/FORCEDUP, 43h, 44h, 57h, 5Ah, 5Bh, 5Ch, FCB (47 verifications) - a executer sous le noyau
+  (pauses : taper "go" six fois). TSTRESS.PAS : fichiers de 200 Ko, ajout, Truncate, trou, 120 fichiers dans un
+  repertoire, suppression, renommage, RD/MD, texte. TUP.PAS : filtre stdin->stdout pour les tuyaux et redirections.
+* DOSBox donne les memes resultats que le noyau pour TSTRESS (sauf constantes 30*4096 : voir TPC).
+* fatchk.py (outil de test local) verifie la coherence d'un volume FAT16 : chaines, clusters partages ou perdus,
+  FAT1 = FAT2, '.' et '..' ; aucune erreur apres les scenarios.
+* GUI : Start-KernelDos dans l'onglet emulateur de DEVENV (Xvfb, frappes XTEST) : ver, dir, md, copy, echo > fichier,
+  type, dir | tup, testh.
 
-Demarrage reel (MBR -> VBR -> IO.SYS -> COMMAND.EXE) : VALIDE
----------------------------------------------------------------
-* DEVENV /KERNELTEST,dossier /KTBOOT : image FAT16 256 Mo (MBR + VBR, 63 secteurs caches), le secteur 0 est
-  execute en 0000:7C00. Le VBR ne charge que 3 secteurs d'IO.SYS ; le chargeur (debut de BEGIN_KERNEL)
-  relit le reste depuis la racine. IO.SYS (~50 Ko) recouvre la pile du VBR (0000:7C00) et le BPB : le chargeur
-  copie les champs du BPB en local puis passe sur une pile privee 9000:FFF0 ou le noyau continue.
-* Meme resultat dans un onglet emulateur de DEVENV : Start-KernelDos -Path dossier [-ImagePath img] (teste sous
-  Linux/Xvfb, frappes injectees par XTEST) : ver, dir, md, copy vers sous-repertoire, cd, dir . et .. fonctionnent.
-* DEVENV.PAS : Kdos_ScanRecursive utilise DirectorySeparator (Start-KernelDos echouait sous Linux).
-* COMMAND.PAS : DIR d'un repertoire sans caractere generique liste son contenu.
+COMMAND.PAS
+-----------
+Redirections > >> < et tuyaux | pour toutes les commandes (internes : Output reassigne au fichier ; externes : 45h/46h
+sur les handles 0/1), programmes .COM/.EXE/.BAT recherches dans le repertoire courant puis PATH, DEL/REN/COPY avec
+jokers et repertoires, SET VAR= supprime la variable, fichiers batch (%0..%9, %VAR%, IF, GOTO, CALL, SHIFT, @,
+ERRORLEVEL). Le segment de code de COMMAND approche 64 Ko.
 
-Ce qui ne marche pas encore
----------------------------
-* Date/heure des fichiers : lues par INT 1Ah/02h-04h (FxStamp) ; DEVENV fournit maintenant ces services RTC
-  (horloge de l'hote). Sans RTC le noyau retombe sur 1980-01-01 00:00.
-* Redirection ">" : COMMAND la gere lui-meme (PipeFile) ; ECHO et DIR redirigent vers un fichier (valide).
-  45h (DUP) / 46h (FORCEDUP) et une table de handles par processus (JFT) restent a faire pour les programmes.
-* Les autres passerelles INT 21h (FCB 0F-17/21-24/27-29, 43h, 45h, 46h, 57h, 5Ah...) ont encore les defauts
-  d'ordre de parametres / DS / ADD SP : meme methode de correction que pour 3A-4F (voir @3Dh..@4Fh, @36h,
-  @39h, @56h dans MSDOS.PAS).
-* Le noyau s'execute sur la pile du programme appelant (COMMAND.EXE : {$M 8192}) ; MatchFileName recursif et les
-  chaines de 256 octets passees par valeur consomment ~6 Ko (pile privee du noyau a prevoir).
-* IO.SYS fait 50 174 octets (65 285 avant les optimisations de TPC, voir DEV-COOLS/DOC/TPC_OPTIMISATIONS.txt) :
-  il reste ~14 Ko de marge dans le segment de 64 Ko.
+Taille
+------
+IO.SYS ~ 62 Ko sur 64 Ko : toute nouvelle fonction doit etre compensee (TPC compile mal les chaines de Or :
+InList() dans MSDOS.PAS reduit FxBadName/FcbIsSep ; voir DEV-COOLS/DOC/TPC_OPTIMISATIONS.txt).
+
+Limites connues
+---------------
+* COPY a+b (concatenation) et COPY de plusieurs sources vers un fichier unique ne concatenent pas.
+* Pas de fichiers a noms longs, pas de FAT32, pas de partitions etendues, une seule partition C:.
+* Les programmes qui ecrivent par l'unite CRT (video directe) ne sont pas redirigeables (comme sous TP7).
+* TPC : une expression constante entiere qui deborde 16 bits (30*4096) est tronquee a 16 bits au lieu de devenir LongInt.
 
 Corrections de TPC (resume)
 ---------------------------
-interrupt, assembler sans cadre, ABI TP7 (pas de lien statique), @Proc/Ofs/Seg,
-assembleur integre etendu, references en avant, edition de liens intelligente,
-segment noyau avec recopie du runtime, donnees en ligne, appel du hook Crt, etc.
-
-Corrections du noyau (resume)
------------------------------
-DS restaure apres les blocs ASM "LDS SI,..." (SetFindState : DS restait ecrase, le noyau lisait ses donnees dans
-le segment de pile de l'appelant), ordre POP ES/POP DS (TranslateBPBtoDPB),
-EXEC reel + terminaison, gestionnaire de memoire (decoupe/fusion), disque INT 13h,
-recherche de fichiers, handles 0-based, CurrentDir 67 octets, dispatcher INT 21h
-qui conserve BX, propagation de CF dans les FLAGS, STI, PSP (DOSCall en 50h),
-console par INT 10h/16h, Intr1Ah (AH ecrase), TYPE/OFFSET invalides.
-
-Prochaines etapes
------------------
-1. Lancer BOOTTEST.sh avec un script "type ver" et suivre les INT 21h manquants
-   (/KTINT:21 affiche chaque appel et son resultat) ; corriger fonction par fonction.
-2. Remettre les fonctions 4Bh enfants (COMMAND lance des programmes), 4Dh, 2Ah/2Ch...
-3. Valider FCB et ecriture FAT12/FAT16, puis alleger encore le segment (marge).
+interrupt, assembler sans cadre, ABI TP7 (pas de lien statique), @Proc/Ofs/Seg, assembleur integre etendu, references
+en avant, edition de liens intelligente, segment noyau avec recopie du runtime, donnees en ligne, appel du hook Crt,
+optimisations de taille (DOC/TPC_OPTIMISATIONS.txt), Write/WriteLn d'une chaine globale sans push/pop ds.
