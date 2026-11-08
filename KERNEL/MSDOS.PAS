@@ -6522,13 +6522,40 @@ Begin
 End;
 
 { Ecrit une entree de repertoire dans le tampon a la position P }
+{ Date et heure DOS courantes (horloge BIOS INT 1Ah/02h-04h) ; 1980-01-01 00:00 si l'horloge est absente }
+Procedure FxStamp(Var Buf:TFxSec;P:Word);
+Var
+ D,T:LongInt;
+ Y,Mo,Dy,H,Mi,Sc,PD,PT:Word;
+Begin
+ D:=DateInt21;
+ T:=TimeInt21;
+ Y:=Word(D);
+ Mo:=Hi(Word(D Shr 16));
+ Dy:=Lo(Word(D Shr 16));
+ H:=Hi(Word(T));
+ Mi:=Lo(Word(T));
+ Sc:=Hi(Word(T Shr 16));
+ If (Y<1980) Or (Y>2107) Or (Mo<1) Or (Mo>12) Or (Dy<1) Or (Dy>31) Or (H>23) Or (Mi>59) Or (Sc>59) Then Begin
+  PD:=$21;
+  PT:=0;
+ End Else Begin
+  PD:=((Y-1980) Shl 9) Or (Mo Shl 5) Or Dy;
+  PT:=(H Shl 11) Or (Mi Shl 5) Or (Sc Shr 1);
+ End;
+ Buf[P+22]:=PT And $FF;
+ Buf[P+23]:=PT Shr 8;
+ Buf[P+24]:=PD And $FF;
+ Buf[P+25]:=PD Shr 8;
+End;
+
 Procedure FxPutEnt(Var Buf:TFxSec;P:Word;Var Nm:String;Attr:Byte;Cl:Word;Size:LongInt);
 Var K:Byte;
 Begin
  FillChar(Buf[P],32,0);
  For K:=0 To 10 Do Buf[P+K]:=Ord(Nm[K+1]);
  Buf[P+11]:=Attr;
- Buf[P+24]:=$21;
+ FxStamp(Buf,P);
  Buf[P+26]:=Cl And $FF;
  Buf[P+27]:=Cl Shr 8;
  Buf[P+28]:=Size And $FF;
@@ -6662,6 +6689,8 @@ Begin
  P:=FxGetIdx(H)*32;
  Cl:=GetFileTableFirstCluster(H);
  Size:=GetFileTableFileSize(H);
+ If (Buf[P+26]<>(Cl And $FF)) Or (Buf[P+27]<>(Cl Shr 8)) Or (Buf[P+28]<>(Size And $FF)) Or
+    (Buf[P+29]<>((Size Shr 8) And $FF)) Or (Buf[P+30]<>((Size Shr 16) And $FF)) Then FxStamp(Buf,P);
  Buf[P+26]:=Cl And $FF;
  Buf[P+27]:=Cl Shr 8;
  Buf[P+28]:=Size And $FF;
@@ -7053,6 +7082,19 @@ Begin
  If Not FxVol(Drive,V) Then Exit;
  CS:=-1;
  Cnt:=0;
+ If V.Is16 Then Begin
+  { FAT16 : parcours direct de chaque secteur de la FAT (256 entrees) }
+  C:=2;
+  While C<=V.Clusters+1 Do Begin
+   If Not ReadSector(V.Drive,V.Res+LongInt(C) Div 256,@B) Then Exit;
+   O:=C And 255;
+   Repeat
+    If (B[O*2]=0) And (B[O*2+1]=0) Then Inc(Cnt);
+    Inc(O);
+    Inc(C);
+   Until (O=256) Or (C>V.Clusters+1);
+  End;
+ End Else
  For K:=0 To V.Clusters-1 Do Begin
   C:=K+2;
   If V.Is16 Then Off:=LongInt(C)*2 Else Off:=LongInt(C)*3 Div 2;

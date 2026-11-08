@@ -46,9 +46,10 @@ Demarrage reel (MBR -> VBR -> IO.SYS -> COMMAND.EXE) : VALIDE
 
 Ce qui ne marche pas encore
 ---------------------------
-* Redirection ">" de COMMAND (ECHO ... > fichier cree le fichier mais ecrit a l'ecran) : il faut 45h (DUP) et
-  46h (FORCEDUP) et une table de handles par processus (JFT) ; les handles 0-4 sont codes en dur (console).
-* Date/heure des fichiers crees : fixees au 1980-01-01 00:00 (INT 1Ah de l'emulateur sans horloge temps reel).
+* Date/heure des fichiers : lues par INT 1Ah/02h-04h (FxStamp) ; DEVENV fournit maintenant ces services RTC
+  (horloge de l'hote). Sans RTC le noyau retombe sur 1980-01-01 00:00.
+* Redirection ">" : COMMAND la gere lui-meme (PipeFile) ; ECHO et DIR redirigent vers un fichier (valide).
+  45h (DUP) / 46h (FORCEDUP) et une table de handles par processus (JFT) restent a faire pour les programmes.
 * Les autres passerelles INT 21h (FCB 0F-17/21-24/27-29, 43h, 45h, 46h, 57h, 5Ah...) ont encore les defauts
   d'ordre de parametres / DS / ADD SP : meme methode de correction que pour 3A-4F (voir @3Dh..@4Fh, @36h,
   @39h, @56h dans MSDOS.PAS).

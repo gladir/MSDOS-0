@@ -956,10 +956,14 @@ Begin
   End;
  End
   Else
- If ParamList='.'Then WriteLn Else
+ If ParamList='.'Then Begin
+  If(Pipe)Then WriteLn(PipeFile)Else WriteLn;
+ End Else
  If StrToUpper(ParamList)='OFF'Then Echo:=False Else
  If StrToUpper(ParamList)='ON'Then Echo:=True
-                              Else WriteLn(ParamList);
+  Else Begin
+   If(Pipe)Then WriteLn(PipeFile,ParamList)Else WriteLn(ParamList);
+  End;
 End;
 
 Procedure EraseCommand;
