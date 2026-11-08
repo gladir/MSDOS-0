@@ -240,8 +240,9 @@ Const
    de memoire (MCB) commence apres, et s'arrete avant la pile du noyau. }
  CDBase=114;         { offset de CurrentDir dans DataMOS (apres FindState) }
  CDSize=67;          { Drive(1) + Cluster(2) + Path(1+63) }
- FTBase=1856;        { CDBase + 26*CDSize : debut de FileTable dans DataMOS }
- FxBase=2486;        { FTBase + 20*17 + 9 + 280 + 1 : apres PendingLF ; 20 x (secteur LongInt + index Byte) }
+ NDrv=6;            { unites A: a F: (LASTDRIVE ne peut pas depasser F:) }
+ FTBase=516;         { CDBase + NDrv*CDSize : debut de FileTable dans DataMOS }
+ FxBase=1146;        { FTBase + 20*17 + 9 + 280 + 1 : apres PendingLF ; 20 x (secteur LongInt + index Byte) }
  ArenaBase=$1080;
  ArenaEnd=$9000;
  VerDos=7;          { Version de DOS }
@@ -335,7 +336,7 @@ Type
   CurrentPSP:Word;     { Segment du PSP courant }
   VerifyFlag:Byte;     { Flag de vérification en écriture (0=off, 1=on) }
   FindState: FindFileState; { État de la recherche de fichiers }
-  CurrentDir: Array[0..25] of Record
+  CurrentDir: Array[0..5] of Record
    Drive: Byte;
    Cluster: Word;
    Path: String[63];
@@ -528,7 +529,6 @@ Function WriteSectorSimple(Sector:Word;Var Buffer):Boolean;Near;Forward;
 
 Procedure SetIntVec(_AL:Byte;_DS,_DX:Word);Near;Forward;
 Procedure GetIntVec(_AL:Byte;Var _DS,_DX:Word);Near;Forward;
-Procedure DataCountry(CountryCode:Word;Var CountryInfo:DataCountryRec);Near;Forward;
 Procedure FillChar(Var Dest;Size:Word;Value:Byte);Near;Forward;
 Procedure Move(Var Source,Dest;Size:Word);Near;Forward;
 Procedure Intr(IntNo:Byte;Var Regs:Registers);Near;Forward;
@@ -538,7 +538,6 @@ Function Length(S:String):Byte;Near;Forward;
 Function Copy(S:String;Index,Count:Byte):String;Near;Forward;
 Procedure Delete(Var S:String;Index,Count:Byte);Near;Forward;
 
-Procedure Handle38hGetCountryInfo(CountryCode:Word;BufferPtr:Word);Near;Forward;
 Function Handle38hSetCountryInfo(NewCountryCode:Word):Word;Near;Forward;
 
 { Procédures pour gestion FAT et répertoires - Fonctions 39h/3Ah }
@@ -764,6 +763,9 @@ Function RelocateExe(LoadSeg:Word;ExeHdr:ExeHeader;FileName:String):Boolean;Near
 
 { Fonction pour charger le processeur de commandes }
 Function LoadAndExecuteCommandProcessor:Boolean;Near;Forward;
+Procedure InitConfig;Near;Forward;
+Function CfgWord(Ofs:Word):Word;Near;Forward;
+Function CfgSegGet:Word;Near;Forward;
 
 { Fonctions utilitaires de base }
 Function UpperCase(S:String):String;Near;Forward;
@@ -1069,7 +1071,7 @@ Begin
  ConPutChar(10);
  { Initialiser répertoires courants via les fonctions d'accès Code Segment }
  SetCurrentDrive(2); { C: par défaut }
- For I:=0 To 25 Do Begin
+ For I:=0 To NDrv-1 Do Begin
   SetCurrentDirDrive(I, I);
   SetCurrentDirCluster(I, 0); { Répertoire racine }
   SetCurrentDirPath(I, '\');
@@ -1105,6 +1107,8 @@ Begin
  { Initialiser le gestionnaire de mémoire }
  InitializeMemoryManager;
 
+ { CONFIG.SYS : FILES, BUFFERS, LASTDRIVE, SHELL, DEVICE, INSTALL }
+ InitConfig;
  { Charger et exécuter COMMAND.COM ou COMMAND.EXE }
  { Le processeur de commandes est relance s'il se termine (EXIT) ; absent, le noyau s'arrête }
  While LoadAndExecuteCommandProcessor Do;
@@ -1156,33 +1160,13 @@ Procedure Data;Assembler;ASM
  DW 0          { CurrentEntry: Word }
  DB 0          { Active: Boolean }
 
- { CurrentDir: Array[0..25] of Record : Drive(1) + Cluster(2) + Path(1+63) = 67 octets par lecteur }
+ { CurrentDir: Array[0..5] of Record : Drive(1) + Cluster(2) + Path(1+63) = 67 octets par lecteur }
  DB 0,0,0,1,'\',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
  DB 1,0,0,1,'\',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
  DB 2,0,0,1,'\',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
  DB 3,0,0,1,'\',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
  DB 4,0,0,1,'\',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
  DB 5,0,0,1,'\',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 6,0,0,1,'\',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 7,0,0,1,'\',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 8,0,0,1,'\',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 9,0,0,1,'\',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 10,0,0,1,'\',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 11,0,0,1,'\',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 12,0,0,1,'\',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 13,0,0,1,'\',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 14,0,0,1,'\',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 15,0,0,1,'\',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 16,0,0,1,'\',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 17,0,0,1,'\',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 18,0,0,1,'\',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 19,0,0,1,'\',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 20,0,0,1,'\',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 21,0,0,1,'\',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 22,0,0,1,'\',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 23,0,0,1,'\',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 24,0,0,1,'\',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 25,0,0,1,'\',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
  { FileTable:Array[0..19]of FileTableEntry - 20 entrées de 17 octets = 340 bytes }
  DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0  { FileTable[0] }
  DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0  { FileTable[1] }
@@ -1268,25 +1252,32 @@ Procedure Data;Assembler;ASM
  DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
  { KSP : sommet de la pile privee du noyau (segment 9000h) }
  DW 0F000h
+ { CfgSeg : segment du bloc de configuration (CONFIG.SYS) }
+ DW 0
 
- { Structure Liste des Listes pour fonction 52h - séparée de DataMOS }
+ { Structure Liste des Listes pour fonction 52h (disposition MS-DOS 4+) : le mot qui precede est le segment du
+   premier MCB ; l'en-tete du pilote NUL est en LoL+22h, tete de la chaine des pilotes de peripheriques }
+ DW 1080h
 @DOSListOfLists:
- DW 0,0        { FirstDPB: Pointer }
- DW 0,0        { FirstSFT: Pointer }
- DW 0,0        { ClockDevice: Pointer }
- DW 0,0        { ConDevice: Pointer }
- DW 512        { MaxSectorLength: 512 bytes standard }
- DW 0,0        { FirstBuffer: Pointer }
- DW 0,0        { FirstDirtyBuffer: Pointer }
- DW 0FFFFh     { FreeClusters: -1 = inconnu }
- DW 0,0        { NextFreeDPB: Pointer }
- DW 20         { NumberOfBuffers: 20 buffers }
- DB 4          { NumberOfLookaheadBuffers: 4 }
- DB 3          { BootDrive: C: (3) par défaut }
- DW 0          { DOSDataSeg: Segment données DOS }
- DB 26         { LastDrive: Z: (26 drives max) }
- DW 0,0        { NULDevice: Pointer vers driver NUL }
-
+ DW 0,0        { 00 : premier DPB }
+ DW 0,0        { 04 : premiere SFT }
+ DW 0,0        { 08 : pilote CLOCK$ }
+ DW 0,0        { 0C : pilote CON }
+ DW 512        { 10 : taille maximale de secteur }
+ DW 0,0        { 12 : premier tampon disque }
+ DW 0,0        { 16 : tableau des repertoires courants }
+ DW 0,0        { 1A : table FCB }
+ DW 0          { 1E : FCB proteges }
+ DB 1          { 20 : nombre d'unites de bloc }
+ DB 6          { 21 : LASTDRIVE }
+ DW 0FFFFh,0FFFFh { 22 : en-tete du pilote NUL : suivant (fin de chaine) }
+ DW 8004h      { attributs : peripherique caractere, NUL }
+ DW @NulRet    { strategie }
+ DW @NulRet    { interruption }
+ DB 'NUL     '
+ DB 0          { 34 : unites jointes }
+@NulRet:
+ DB 0CBh
 END;
 
 Procedure Intr1Ah;Assembler;ASM
@@ -1465,6 +1456,8 @@ Procedure Intr21hCore;Assembler;ASM
  INC Data.DataMOS.InDos
 @CallFunc:
  { saut vers la fonction AH en conservant BX (parametre des fonctions) }
+ CMP AH,6Fh { fonctions au-dela de 6Fh : sans effet }
+ JA @Xit
  PUSH BX
  MOV BL,AH
  XOR BH,BH
@@ -1586,152 +1579,8 @@ Procedure Intr21hCore;Assembler;ASM
  DW @Xit { Fonction 6Bh - a d�velopper }
  DW @Xit { Fonction 6Ch - a d�velopper }
  DW @Xit { Fonction 6Dh - a d�velopper }
- DW @Xit { Fonction 6Eh - a d�velopper }
- DW @Xit { Fonction 6Fh - a d�velopper }
- DW @Xit { Fonction 70h - a d�velopper }
- DW @Xit { Fonction 71h - a d�velopper }
- DW @Xit { Fonction 72h - a d�velopper }
- DW @Xit { Fonction 73h - a d�velopper }
- DW @Xit { Fonction 74h - a d�velopper }
- DW @Xit { Fonction 75h - a d�velopper }
- DW @Xit { Fonction 76h - a d�velopper }
- DW @Xit { Fonction 77h - a d�velopper }
- DW @Xit { Fonction 78h - a d�velopper }
- DW @Xit { Fonction 79h - a d�velopper }
- DW @Xit { Fonction 7Ah - a d�velopper }
- DW @Xit { Fonction 7Bh - a d�velopper }
- DW @Xit { Fonction 7Ch - a d�velopper }
- DW @Xit { Fonction 7Dh - a d�velopper }
- DW @Xit { Fonction 7Eh - a d�velopper }
- DW @Xit { Fonction 7Fh - a d�velopper }
- DW @Xit { Fonction 80h - a d�velopper }
- DW @Xit { Fonction 81h - a d�velopper }
- DW @Xit { Fonction 82h - a d�velopper }
- DW @Xit { Fonction 83h - a d�velopper }
- DW @Xit { Fonction 84h - a d�velopper }
- DW @Xit { Fonction 85h - a d�velopper }
- DW @Xit { Fonction 86h - a d�velopper }
- DW @Xit { Fonction 87h - a d�velopper }
- DW @Xit { Fonction 88h - a d�velopper }
- DW @Xit { Fonction 89h - a d�velopper }
- DW @Xit { Fonction 8Ah - a d�velopper }
- DW @Xit { Fonction 8Bh - a d�velopper }
- DW @Xit { Fonction 8Ch - a d�velopper }
- DW @Xit { Fonction 8Dh - a d�velopper }
- DW @Xit { Fonction 8Eh - a d�velopper }
- DW @Xit { Fonction 8Fh - a d�velopper }
- DW @Xit { Fonction 90h - a d�velopper }
- DW @Xit { Fonction 91h - a d�velopper }
- DW @Xit { Fonction 92h - a d�velopper }
- DW @Xit { Fonction 93h - a d�velopper }
- DW @Xit { Fonction 94h - a d�velopper }
- DW @Xit { Fonction 95h - a d�velopper }
- DW @Xit { Fonction 96h - a d�velopper }
- DW @Xit { Fonction 97h - a d�velopper }
- DW @Xit { Fonction 98h - a d�velopper }
- DW @Xit { Fonction 99h - a d�velopper }
- DW @Xit { Fonction 9Ah - a d�velopper }
- DW @Xit { Fonction 9Bh - a d�velopper }
- DW @Xit { Fonction 9Ch - a d�velopper }
- DW @Xit { Fonction 9Dh - a d�velopper }
- DW @Xit { Fonction 9Eh - a d�velopper }
- DW @Xit { Fonction 9Fh - a d�velopper }
- DW @Xit { Fonction A0h - a d�velopper }
- DW @Xit { Fonction A1h - a d�velopper }
- DW @Xit { Fonction A2h - a d�velopper }
- DW @Xit { Fonction A3h - a d�velopper }
- DW @Xit { Fonction A4h - a d�velopper }
- DW @Xit { Fonction A5h - a d�velopper }
- DW @Xit { Fonction A6h - a d�velopper }
- DW @Xit { Fonction A7h - a d�velopper }
- DW @Xit { Fonction A8h - a d�velopper }
- DW @Xit { Fonction A9h - a d�velopper }
- DW @Xit { Fonction AAh - a d�velopper }
- DW @Xit { Fonction ABh - a d�velopper }
- DW @Xit { Fonction ACh - a d�velopper }
- DW @Xit { Fonction ADh - a d�velopper }
- DW @Xit { Fonction AEh - a d�velopper }
- DW @Xit { Fonction AFh - a d�velopper }
- DW @Xit { Fonction B0h - a d�velopper }
- DW @Xit { Fonction B1h - a d�velopper }
- DW @Xit { Fonction B2h - a d�velopper }
- DW @Xit { Fonction B3h - a d�velopper }
- DW @Xit { Fonction B4h - a d�velopper }
- DW @Xit { Fonction B5h - a d�velopper }
- DW @Xit { Fonction B6h - a d�velopper }
- DW @Xit { Fonction B7h - a d�velopper }
- DW @Xit { Fonction B8h - a d�velopper }
- DW @Xit { Fonction B9h - a d�velopper }
- DW @Xit { Fonction BAh - a d�velopper }
- DW @Xit { Fonction BBh - a d�velopper }
- DW @Xit { Fonction BCh - a d�velopper }
- DW @Xit { Fonction BDh - a d�velopper }
- DW @Xit { Fonction BEh - a d�velopper }
- DW @Xit { Fonction BFh - a d�velopper }
- DW @Xit { Fonction C0h - a d�velopper }
- DW @Xit { Fonction C1h - a d�velopper }
- DW @Xit { Fonction C2h - a d�velopper }
- DW @Xit { Fonction C3h - a d�velopper }
- DW @Xit { Fonction C4h - a d�velopper }
- DW @Xit { Fonction C5h - a d�velopper }
- DW @Xit { Fonction C6h - a d�velopper }
- DW @Xit { Fonction C7h - a d�velopper }
- DW @Xit { Fonction C8h - a d�velopper }
- DW @Xit { Fonction C9h - a d�velopper }
- DW @Xit { Fonction CAh - a d�velopper }
- DW @Xit { Fonction CBh - a d�velopper }
- DW @Xit { Fonction CCh - a d�velopper }
- DW @Xit { Fonction CDh - a d�velopper }
- DW @Xit { Fonction CEh - a d�velopper }
- DW @Xit { Fonction CFh - a d�velopper }
- DW @Xit { Fonction D0h - a d�velopper }
- DW @Xit { Fonction D1h - a d�velopper }
- DW @Xit { Fonction D2h - a d�velopper }
- DW @Xit { Fonction D3h - a d�velopper }
- DW @Xit { Fonction D4h - a d�velopper }
- DW @Xit { Fonction D5h - a d�velopper }
- DW @Xit { Fonction D6h - a d�velopper }
- DW @Xit { Fonction D7h - a d�velopper }
- DW @Xit { Fonction D8h - a d�velopper }
- DW @Xit { Fonction D9h - a d�velopper }
- DW @Xit { Fonction DAh - a d�velopper }
- DW @Xit { Fonction DBh - a d�velopper }
- DW @Xit { Fonction DCh - a d�velopper }
- DW @Xit { Fonction DDh - a d�velopper }
- DW @Xit { Fonction DEh - a d�velopper }
- DW @Xit { Fonction DFh - a d�velopper }
- DW @Xit { Fonction E0h - a d�velopper }
- DW @Xit { Fonction E1h - a d�velopper }
- DW @Xit { Fonction E2h - a d�velopper }
- DW @Xit { Fonction E3h - a d�velopper }
- DW @Xit { Fonction E4h - a d�velopper }
- DW @Xit { Fonction E5h - a d�velopper }
- DW @Xit { Fonction E6h - a d�velopper }
- DW @Xit { Fonction E7h - a d�velopper }
- DW @Xit { Fonction E8h - a d�velopper }
- DW @Xit { Fonction E9h - a d�velopper }
- DW @Xit { Fonction EAh - a d�velopper }
- DW @Xit { Fonction EBh - a d�velopper }
- DW @Xit { Fonction ECh - a d�velopper }
- DW @Xit { Fonction EDh - a d�velopper }
- DW @Xit { Fonction EEh - a d�velopper }
- DW @Xit { Fonction EFh - a d�velopper }
- DW @Xit { Fonction F0h - a d�velopper }
- DW @Xit { Fonction F1h - a d�velopper }
- DW @F2h { Fonction F2h - interne : lecture absolue (INT 25h) }
- DW @F3h { Fonction F3h - interne : ecriture absolue (INT 26h) }
- DW @Xit { Fonction F4h - a d�velopper }
- DW @Xit { Fonction F5h - a d�velopper }
- DW @Xit { Fonction F6h - a d�velopper }
- DW @Xit { Fonction F7h - a d�velopper }
- DW @Xit { Fonction F8h - a d�velopper }
- DW @Xit { Fonction F9h - a d�velopper }
- DW @Xit { Fonction FAh - a d�velopper }
- DW @Xit { Fonction FBh - a d�velopper }
- DW @Xit { Fonction FCh - a d�velopper }
- DW @Xit { Fonction FDh - a d�velopper }
- DW @Xit { Fonction FEh - a d�velopper }
- DW @Xit { Fonction FFh - a d�velopper }
+ DW @F2h { Fonction 6Eh - interne : lecture absolue (INT 25h) }
+ DW @F3h { Fonction 6Fh - interne : ecriture absolue (INT 26h) }
 
  {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
  { Interruption 21h - Fonction 00h: Terminer le programme                      }
@@ -2107,7 +1956,16 @@ Procedure Intr21hCore;Assembler;ASM
  { Interruption 21h - Fonction 0Eh: Selectionne le lecteur courant }
  {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
 @0Eh:
- MOV AL,26 { Nombre d'unite installe }
+ PUSH DS
+ PUSH CS
+ POP DS
+ PUSH DX
+ MOV AX,2
+ PUSH AX
+ CALL CfgWord
+ POP DX
+ POP DS
+ { AL = LASTDRIVE : nombre d'unites }
  CMP DL,AL
  JAE @Xit
  MOV BYTE PTR [Data + 2],DL { Stocker CurrentDrive dans DataMOS.CurrDisk }
@@ -4534,13 +4392,13 @@ END;
   F2h/F3h) pour profiter de la pile privee ; retour FAR en laissant les FLAGS de l'INT sur la pile de
   l'appelant (comportement DOS), CF = erreur. }
 Procedure Intr25h;Assembler;ASM
- MOV AH,0F2h
+ MOV AH,6Eh
  INT 21h
  DB 0CBh
 END;
 
 Procedure Intr26h;Assembler;ASM
- MOV AH,0F3h
+ MOV AH,6Fh
  INT 21h
  DB 0CBh
 END;
@@ -4722,6 +4580,10 @@ END;
 Function GetCurrentDirDrive(Index: Byte): Byte;Assembler;
 ASM
  MOV AL,Index
+ CMP AL,NDrv
+ JB @Ok
+ XOR AL,AL
+@Ok:
  MOV AH,CDSize
  MUL AH
  MOV BX,AX
@@ -4731,6 +4593,10 @@ END;
 Function GetCurrentDirCluster(Index: Byte): Word;Assembler;
 ASM
  MOV AL,Index
+ CMP AL,NDrv
+ JB @Ok
+ XOR AL,AL
+@Ok:
  MOV AH,CDSize
  MUL AH
  MOV BX,AX
@@ -4743,6 +4609,7 @@ Var
  I, Len, Cc: Byte;
  Base: Word;
 Begin
+ If Index>=NDrv Then Index:=0;
  Base := Index * CDSize + CDBase + 3;
  ASM
   MOV BX,Base
@@ -4768,6 +4635,10 @@ End;
 Procedure SetCurrentDirDrive(Index, Drive: Byte);Assembler;
 ASM
  MOV AL,Index
+ CMP AL,NDrv
+ JB @Ok
+ XOR AL,AL
+@Ok:
  MOV AH,CDSize
  MUL AH
  MOV BX,AX
@@ -4778,6 +4649,10 @@ END;
 Procedure SetCurrentDirCluster(Index: Byte; Cluster: Word);Assembler;
 ASM
  MOV AL,Index
+ CMP AL,NDrv
+ JB @Ok
+ XOR AL,AL
+@Ok:
  MOV AH,CDSize
  MUL AH
  MOV BX,AX
@@ -4792,6 +4667,7 @@ Var
 Begin
  Len := Length(Path);
  If Len > 63 Then Len := 63;
+ If Index>=NDrv Then Index:=0;
  Base := Index * CDSize + CDBase + 3;
  ASM
   MOV BX,Base
@@ -4918,7 +4794,7 @@ ASM
  MOV AL,Index
  MOV AH,17
  MUL AH
- ADD AX,3421                 { Offset + 8 pour CurrentPos }
+ ADD AX,FTBase+8                 { Offset + 8 pour CurrentPos }
  MOV BX,AX
  MOV AX,WORD PTR [Data + BX]
  MOV DX,WORD PTR [Data + BX + 2]
@@ -4929,7 +4805,7 @@ ASM
  MOV AL,Index
  MOV AH,17
  MUL AH
- ADD AX,3421
+ ADD AX,FTBase+8
  MOV BX,AX
  MOV AX,WORD PTR [CurrentPos]
  MOV WORD PTR [Data + BX],AX
@@ -4942,7 +4818,7 @@ ASM
  MOV AL,Index
  MOV AH,17
  MUL AH
- ADD AX,3425                 { Offset + 12 pour Attributes }
+ ADD AX,FTBase+12                 { Offset + 12 pour Attributes }
  MOV BX,AX
  MOV AL,BYTE PTR [Data + BX]
 END;
@@ -4952,7 +4828,7 @@ ASM
  MOV AL,Index
  MOV AH,17
  MUL AH
- ADD AX,3425
+ ADD AX,FTBase+12
  MOV BX,AX
  MOV AL,Attributes
  MOV BYTE PTR [Data + BX],AL
@@ -4963,7 +4839,7 @@ ASM
  MOV AL,Index
  MOV AH,17
  MUL AH
- ADD AX,3426                 { Offset + 13 pour CurrentCluster }
+ ADD AX,FTBase+13                 { Offset + 13 pour CurrentCluster }
  MOV BX,AX
  MOV AX,WORD PTR [Data + BX]
 END;
@@ -4973,7 +4849,7 @@ ASM
  MOV AL,Index
  MOV AH,17
  MUL AH
- ADD AX,3426
+ ADD AX,FTBase+13
  MOV BX,AX
  MOV AX,CurrentCluster
  MOV WORD PTR [Data + BX],AX
@@ -4984,7 +4860,7 @@ ASM
  MOV AL,Index
  MOV AH,17
  MUL AH
- ADD AX,3428                 { Offset + 15 pour ClusterOffset }
+ ADD AX,FTBase+15                 { Offset + 15 pour ClusterOffset }
  MOV BX,AX
  MOV AX,WORD PTR [Data + BX]
 END;
@@ -4994,7 +4870,7 @@ ASM
  MOV AL,Index
  MOV AH,17
  MUL AH
- ADD AX,3428
+ ADD AX,FTBase+15
  MOV BX,AX
  MOV AX,ClusterOffset
  MOV WORD PTR [Data + BX],AX
@@ -5158,126 +5034,6 @@ Begin
  S[0]:=Chr(NewLen);
 End;
 
-Procedure Handle38hGetCountryInfo(CountryCode:Word;BufferPtr:Word);
-{ Procedure helper pour remplir le buffer avec les informations pays }
-Var
- CountryInfo: DataCountryRec;
- I: Byte;
-Begin
- { Obtenir les informations du pays }
- DataCountry(CountryCode, CountryInfo);
-
- { Remplir le buffer de 38 octets au format DOS en utilisant l'assembleur inline }
- ASM
-  PUSH ES
-  PUSH DI
-  PUSH AX
-  PUSH CX
-
-  MOV DI,BufferPtr           { DI = adresse du buffer }
-
-  { Format de date }
-  MOV AL,CountryInfo.DateFormat
-  MOV ES:[DI],AL
-  INC DI
-
-  { Symbole monétaire (5 octets) }
-  MOV AL,BYTE PTR CountryInfo.Currency[0]
-  MOV ES:[DI],AL
-  INC DI
-  MOV AL,BYTE PTR CountryInfo.Currency[1]
-  MOV ES:[DI],AL
-  INC DI
-  MOV AL,BYTE PTR CountryInfo.Currency[2]
-  MOV ES:[DI],AL
-  INC DI
-  MOV AL,BYTE PTR CountryInfo.Currency[3]
-  MOV ES:[DI],AL
-  INC DI
-  MOV AL,BYTE PTR CountryInfo.Currency[4]
-  MOV ES:[DI],AL
-  INC DI
-
-  { Séparateur milliers (2 octets) }
-  MOV AL,BYTE PTR CountryInfo.ThousandsSep[0]
-  MOV ES:[DI],AL
-  INC DI
-  MOV AL,BYTE PTR CountryInfo.ThousandsSep[1]
-  MOV ES:[DI],AL
-  INC DI
-
-  { Séparateur décimal (2 octets) }
-  MOV AL,BYTE PTR CountryInfo.DecimalSep[0]
-  MOV ES:[DI],AL
-  INC DI
-  MOV AL,BYTE PTR CountryInfo.DecimalSep[1]
-  MOV ES:[DI],AL
-  INC DI
-
-  { Séparateur date (2 octets) }
-  MOV AL,BYTE PTR CountryInfo.DateSep[0]
-  MOV ES:[DI],AL
-  INC DI
-  MOV AL,BYTE PTR CountryInfo.DateSep[1]
-  MOV ES:[DI],AL
-  INC DI
-
-  { Séparateur heure (2 octets) }
-  MOV AL,BYTE PTR CountryInfo.TimeSep[0]
-  MOV ES:[DI],AL
-  INC DI
-  MOV AL,BYTE PTR CountryInfo.TimeSep[1]
-  MOV ES:[DI],AL
-  INC DI
-
-  { Format monétaire }
-  MOV AL,CountryInfo.CurrencyFormat
-  MOV ES:[DI],AL
-  INC DI
-
-  { Chiffres après virgule }
-  MOV AL,CountryInfo.DecimalDigits
-  MOV ES:[DI],AL
-  INC DI
-
-  { Format heure }
-  MOV AL,CountryInfo.TimeFormat
-  MOV ES:[DI],AL
-  INC DI
-
-  { Adresse routine conversion (4 octets) - non utilisé }
-  XOR AL,AL
-  MOV ES:[DI],AL
-  INC DI
-  MOV ES:[DI],AL
-  INC DI
-  MOV ES:[DI],AL
-  INC DI
-  MOV ES:[DI],AL
-  INC DI
-
-  { Séparateur liste (2 octets) }
-  MOV AL,BYTE PTR CountryInfo.DataListSep[0]
-  MOV ES:[DI],AL
-  INC DI
-  MOV AL,BYTE PTR CountryInfo.DataListSep[1]
-  MOV ES:[DI],AL
-  INC DI
-
-  { Réservé (10 octets) }
-  MOV CX,10
-  XOR AL,AL
-@FillLoop:
-  MOV ES:[DI],AL
-  INC DI
-  LOOP @FillLoop
-
-  POP CX
-  POP AX
-  POP DI
-  POP ES
- END;
-End;
 
  { Fonction helper pour valider et changer le code pays }
 Function Handle38hSetCountryInfo(NewCountryCode:Word):Word;Begin
@@ -5297,92 +5053,6 @@ Function Handle38hSetCountryInfo(NewCountryCode:Word):Word;Begin
  End;
 End;
 
-Procedure DataCountry(CountryCode:Word;Var CountryInfo:DataCountryRec);Begin
- { Remplir les informations selon le code pays }
- FillChar(CountryInfo,SizeOf(CountryInfo),0);
- CountryInfo.CountryCode:=CountryCode;
-
- Case CountryCode of
-  1: Begin { États-Unis }
-   CountryInfo.DateFormat:=0;          { Format USA mm/dd/yy }
-   CountryInfo.Currency[0]:='$';
-   CountryInfo.Currency[1]:=#0;
-   CountryInfo.ThousandsSep[0]:=',';   { Virgule pour milliers }
-   CountryInfo.ThousandsSep[1]:=#0;
-   CountryInfo.DecimalSep[0]:='.';     { Point décimal }
-   CountryInfo.DecimalSep[1]:=#0;
-   CountryInfo.DateSep[0]:='/';
-   CountryInfo.DateSep[1]:=#0;
-   CountryInfo.TimeSep[0]:=':';
-   CountryInfo.TimeSep[1]:=#0;
-   CountryInfo.CurrencyFormat:=0;      { $ précède }
-   CountryInfo.DecimalDigits:=2;
-   CountryInfo.TimeFormat:=0;          { Format 12h }
-   CountryInfo.DataListSep[0]:=',';
-   CountryInfo.DataListSep[1]:=#0;
-  End;
-  2: Begin { Canada }
-   CountryInfo.DateFormat:=1;          { Format européen dd/mm/yy }
-   CountryInfo.Currency[0]:='$';
-   CountryInfo.Currency[1]:=#0;
-   CountryInfo.ThousandsSep[0]:=' ';   { Espace pour milliers }
-   CountryInfo.ThousandsSep[1]:=#0;
-   CountryInfo.DecimalSep[0]:=',';     { Virgule décimale (français canadien) }
-   CountryInfo.DecimalSep[1]:=#0;
-   CountryInfo.DateSep[0]:='/';
-   CountryInfo.DateSep[1]:=#0;
-   CountryInfo.TimeSep[0]:=':';
-   CountryInfo.TimeSep[1]:=#0;
-   CountryInfo.CurrencyFormat:=0;      { $ précède }
-   CountryInfo.DecimalDigits:=2;
-   CountryInfo.TimeFormat:=1;          { Format 24h }
-   CountryInfo.DataListSep[0]:=';';
-   CountryInfo.DataListSep[1]:=#0;
-  End;
-  33: Begin { France }
-   CountryInfo.DateFormat:=1;          { Format européen dd/mm/yy }
-   CountryInfo.Currency[0]:='F';
-   CountryInfo.Currency[1]:='R';
-   CountryInfo.Currency[2]:=#0;
-   CountryInfo.ThousandsSep[0]:=' ';   { Espace pour milliers }
-   CountryInfo.ThousandsSep[1]:=#0;
-   CountryInfo.DecimalSep[0]:=',';     { Virgule décimale }
-   CountryInfo.DecimalSep[1]:=#0;
-   CountryInfo.DateSep[0]:='/';
-   CountryInfo.DateSep[1]:=#0;
-   CountryInfo.TimeSep[0]:=':';
-   CountryInfo.TimeSep[1]:=#0;
-   CountryInfo.CurrencyFormat:=0;      { FR précède }
-   CountryInfo.DecimalDigits:=2;
-   CountryInfo.TimeFormat:=1;          { Format 24h }
-   CountryInfo.DataListSep[0]:=';';
-   CountryInfo.DataListSep[1]:=#0;
-  End;
-  34: Begin { Espagne }
-   CountryInfo.DateFormat:=1;          { Format européen dd/mm/yy }
-   CountryInfo.Currency[0]:='P';
-   CountryInfo.Currency[1]:='t';
-   CountryInfo.Currency[2]:='s';
-   CountryInfo.Currency[3]:=#0;
-   CountryInfo.ThousandsSep[0]:='.';   { Point pour milliers }
-   CountryInfo.ThousandsSep[1]:=#0;
-   CountryInfo.DecimalSep[0]:=',';     { Virgule décimale }
-   CountryInfo.DecimalSep[1]:=#0;
-   CountryInfo.DateSep[0]:='/';
-   CountryInfo.DateSep[1]:=#0;
-   CountryInfo.TimeSep[0]:=':';
-   CountryInfo.TimeSep[1]:=#0;
-   CountryInfo.CurrencyFormat:=0;      { Pts précède }
-   CountryInfo.DecimalDigits:=2;
-   CountryInfo.TimeFormat:=1;          { Format 24h }
-   CountryInfo.DataListSep[0]:=';';
-   CountryInfo.DataListSep[1]:=#0;
-  End;
-  Else Begin { Pays par défaut (France) }
-   DataCountry(33,CountryInfo);
-  End;
- End;
-End;
 
 { =============================================== }
 { Fonctions de support pour opérations disque  }
@@ -5428,7 +5098,7 @@ End;
 Function ValidateDriveNumber(DriveNumber:Byte):Boolean;
 { Vérifie si le numéro de lecteur est valide }
 Begin
-  ValidateDriveNumber:=(DriveNumber>=0) And (DriveNumber<=25); { A-Z }
+  ValidateDriveNumber:=(DriveNumber>=0) And (DriveNumber<=NDrv-1); { A-Z }
 End;
 
 Procedure ConvertLBAtoCHS(LBA:LongInt;Var Cylinder,Head,Sector:Word;DPT:DriveParameterTable);
@@ -6908,7 +6578,7 @@ Begin
   Dr:=Ord(UpCase(Path[1]))-Ord('A');
   Full:=Copy(Path,3,255);
  End;
- If Dr>25 Then Begin FxChDir:=15; Exit End;
+ If Dr>NDrv-1 Then Begin FxChDir:=15; Exit End;
  If Not FxVol(Dr,V) Then Begin FxChDir:=15; Exit End;
  If Full='' Then Begin
   SetCurrentDrive(Dr);
@@ -7075,7 +6745,7 @@ Begin
   Mask:=Copy(Path,Q,255);
  End;
  If Mask='' Then Mask:='*.*';
- If Dr>25 Then Begin FxFindFirst:=3; Exit End;
+ If Dr>NDrv-1 Then Begin FxFindFirst:=3; Exit End;
  If Not FxVol(Dr,V) Then Begin FxFindFirst:=3; Exit End;
  If (Q<=Length(Path)) And ((Path[Q]='\') Or (Path[Q]='/')) Then Start:=0 Else Start:=GetCurrentDirCluster(Dr);
  If Not FxWalk(V,DirP,Start,Dir) Then Begin FxFindFirst:=3; Exit End;
@@ -7100,7 +6770,7 @@ Var
 Begin
  DOS36h_DiskFree:=15;
  If Drive=0 Then Drive:=GetCurrentDrive Else Dec(Drive);
- If Drive>25 Then Exit;
+ If Drive>NDrv-1 Then Exit;
  If Not FxVol(Drive,V) Then Exit;
  CS:=-1;
  Cnt:=0;
@@ -7222,7 +6892,7 @@ Begin
  SetCurrentDirectory:=False;
 
  { Vérifier validité du lecteur }
- If Drive > 25 Then Exit; { A-Z seulement }
+ If Drive>NDrv-1 Then Exit; { A-Z seulement }
 
  { Mettre à jour via les fonctions d'accès Code Segment }
  SetCurrentDirDrive(Drive, Drive);
@@ -7266,7 +6936,7 @@ Begin
   Delete(FullPath,1,2);
  End;
 
- If Drive > 25 Then Exit; { Lecteur invalide }
+ If Drive>NDrv-1 Then Exit; { Lecteur invalide }
 
  { Trouver le dernier backslash }
  I:=0;
@@ -7302,7 +6972,7 @@ Begin
  Handle:=0;
 
  { Chercher une entrée libre dans la table des fichiers (poignées 0..4 = périphériques standard) }
- For I:=5 To 19 Do Begin
+ For I:=5 To CfgWord(0)-1 Do Begin
   If Not GetFileTableInUse(I) Then Begin
    { Initialiser l'entrée via fonctions d'accès Code Segment }
    SetFileTableInUse(I, True);
@@ -9391,7 +9061,7 @@ Begin
  IOCTL_GetDriveInfo:=$FFFF; { Erreur par défaut }
 
  { Vérifier que le lecteur est valide }
- If Drive >= 26 Then Exit; { A: à Z: seulement }
+ If Drive>=NDrv Then Exit; { A: à Z: seulement }
 
  { Lire le boot sector pour vérifier que le lecteur existe }
  If Not ReadBootSector(Drive, BootSec) Then Exit;
@@ -9418,7 +9088,7 @@ Begin
  IOCTL_SetDriveInfo:=1; { Invalid function }
 
  { Vérifier que le lecteur est valide }
- If Drive >= 26 Then Exit;
+ If Drive>=NDrv Then Exit;
 
  { Cette fonction n'est généralement pas implémentée }
  { Elle permettrait de changer les paramètres du lecteur }
@@ -9535,7 +9205,7 @@ Begin
   CurrentDrive:=GetCurrentDrive
  Else Begin
   CurrentDrive:=Drive - 1; { 1=A:, 2=B:, ... -> 0=A:, 1=B:, ... }
-  If CurrentDrive >= 26 Then Exit;
+  If CurrentDrive>=NDrv Then Exit;
  End;
  { chemin courant memorise sans le "\" initial (chaine vide pour la racine) }
  Path:='';
@@ -10191,6 +9861,10 @@ Begin
  If Seg=0 Then Exit;
  SetBlockOwner(Seg,Owner);
  Env:='COMSPEC=C:\COMMAND.EXE';
+ If Mem[CfgSegGet:12]<>0 Then Begin
+  Env:='COMSPEC=';
+  For I:=1 To Mem[CfgSegGet:12] Do Env:=Env+Chr(Mem[CfgSegGet:12+I]);
+ End;
  Ofs2:=0;
  For I:=1 To Length(Env) Do Begin
   Mem[Seg:Ofs2]:=Ord(Env[I]); Inc(Ofs2);
@@ -10546,25 +10220,25 @@ END;
 
 { 38h : informations pays au format DOS (34 octets) en Buf }
 Function CountryInt21(Buf:Pointer):Word;
+Const
+ { code pays (2 octets), octets 0..17 de la structure (format de date, monnaie, separateurs, formats), separateur de liste (2) :
+   Etats-Unis, Canada, France, Espagne }
+ T: String[88]=#1#0#0#0'$'#0#0#0#0','#0'.'#0'/'#0':'#0#0#2#0','#0+
+              #2#0#1#0'$'#0#0#0#0' '#0','#0'/'#0':'#0#0#2#1';'#0+
+              #33#0#1#0'FR'#0#0#0' '#0','#0'/'#0':'#0#0#2#1';'#0+
+              #34#0#1#0'Pts'#0#0'.'#0','#0'/'#0':'#0#0#2#1';'#0;
 Var
- C:DataCountryRec;
- S,O,K:Word;
+ S,O,K,E,C: Word;
 Begin
  BufParts(Buf,S,O);
- DataCountry(GetCurrentCountryCode,C);
+ C:=GetCurrentCountryCode;
+ E:=45;
+ For K:=0 To 3 Do
+  If Ord(T[K*22+1])=C Then E:=K*22+1;
  For K:=0 To 33 Do Mem[S:O+K]:=0;
- Mem[S:O]:=C.DateFormat;
- For K:=0 To 4 Do Mem[S:O+2+K]:=Ord(C.Currency[K]);
- For K:=0 To 1 Do Begin
-  Mem[S:O+7+K]:=Ord(C.ThousandsSep[K]);
-  Mem[S:O+9+K]:=Ord(C.DecimalSep[K]);
-  Mem[S:O+11+K]:=Ord(C.DateSep[K]);
-  Mem[S:O+13+K]:=Ord(C.TimeSep[K]);
-  Mem[S:O+22+K]:=Ord(C.DataListSep[K]);
- End;
- Mem[S:O+15]:=C.CurrencyFormat;
- Mem[S:O+16]:=C.DecimalDigits;
- Mem[S:O+17]:=C.TimeFormat;
+ For K:=0 To 17 Do Mem[S:O+K]:=Ord(T[E+2+K]);
+ Mem[S:O+22]:=Ord(T[E+20]);
+ Mem[S:O+23]:=Ord(T[E+21]);
  CountryInt21:=0;
 End;
 
@@ -10617,7 +10291,7 @@ Var
  Ok: Boolean;
 Begin
  AbsDiskInt21:=0;
- If Drive>25 Then Begin AbsDiskInt21:=1; Exit; End;
+ If Drive>NDrv-1 Then Begin AbsDiskInt21:=1; Exit; End;
  BS:=BufSeg;
  BO:=BufOfs;
  Sec:=SecHi;
@@ -10756,6 +10430,169 @@ Begin
  FindNextInt21:=DOS4Fh_FindNextFile(D^);
 End;
 
+{ ---------- CONFIG.SYS : FILES, BUFFERS, LASTDRIVE, SHELL, DEVICE, INSTALL ---------- }
+{ Bloc de configuration (segment CfgSeg, alloue au demarrage) :
+    0 FILES (mot)  2 LASTDRIVE (nombre d'unites)  4 BUFFERS  8 tete de la chaine des pilotes (FFFF:FFFF = vide)
+    12 SHELL : chemin (chaine Pascal de 63 car.)  76 SHELL : arguments  140 requete de pilote  172 ligne de commande du pilote
+    320 contenu du fichier CONFIG.SYS }
+Function CfgSegGet:Word;Assembler;
+ASM
+ MOV AX,WORD PTR [Data + FxBase + 126]
+END;
+
+Function CfgWord(Ofs:Word):Word;Assembler;
+ASM
+ PUSH ES
+ MOV AX,WORD PTR [Data + FxBase + 126]
+ MOV ES,AX
+ MOV BX,Ofs
+ MOV AX,ES:[BX]
+ POP ES
+END;
+
+Procedure CfgMsg(Id:Byte);
+Var I:Byte; M:String[40];
+Begin
+ If Id=0 Then M:='Pilote non installe' Else If Id=1 Then M:='INSTALL: programme introuvable'
+ Else M:='Commande incorrecte dans CONFIG.SYS';
+ For I:=1 To Length(M) Do ConPutChar(Ord(M[I]));
+ ConPutChar(13);
+ ConPutChar(10);
+End;
+
+{ DEVICE= : charge le pilote dont le chemin est a CfS:300 (ASCIIZ), appelle sa commande INIT et l'ajoute a la chaine }
+Procedure CfgCopy(Src,Dst,Len:Word);
+Var CfS,I:Word;
+Begin
+ CfS:=CfgSegGet;
+ I:=0;
+ While I<Len Do Begin Mem[CfS:Dst+I]:=Mem[CfS:Src+I]; Inc(I); End;
+End;
+
+{ DEVICE= : charge un pilote par DEVLOAD.EXE ; INSTALL= : lance un programme residant (ligne de commande a CfS:172) }
+Procedure CfgRun(Dev:Boolean;V,P,A,E:Word);
+Var
+ PB: ExecParameterBlock;
+ Pth: String;
+ CfS,I: Word;
+Begin
+ CfS:=CfgSegGet;
+ FillChar(PB,SizeOf(PB),0);
+ PB.CommandLine:=Ptr(CfS,172);
+ PB.FCB1:=Ptr(CfS,140);
+ PB.FCB2:=Ptr(CfS,140);
+ If Dev Then Begin
+  Pth:='C:\DEVLOAD.EXE';
+  A:=V;
+ End Else Begin
+  Pth:='';
+  For I:=V To P-1 Do Pth:=Pth+Chr(Mem[CfS:I]);
+ End;
+ If E-A>120 Then E:=A+120;
+ Mem[CfS:172]:=E-A+1;
+ Mem[CfS:173]:=32;
+ CfgCopy(A,174,E-A);
+ If DOS4Bh_ExecProgram(0,Pth,PB)<>0 Then CfgMsg(0);
+End;
+
+{ Traite la ligne CfS:S..E-1 du tampon (en place) : le mot-cle est reconnu par ses deux premieres lettres }
+Procedure CfgLine(S,E:Word);
+Var
+ CfS,V,P,A,I,N,Sig: Word;
+Begin
+ CfS:=CfgSegGet;
+ Mem[CfS:E]:=32;
+ While (S<E) And (Mem[CfS:S]<=32) Do Inc(S);
+ If S>=E Then Exit;
+ Sig:=(Mem[CfS:S] And $DF)*256+(Mem[CfS:S+1] And $DF);
+ V:=S;
+ While (Mem[CfS:V]>32) And (Mem[CfS:V]<>61) Do Inc(V);
+ While (V<E) And ((Mem[CfS:V]<=32) Or (Mem[CfS:V]=61)) Do Inc(V);
+ P:=V;
+ While (P<E) And (Mem[CfS:P]>32) Do Inc(P);
+ A:=P;
+ While (A<E) And (Mem[CfS:A]<=32) Do Inc(A);
+ N:=0;
+ For I:=V To P-1 Do
+  If (Mem[CfS:I]>=48) And (Mem[CfS:I]<=57) Then N:=N*10+Mem[CfS:I]-48;
+ Case Sig Of
+  $4649:Begin If N<8 Then N:=8; If N>20 Then N:=20; MemW[CfS:0]:=N; End;    { FILES }
+  $4255:Begin If N<1 Then N:=1; MemW[CfS:4]:=N; End;                         { BUFFERS }
+  $4C41:Begin                                                                { LASTDRIVE }
+   N:=(Mem[CfS:V] And $DF)-64;
+   If N<3 Then N:=3;
+   If N>NDrv Then N:=NDrv;
+   MemW[CfS:2]:=N;
+  End;
+  $5348:Begin                                                                { SHELL }
+   Mem[CfS:12]:=P-V;
+   CfgCopy(V,13,P-V);
+   Mem[CfS:76]:=E-A;
+   CfgCopy(A,77,E-A);
+  End;
+  $4445:CfgRun(True,V,P,A,E);                                                { DEVICE, DEVICEHIGH }
+  $494E:CfgRun(False,V,P,A,E);                                               { INSTALL }
+  $5245,$4252,$444F,$5354,$4643,$434F,$5357:;                               { INSTALL REM BREAK DOS STACKS FCBS COUNTRY SWITCHES }
+  Else CfgMsg(2);
+ End;
+End;
+
+Procedure InitConfig;
+Var
+ CfS,H,Got,I,S: Word;
+ Nm: String[13];
+Begin
+ CfS:=DOS48h_AllocateMemory(150);
+ If CfS=0 Then Exit;
+ SetBlockOwner(CfS,8);
+ For I:=0 To 399 Do Mem[CfS:I]:=0;
+ MemW[CfS:0]:=20;
+ MemW[CfS:2]:=NDrv;
+ MemW[CfS:4]:=20;
+ ASM
+  MOV AX,CfS
+  MOV WORD PTR [Data + FxBase + 126],AX
+ END;
+ { C:\CONFIG.SYS }
+ Nm:='C:\CONFIG.SYS';
+ For I:=1 To 13 Do Mem[CfS:299+I]:=Ord(Nm[I]);
+ H:=DOS3Dh_OpenFile(Ptr(CfS,300),0);
+ If H<>$FFFF Then Begin
+  Got:=0;
+  DOS3Fh_ReadFile(H,Ptr(CfS,400),2040,Got);
+  DOS3Eh_CloseFile(H);
+  I:=0;
+  While I<Got Do Begin
+   S:=I;
+   While (I<Got) And (Mem[CfS:400+I]<>13) And (Mem[CfS:400+I]<>10) And (Mem[CfS:400+I]<>26) Do Inc(I);
+   CfgLine(400+S,400+I);
+   Inc(I);
+  End;
+ End;
+ DOS4Ah_ModifyMemory(CfS,25);
+End;
+
+{ SHELL= de CONFIG.SYS : lance l'interpreteur choisi (0 = s'est execute puis termine, 1 = absent ou echec) }
+Function CfgShell:Word;
+Var
+ PB: ExecParameterBlock;
+ Shell: String;
+ F: Array[0..15] of Byte;
+ CfS,I: Word;
+Begin
+ CfgShell:=1;
+ CfS:=CfgSegGet;
+ If Mem[CfS:12]=0 Then Exit;
+ FillChar(PB,SizeOf(PB),0);
+ FillChar(F,SizeOf(F),0);
+ Shell:='';
+ For I:=1 To Mem[CfS:12] Do Shell:=Shell+Chr(Mem[CfS:12+I]);
+ PB.CommandLine:=Ptr(CfS,76);
+ PB.FCB1:=@F;
+ PB.FCB2:=@F;
+ CfgShell:=DOS4Bh_ExecProgram(0,Shell,PB);
+End;
+
 { Charge et exécute le processeur de commandes }
 Function LoadAndExecuteCommandProcessor:Boolean;
 Var
@@ -10780,8 +10617,9 @@ Begin
  ParamBlock.FCB1:=@FCB1;
  ParamBlock.FCB2:=@FCB2;
 
+ Result:=CfgShell;
  { Essayer de charger COMMAND.COM en premier }
- Result:=DOS4Bh_ExecProgram(0, 'C:\COMMAND.COM', ParamBlock);
+ If Result <> 0 Then Result:=DOS4Bh_ExecProgram(0, 'C:\COMMAND.COM', ParamBlock);
  If Result <> 0 Then Begin
   { Si COMMAND.COM échoue, essayer COMMAND.EXE }
   Result:=DOS4Bh_ExecProgram(0, 'C:\COMMAND.EXE', ParamBlock);
@@ -11233,22 +11071,12 @@ End;
 { Fonctions 52h et 53h - Structures internes DOS }
 
 { Fonction 52h - Get List of Lists }
-Function DOS52h_GetListOfLists:Pointer;
-Begin
- { Retourner un pointeur vers la structure Liste des Listes }
- { L'adresse est calculée dynamiquement }
- ASM
-  MOV AX,CS
-  MOV DX,AX              { DX = segment }
-
-  { Calculer l'offset de la structure dans le segment de données }
-  MOV AX,OFFSET Data
-  ADD AX,FTBase                { Offset approximatif vers la structure }
-
-  { Retourner le pointeur dans AX:DX }
-  { En Pascal, Pointer est retourné dans AX (offset) et DX (segment) }
- END;
-End;
+Function DOS52h_GetListOfLists:Pointer;Assembler;
+ASM
+ MOV DX,CS
+ MOV AX,OFFSET Data
+ ADD AX,FxBase+130            { Liste des Listes (apres CfgSeg et le mot du premier MCB) }
+END;
 
 { Fonction 53h - Translate BPB to DPB }
 Function DOS53h_TranslateBPBtoDPB(BPBPtr:Pointer;DPBPtr:Pointer):Word;
@@ -12700,93 +12528,34 @@ End;
 { Fonction 5Ah - Create Temporary File }
 Function DOS5Ah_CreateTempFile(PathPtr:Pointer;Attributes:Word):Word;
 Var
- TempFileName: String;
- TempFullPath: String;
- Counter: Word;
- CounterWork: Word;
- DigitIndex: Byte;
- Handle: Word;
- PathStr: String;
- Drive: Byte;
- DirPath: String;
- FileName: String;
  P: PChar;
- I: Byte;
- Zt: TFcbZ;
+ L,Counter,W: Word;
+ K: Byte;
+ Handle: Word;
+ T: String[12];
 Begin
- DOS5Ah_CreateTempFile := $FFFF; { Erreur par défaut }
-
- { Convertir pointeur ASCIIZ en string Pascal }
- P := PChar(PathPtr);
- PathStr := '';
- I := 0;
- While (P^ <> #0) and (I < 255) Do Begin
-  PathStr := PathStr + P^;
-  Inc(P);
-  Inc(I);
- End;
- { Chemin vide : repertoire courant ; sinon le terminer par '\' }
- If Length(PathStr) > 0 Then
-  If PathStr[Length(PathStr)] <> '\' Then
-   PathStr := PathStr + '\';
-
- { Générer un nom de fichier temporaire unique }
- Counter := 1;
- Repeat
-  { Format: TMPxxxxx.TMP où xxxxx est un nombre }
-  { Conversion decimale sur 5 chiffres sans le runtime SYSTEM }
-  TempFileName := 'TMP00000.TMP';
-  CounterWork := Counter;
-  For DigitIndex := 8 DownTo 4 Do Begin
-   TempFileName[DigitIndex] := Chr(Ord('0') + (CounterWork Mod 10));
-   CounterWork := CounterWork Div 10;
+ { le chemin (repertoire) est suivi du nom genere TMPnnnnn.TMP dans le tampon de l'appelant }
+ P:=PChar(PathPtr);
+ L:=0;
+ While (P[L]<>#0) And (L<240) Do Inc(L);
+ If (L>0) And (P[L-1]<>'\') Then Begin P[L]:='\'; Inc(L); End;
+ For Counter:=1 To 9999 Do Begin
+  W:=Counter;
+  T:='TMP00000.TMP';
+  For K:=0 To 12 Do P[L+K]:=T[K+1];
+  P[L+12]:=#0;
+  For K:=7 DownTo 3 Do Begin
+   P[L+K]:=Chr(48+(W Mod 10));
+   W:=W Div 10;
   End;
-
-  TempFullPath := PathStr + TempFileName;
-  PathToZ(TempFullPath,Zt);
-
-  { Vérifier si le fichier existe déjà }
-  Handle := DOS3Dh_OpenFile(@Zt, 0); { Mode lecture seule }
-  If Handle <> $FFFF Then Begin
-   { Le fichier existe, fermer et essayer un autre nom }
-   DOS3Eh_CloseFile(Handle);
-   Inc(Counter);
-   If Counter > 9999 Then Begin
-    SetExtendedError(ERROR_NO_MORE_FILES, ERRCLASS_TEMPFAIL, ERRACT_RETRY, ERRLOC_UNK);
-    Exit; { Trop de tentatives }
-   End;
-  End Else Begin
-   { Le fichier n'existe pas, nous pouvons le créer }
-   Break;
-  End;
- Until False;
-
- { Créer le fichier temporaire }
- Handle := DOS3Ch_CreateOpenFile(@Zt);
- If Handle = $FFFF Then Begin
-  SetExtendedError(ERROR_PATH_NOT_FOUND, ERRCLASS_NOTFND, ERRACT_USER, ERRLOC_DISK);
-  Exit;
- End;
-
- { Copier le nom généré dans le chemin d'origine (modification du buffer appelant) }
- { Attention: ceci modifie le buffer de l'appelant avec le nom généré }
- Move(TempFullPath[1], PathPtr^, Length(TempFullPath));
- P := PChar(PathPtr);
- Inc(P, Length(TempFullPath));
- P^ := #0; { Terminateur null }
-
- { Définir les attributs si nécessaires }
- If Attributes <> 0 Then Begin
-  If DOS43h_GetSetFileAttributes(PathPtr, 1, Attributes) = $FFFF Then Begin
-   { Erreur lors de la définition des attributs - fermer le fichier }
-   DOS3Eh_CloseFile(Handle);
-   DOS5Ah_CreateTempFile := $FFFF;
+  Handle:=FxCreate(PathPtr,Byte(Attributes),True);
+  If Handle<>$FFFF Then Begin
+   ClearExtendedError;
+   DOS5Ah_CreateTempFile:=Handle;
    Exit;
   End;
  End;
-
- ClearExtendedError;
- DOS5Ah_CreateTempFile := Handle;
+ DOS5Ah_CreateTempFile:=$FFFF;
 End;
 
 { Fonction 5Bh - Create New File }
@@ -12875,7 +12644,7 @@ End;
   Table des verrous : 20 entrees de 14 octets dans DataMOS.FileLocks (InUse:1, Handle:2, PSP:2,
   Debut:4, Longueur:4, Type:1). Handle = index SFT. }
 Const
- LkBase=2205;
+ LkBase=865;
 
 Function LkGetB(Off:Word):Byte;Assembler;
 ASM

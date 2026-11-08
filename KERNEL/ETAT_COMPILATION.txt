@@ -65,6 +65,29 @@ Taille
 IO.SYS ~ 62 Ko sur 64 Ko : toute nouvelle fonction doit etre compensee (TPC compile mal les chaines de Or :
 InList() dans MSDOS.PAS reduit FxBadName/FcbIsSep ; voir DEV-COOLS/DOC/TPC_OPTIMISATIONS.txt).
 
+CONFIG.SYS (lu par IO.SYS au demarrage, avant le lancement du processeur de commandes)
+--------------------------------------------------------------------------------------
+Prises en charge (une commande par ligne, mots-cles en majuscules ou minuscules, reconnus par leurs deux premieres lettres) :
+  FILES=n        nombre d'entrees de la table des fichiers ouverts (5 peripheriques + fichiers) : 8 a 20 (20 = maximum du noyau)
+  BUFFERS=n      accepte et memorise (le noyau n'a pas d'antememoire disque : sans effet)
+  LASTDRIVE=x    derniere unite (C: a F: ; F: est le maximum du noyau) : fonction 0Eh de INT 21h
+  SHELL=chemin [arguments]   interpreteur de commandes lance a la place de C:\COMMAND.EXE (variable COMSPEC et ligne de
+                 commande du PSP en tiennent compte) ; s'il est introuvable, COMMAND.COM / COMMAND.EXE sont essayes
+  DEVICE=pilote [arguments]  (DEVICEHIGH= identique) charge un pilote de peripherique par C:\DEVLOAD.EXE : le pilote est lu en
+                 memoire, ses commandes strategie / interruption INIT sont appelees, sa taille residente est celle de l'adresse
+                 de rupture rendue, et il est chaine apres le pilote NUL (liste des listes, INT 21h/52h, en-tete NUL en LoL+22h)
+  INSTALL=programme [arguments]   lance un programme residant (fonction 31h) avant le processeur de commandes
+  REM, BREAK, DOS, STACKS, FCBS, COUNTRY, SWITCHES : acceptes sans effet.
+Toute autre commande : message "Commande incorrecte dans CONFIG.SYS".
+Limites : pilotes de bloc non pris en charge (refuses), pas d'ouverture des pilotes caracteres par leur nom depuis INT 21h
+(utile pour les pilotes qui accrochent des interruptions : souris, XMS, EMS...), un seul CONFIG.SYS (C:\), pas de AUTOEXEC.BAT
+automatique. Tests : KERNEL/TCFG.PAS, TCHAIN.PAS, MKTESTDRV.PY (pilote de test), DEVLOAD.PAS (racine du depot).
+Taille : pour tenir dans les 64 Ko du noyau, la table des repertoires courants est reduite a 6 unites (A: a F:), le pilote
+pays ne connait que les Etats-Unis, le Canada, la France et l'Espagne (table compacte), INT 21h/5Ah est reecrit plus court.
+Corrections de bogues decouvertes au passage : l'ecriture de la position / des attributs / du cluster courant des entrees de la
+table des fichiers visait un decalage constant hors de la table (code de 64 Ko tres serre) ; INT 21h/52h rendait 0:0 (fonction
+Pascal a corps assembleur qui perdait son resultat) et expose maintenant la vraie liste des listes.
+
 Limites connues
 ---------------
 * COPY a+b (concatenation) et COPY de plusieurs sources vers un fichier unique ne concatenent pas.
