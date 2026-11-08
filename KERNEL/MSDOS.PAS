@@ -236,6 +236,13 @@ Procedure END_KERNEL;
 IMPLEMENTATION
 
 Const
+ { Le noyau (IO.SYS) est charge en 0070:0000 et occupe jusqu'a 64 Ko : l'arene
+   de memoire (MCB) commence apres, et s'arrete avant la pile du noyau. }
+ CDBase=114;         { offset de CurrentDir dans DataMOS (apres FindState) }
+ CDSize=67;          { Drive(1) + Cluster(2) + Path(1+63) }
+ FTBase=1856;        { CDBase + 26*CDSize : debut de FileTable dans DataMOS }
+ ArenaBase=$1080;
+ ArenaEnd=$9000;
  VerDos=7;          { Version de DOS }
  SubVerDos=10;      { Sous-version de DOS }
 
@@ -308,7 +315,7 @@ Type
   CurrentDir: Array[0..25] of Record
    Drive: Byte;
    Cluster: Word;
-   Path: String[127];
+   Path: String[63];
   End;
   FileTable:Array[0..19]of FileTableEntry;
   { Données pour fonction 59h - Get Extended Error Information }
@@ -374,7 +381,7 @@ Type
   SavedSSSP: LongInt;        { SS:SP sauvegardé }
   HandleTableSize: Word;     { Taille table handles }
   HandleTablePtr: Pointer;   { Pointeur table handles }
-  Reserved2: Array[0..22] of Byte; { Réservé }
+  Reserved2: Array[0..23] of Byte; { Réservé }
   DOSCall: Array[0..2] of Byte;    { INT 21h, RETF }
   Reserved3: Array[0..8] of Byte;  { Réservé }
   FCB1: Array[0..15] of Byte;      { FCB #1 }
@@ -609,6 +616,10 @@ Function DOS49h_FreeMemory(BlockSegment:Word):Word;Near;Forward;
 Function DOS4Ah_ModifyMemory(BlockSegment:Word;NewSize:Word):Word;Near;Forward;
 Function DOS4Bh_ExecProgram(ExecType:Byte;ProgramPath:String;ParamBlock:ExecParameterBlock):Word;Near;Forward;
 Function DOS4Ch_TerminateProgram(ExitCode:Byte):Word;Near;Forward;
+Function ExecFromInt21(Mode:Word;NamePtr:Pointer;BlockPtr:Pointer):Word;Near;Forward;
+{$IFDEF KDEBUG}
+Procedure DbgW(Tag:Char;W:Word);Near;Forward;
+{$ENDIF}
 Function DOS4Dh_GetReturnCode:Word;Near;Forward;
 
 { Fonctions 50h et 51h - Gestion PSP }
@@ -745,6 +756,12 @@ Var
  I:Byte;
  IntSeg, IntOfs: Word;
 Begin
+ { Le noyau est chargé comme IO.SYS : DS=CS pour les chaînes et constantes que le
+   compilateur place dans le segment du noyau (pas de segment de données séparé). }
+ ASM
+  PUSH CS
+  POP DS
+ END;
  { Initialiser répertoires courants via les fonctions d'accès Code Segment }
  SetCurrentDrive(2); { C: par défaut }
  For I:=0 To 25 Do Begin
@@ -782,8 +799,13 @@ Begin
 
  { Charger et exécuter COMMAND.COM ou COMMAND.EXE }
  LoadAndExecuteCommandProcessor;
+ { Plus de processeur de commandes : le noyau s'arrête }
  ASM
-  DB 'DEBUT DU NOYAU MSDOS-0';
+ @Halt:
+  CLI
+  HLT
+  JMP @Halt
+  DB 'DEBUT DU NOYAU MSDOS-0'
  END;
 End;
 
@@ -812,167 +834,33 @@ Procedure Data;Assembler;ASM
  DW 0          { CurrentEntry: Word }
  DB 0          { Active: Boolean }
 
- { CurrentDir: Array[0..25] of Record - Structure pour chaque drive }
- { Chaque entrée: Drive(1) + Cluster(2) + Path(128) = 131 bytes * 26 drives = 3406 bytes }
- { Drive A: (0) }
- DB 0          { Drive }
- DW 0          { Cluster }
- DB 127,'\',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- { Drive B: (1) }
- DB 1          { Drive }
- DW 0          { Cluster }
- DB 127,'\',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- { Répéter pour drives C: à Z: (2-25) - 24 drives supplémentaires }
- { Drive C: (2) }
- DB 2,0,0,127,'\',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- { Drives restants D: à Z: (3-25) chacun 131 bytes }
- { Drive D: (3) }
- DB 3,0,0,1,'\',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0
- { Drive E: (4) }
- DB 4,0,0,1,'\',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0
- { Drive F: (5) }
- DB 5,0,0,1,'\',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0
- { Drive G: (6) }
- DB 6,0,0,1,'\',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0
- { Drive H: (7) }
- DB 7,0,0,1,'\',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0
- { Drive I: (8) }
- DB 8,0,0,1,'\',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0
- { Drive J: (9) }
- DB 9,0,0,1,'\',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0
- { Drive K: (10) }
- DB 10,0,0,1,'\',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0
- { Drive L: (11) }
- DB 11,0,0,1,'\',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0
- { Drive M: (12) }
- DB 12,0,0,1,'\',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0
- { Drive N: (13) }
- DB 13,0,0,1,'\',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0
-  { Drive O: (14) }
- DB 14,0,0,1,'\',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0
- { Drive P: (15) }
- DB 15,0,0,1,'\',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0
- { Drive Q: (16) }
- DB 16,0,0,1,'\',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0
- { Drive R: (17) }
- DB 17,0,0,1,'\',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0
- { Drive S: (18) }
- DB 18,0,0,1,'\',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0
- { Drive T: (19) }
- DB 19,0,0,1,'\',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0
- { Drive U: (20) }
- DB 20,0,0,1,'\',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0
-  { Drive V: (21) }
- DB 21,0,0,1,'\',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0
- { Drive W: (22) }
- DB 22,0,0,1,'\',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0
- { Drive X: (23) }
- DB 23,0,0,1,'\',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0
- { Drive Y: (24) }
- DB 24,0,0,1,'\',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0
- { Drive Z: (25) }
- DB 25,0,0,1,'\',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
- DB 0,0,0
+ { CurrentDir: Array[0..25] of Record : Drive(1) + Cluster(2) + Path(1+63) = 67 octets par lecteur }
+ DB 0,0,0,1,'\',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 1,0,0,1,'\',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 2,0,0,1,'\',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 3,0,0,1,'\',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 4,0,0,1,'\',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 5,0,0,1,'\',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 6,0,0,1,'\',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 7,0,0,1,'\',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 8,0,0,1,'\',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 9,0,0,1,'\',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 10,0,0,1,'\',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 11,0,0,1,'\',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 12,0,0,1,'\',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 13,0,0,1,'\',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 14,0,0,1,'\',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 15,0,0,1,'\',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 16,0,0,1,'\',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 17,0,0,1,'\',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 18,0,0,1,'\',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 19,0,0,1,'\',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 20,0,0,1,'\',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 21,0,0,1,'\',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 22,0,0,1,'\',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 23,0,0,1,'\',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 24,0,0,1,'\',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 25,0,0,1,'\',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
  { FileTable:Array[0..19]of FileTableEntry - 20 entrées de 17 octets = 340 bytes }
  DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0  { FileTable[0] }
  DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0  { FileTable[1] }
@@ -1172,7 +1060,7 @@ Begin
   MOV AX,SI
   MOV DX,17                    { Taille d'une entrée FileTable }
   MUL DX
-  ADD AX,3520                  { Offset de FileTable }
+  ADD AX,FTBase                  { Offset de FileTable }
   MOV BX,AX
   MOV BYTE PTR [Data + BX],0   { Marquer InUse = False }
   INC SI
@@ -3615,19 +3503,19 @@ Procedure Intr21h;Assembler;ASM
  PUSH DI
 
  { Paramètres: AL = type EXEC, DS:DX = nom fichier, ES:BX = bloc paramètres }
-
- { Sauvegarder les paramètres sur la pile }
- PUSH ES                    { Segment bloc paramètres }
- PUSH BX                    { Offset bloc paramètres }
- PUSH DS                    { Segment nom fichier }
- PUSH DX                    { Offset nom fichier }
- PUSH AX                    { Type EXEC (AL) }
-
- { Convertir les paramètres pour Pascal }
- { Note: implémentation simplifiée - les vrais paramètres seront traités dans la fonction Pascal }
-
- CALL DOS4Bh_ExecProgram    { Appeler fonction Pascal }
- ADD SP,10                  { Nettoyer pile (5 mots = 10 octets) }
+ { Convention Pascal : arguments de gauche à droite, pointeur = segment puis offset, }
+ { l'appelée dépile ; DS = segment du noyau pendant l'appel }
+ PUSH DS                    { DS de l'appelant, restauré après l'appel }
+ XOR AH,AH
+ PUSH AX                    { Mode (AL) }
+ PUSH DS                    { Nom : segment }
+ PUSH DX                    { Nom : offset }
+ PUSH ES                    { Bloc : segment }
+ PUSH BX                    { Bloc : offset }
+ PUSH CS
+ POP DS
+ CALL ExecFromInt21
+ POP DS
 
  { AX contient le résultat (0 si succès, code d'erreur sinon) }
  CMP AX,0                   { Vérifier si succès }
@@ -3657,10 +3545,12 @@ Procedure Intr21h;Assembler;ASM
  PUSH DI
 
  { Paramètres: AL = code de retour }
+ XOR AH,AH
  PUSH AX                    { Code de retour (AL) }
+ PUSH CS
+ POP DS
 
- CALL DOS4Ch_TerminateProgram { Appeler fonction Pascal }
- ADD SP,2                   { Nettoyer pile (1 mot = 2 octets) }
+ CALL DOS4Ch_TerminateProgram { Appeler fonction Pascal (ne revient pas) }
 
  { Cette fonction ne retourne jamais - elle termine le programme }
  { En cas d'erreur, continuer quand même }
@@ -4655,115 +4545,91 @@ END;
 Function GetCurrentDirDrive(Index: Byte): Byte;Assembler;
 ASM
  MOV AL,Index
- MOV AH,131                  { Taille d'un enregistrement CurrentDir (1+2+128) }
- MUL AH                      { AL = Index * 131 }
- ADD AX,7                    { Ajouter offset de base (7) }
+ MOV AH,CDSize
+ MUL AH
  MOV BX,AX
- MOV AL,BYTE PTR [Data + BX + 114] { Lire Drive dans CurrentDir }
+ MOV AL,BYTE PTR [Data + BX + CDBase]    { Drive dans CurrentDir }
 END;
 
 Function GetCurrentDirCluster(Index: Byte): Word;Assembler;
 ASM
  MOV AL,Index
- MOV AH,131                  { Taille d'un enregistrement CurrentDir }
+ MOV AH,CDSize
  MUL AH
- ADD AX,8                    { Drive(1) + offset de base(7) = 8 }
  MOV BX,AX
- MOV AX,WORD PTR [Data + BX + 115] { Lire Cluster dans CurrentDir (après Drive) }
+ MOV AX,WORD PTR [Data + BX + CDBase + 1] { Cluster dans CurrentDir }
 END;
 
 Function GetCurrentDirPath(Index: Byte): String;
 Var
  Path: String;
- I, Len: Byte;
- BaseOffset: Word;
+ I, Len, Ch: Byte;
+ Base: Word;
 Begin
- BaseOffset := 7 + (Index * 131) + 3;  { Base + Index*RecordSize + Drive(1) + Cluster(2) }
-
- { Lire la longueur de la chaîne }
+ Base := Index * CDSize + CDBase + 3;
  ASM
-  MOV BX,BaseOffset
-  MOV AL,BYTE PTR [Data + BX + 117] { Lire longueur String Path dans CurrentDir }
+  MOV BX,Base
+  MOV AL,BYTE PTR [Data + BX]
   MOV Len,AL
  END;
-
- { Lire les caractères }
+ If Len > 63 Then Len := 63;
  Path[0] := Chr(Len);
  For I := 1 To Len Do Begin
   ASM
+   MOV BX,Base
    MOV AL,I
-   MOV AH,0
-   ADD AX,BaseOffset
-   MOV BX,AX
-   MOV AL,BYTE PTR [Data + BX + 117] { Lire caractère String Path dans CurrentDir }
-
-   { Stocker le caractère dans Path[I] }
-   LEA BX,Path
-   MOV CL,I
-   MOV CH,0
-   ADD BX,CX
-   MOV BYTE PTR [BX],AL
+   XOR AH,AH
+   ADD BX,AX
+   MOV AL,BYTE PTR [Data + BX]
+   MOV Ch,AL
   END;
+  Path[I] := Chr(Ch);
  End;
-
  GetCurrentDirPath := Path;
 End;
 
 Procedure SetCurrentDirDrive(Index, Drive: Byte);Assembler;
 ASM
  MOV AL,Index
- MOV AH,131                  { Taille d'un enregistrement CurrentDir }
+ MOV AH,CDSize
  MUL AH
- ADD AX,7                    { Ajouter offset de base }
  MOV BX,AX
  MOV AL,Drive
- MOV BYTE PTR [Data + BX + 114],AL { Stocker Drive dans CurrentDir }
+ MOV BYTE PTR [Data + BX + CDBase],AL
 END;
 
 Procedure SetCurrentDirCluster(Index: Byte; Cluster: Word);Assembler;
 ASM
  MOV AL,Index
- MOV AH,131                  { Taille d'un enregistrement CurrentDir }
+ MOV AH,CDSize
  MUL AH
- ADD AX,8                    { Drive(1) + offset de base(7) = 8 }
  MOV BX,AX
  MOV AX,Cluster
- MOV WORD PTR [Data + BX + 115],AX { Stocker Cluster dans CurrentDir }
+ MOV WORD PTR [Data + BX + CDBase + 1],AX
 END;
 
 Procedure SetCurrentDirPath(Index: Byte; Path: String);
 Var
- I, Len: Byte;
- BaseOffset: Word;
+ I, Len, Ch: Byte;
+ Base: Word;
 Begin
  Len := Length(Path);
- BaseOffset := 7 + (Index * 131) + 3;  { Base + Index*RecordSize + Drive(1) + Cluster(2) }
-
- { Stocker la longueur }
+ If Len > 63 Then Len := 63;
+ Base := Index * CDSize + CDBase + 3;
  ASM
-  MOV BX,BaseOffset
+  MOV BX,Base
   MOV AL,Len
-  MOV BYTE PTR [Data + BX + 117],AL { Stocker longueur String Path dans CurrentDir }
+  MOV BYTE PTR [Data + BX],AL
  END;
-
- { Stocker les caractères }
  For I := 1 To Len Do Begin
+  Ch := Ord(Path[I]);
   ASM
-   { Calculer l'adresse de destination dans Data }
+   MOV BX,Base
    MOV AL,I
-   MOV AH,0
-   ADD AX,BaseOffset
-   MOV DI,AX           { DI = adresse destination dans Data }
-
-   { Lire le caractère depuis Path[I] }
-   LEA BX,Path
-   MOV CL,I
-   MOV CH,0
-   ADD BX,CX
-   MOV AL,BYTE PTR [BX] { AL = Path[I] }
-
-   { Stocker dans Data }
-   MOV BYTE PTR [Data + DI + 117],AL { Stocker caractère dans String Path CurrentDir }
+   XOR AH,AH
+   ADD BX,AX
+   MOV AL,Ch
+   MOV BYTE PTR [Data + BX],AL
   END;
  End;
 End;
@@ -4781,7 +4647,7 @@ ASM
  MOV AL,Index
  MOV AH,17                   { Taille d'une entrée FileTable }
  MUL AH
- ADD AX,3520                 { Ajouter offset de base FileTable dans DataMOS }
+ ADD AX,FTBase+0                 { Ajouter offset de base FileTable dans DataMOS }
  MOV BX,AX
  MOV AL,BYTE PTR [Data + BX] { Lire InUse dans FileTable }
  CMP AL,0
@@ -4798,7 +4664,7 @@ ASM
  MOV AL,Index
  MOV AH,17
  MUL AH
- ADD AX,3520
+ ADD AX,FTBase+0
  MOV BX,AX
  MOV AL,InUse
  MOV BYTE PTR [Data + BX],AL
@@ -4809,7 +4675,7 @@ ASM
  MOV AL,Index
  MOV AH,17
  MUL AH
- ADD AX,3521                 { Offset + 1 pour Drive dans FileTable }
+ ADD AX,FTBase+1                 { Offset + 1 pour Drive dans FileTable }
  MOV BX,AX
  MOV AL,BYTE PTR [Data + BX]
 END;
@@ -4819,7 +4685,7 @@ ASM
  MOV AL,Index
  MOV AH,17
  MUL AH
- ADD AX,3521
+ ADD AX,FTBase+1
  MOV BX,AX
  MOV AL,Drive
  MOV BYTE PTR [Data + BX],AL
@@ -4830,7 +4696,7 @@ ASM
  MOV AL,Index
  MOV AH,17
  MUL AH
- ADD AX,3522                 { Offset + 2 pour FirstCluster dans FileTable }
+ ADD AX,FTBase+2                 { Offset + 2 pour FirstCluster dans FileTable }
  MOV BX,AX
  MOV AX,WORD PTR [Data + BX]
 END;
@@ -4840,7 +4706,7 @@ ASM
  MOV AL,Index
  MOV AH,17
  MUL AH
- ADD AX,3522
+ ADD AX,FTBase+2
  MOV BX,AX
  MOV AX,FirstCluster
  MOV WORD PTR [Data + BX],AX
@@ -4851,7 +4717,7 @@ ASM
  MOV AL,Index
  MOV AH,17
  MUL AH
- ADD AX,3524                 { Offset + 4 pour FileSize dans FileTable }
+ ADD AX,FTBase+4                 { Offset + 4 pour FileSize dans FileTable }
  MOV BX,AX
  MOV AX,WORD PTR [Data + BX]     { Partie basse }
  MOV DX,WORD PTR [Data + BX + 2] { Partie haute }
@@ -4862,7 +4728,7 @@ ASM
  MOV AL,Index
  MOV AH,17
  MUL AH
- ADD AX,3524
+ ADD AX,FTBase+4
  MOV BX,AX
  MOV AX,WORD PTR [FileSize]      { Partie basse }
  MOV WORD PTR [Data + BX],AX
@@ -5497,82 +5363,97 @@ Begin
 End;
 
 { Lire un secteur depuis un lecteur }
-Function ReadSector(Drive:Byte;Sector:LongInt;Buffer:Pointer):Boolean;
+{ Une operation BIOS INT 13h sur un secteur (Op = 02h lecture, 03h ecriture) }
+Function BiosDisk(Op:Byte;BiosDrv:Byte;Cyl,Head,Sec:Word;Buffer:Pointer):Boolean;Assembler;
+ASM
+ MOV AX,Cyl
+ MOV CH,AL
+ MOV BL,AH
+ MOV CL,6
+ SHL BL,CL
+ MOV CL,BYTE PTR Sec
+ OR CL,BL
+ MOV DH,BYTE PTR Head
+ MOV DL,BiosDrv
+ MOV AH,Op
+ MOV AL,1
+ LES BX,Buffer
+ INT 13h
+ MOV AL,1
+ JNC @Ok
+ XOR AL,AL
+@Ok:
+END;
+
+{ Geometrie du disque (secteurs par piste, nombre de tetes) ; defaut 18 x 2 }
+Procedure GetGeometry(BiosDrv:Byte;Var SPT,Heads:Word);Assembler;
+ASM
+ PUSH ES
+ PUSH DI
+ MOV DL,BiosDrv
+ MOV AH,08h
+ INT 13h
+ JC @Def
+ MOV AL,CL
+ AND AX,003Fh
+ JZ @Def
+ MOV BX,AX
+ MOV AL,DH
+ XOR AH,AH
+ INC AX
+ MOV CX,AX
+ JMP @Store
+@Def:
+ MOV BX,18
+ MOV CX,2
+@Store:
+ LES DI,SPT
+ MOV ES:[DI],BX
+ LES DI,Heads
+ MOV ES:[DI],CX
+ POP DI
+ POP ES
+END;
+
+Procedure ResetDisk(BiosDrv:Byte);Assembler;
+ASM
+ MOV DL,BiosDrv
+ XOR AH,AH
+ INT 13h
+END;
+
+{ Lecture/ecriture d'un secteur logique : lecteur DOS (0=A:, 1=B:, 2=C:...) }
+Function DiskTransfer(Op:Byte;Drive:Byte;Sector:LongInt;Buffer:Pointer):Boolean;
 Var
- Result:Byte;
+ BiosDrv: Byte;
+ SPT,Heads,Tries,Head,Sec: Word;
+ Cyl,Tmp: LongInt;
 Begin
- ASM
-  PUSH ES
-  PUSH BX
-  PUSH CX
-  PUSH DX
-  PUSH AX
+ DiskTransfer:=False;
+ If Drive<2 Then BiosDrv:=Drive Else BiosDrv:=$80+(Drive-2);
+ GetGeometry(BiosDrv,SPT,Heads);
+ Sec:=Word(Sector Mod SPT)+1;
+ Tmp:=Sector Div SPT;
+ Head:=Word(Tmp Mod Heads);
+ Cyl:=Tmp Div Heads;
+ For Tries:=1 To 3 Do Begin
+  If BiosDisk(Op,BiosDrv,Word(Cyl),Head,Sec,Buffer) Then Begin
+   DiskTransfer:=True;
+   Exit;
+  End;
+  ResetDisk(BiosDrv);
+ End;
+End;
 
-  MOV DL,Drive               { DL = numéro de lecteur }
-  MOV AX,Word Ptr Sector     { Secteur bas }
-  MOV DX,Word Ptr Sector+2   { Secteur haut }
-
-  { Convertir secteur logique en CHS si nécessaire }
-  { Pour simplifier, on utilise l'interruption 25h }
-
-  LES BX,Buffer              { ES:BX = buffer }
-  MOV CX,1                   { Lire 1 secteur }
-  MOV AL,DL                  { AL = lecteur }
-  INT 25h                    { Interruption lecture secteur }
-  JC @ReadError
-
-  MOV AL,1                   { Succès }
-  JMP @ReadEnd
-@ReadError:
-  XOR AL,AL                  { Échec }
-@ReadEnd:
-  MOV Result,AL              { Sauver résultat dans variable Pascal }
-  POP BX                     { Nettoyer pile (INT 25h pousse flags) }
-  POP AX
-  POP DX
-  POP CX
-  POP BX
-  POP ES
- END;
- ReadSector:=(Result<>0);
+Function ReadSector(Drive:Byte;Sector:LongInt;Buffer:Pointer):Boolean;
+Begin
+ ReadSector:=DiskTransfer($02,Drive,Sector,Buffer);
 End;
 
 { Écrire un secteur sur un lecteur }
 Function WriteSector(Drive:Byte;Sector:LongInt;Buffer:Pointer):Boolean;
-Var
- Result:Byte;
 Begin
- ASM
-  PUSH ES
-  PUSH BX
-  PUSH CX
-  PUSH DX
-  PUSH AX
-
-  MOV DL,Drive               { DL = numéro de lecteur }
-  MOV AX,Word Ptr Sector     { Secteur bas }
-  MOV DX,Word Ptr Sector+2   { Secteur haut }
-
-  LES BX,Buffer              { ES:BX = buffer }
-  MOV CX,1                   { Écrire 1 secteur }
-  MOV AL,DL                  { AL = lecteur }
-  INT 26h                    { Interruption écriture secteur }
-  JC @WriteError
-
-  MOV AL,1                   { Succès }
-  JMP @WriteEnd
-@WriteError:
-  XOR AL,AL                  { Échec }
-@WriteEnd:
-  MOV Result,AL              { Sauver résultat dans variable Pascal }
-  POP BX                     { Nettoyer pile (INT 26h pousse flags) }
-  POP AX
-  POP DX
-  POP CX
-  POP BX
-  POP ES
- END;
- WriteSector:=(Result<>0);
+ WriteSector:=DiskTransfer($03,Drive,Sector,Buffer);
 End;
 
 { Trouver un cluster libre dans la FAT }
@@ -5924,59 +5805,68 @@ Function FindDirectoryEntry(Drive:Byte;BootSec:BootSectorRec;
                            ParentCluster:Word;DirName:String;
                            Var Entry:DirectoryEntry;
                            Var EntryOffset:Word):Boolean;
-{ Trouve l'entrée de répertoire dans le répertoire parent }
+{ Cherche une entrée (fichier ou répertoire) par son nom 8.3 (8 caractères de nom
+  + 3 d'extension, complétés par des espaces) dans le répertoire parent : racine
+  (ParentCluster=0) ou chaîne de clusters. }
 Var
  DirBuffer:Array[0..511] of Byte;
+ Name11:Array[0..10] of Char;
  DirSector:LongInt;
- SectorsToRead:Word;
- I,J:Word;
+ SectorsToRead,I,J,K,N,Cluster,Dot:Word;
  EntryPtr:^DirectoryEntry;
- FoundName:String;
+ Match:Boolean;
+ C:Char;
 Begin
  FindDirectoryEntry:=False;
  EntryOffset:=0;
-
- { Convertir nom en format 8.3 majuscules }
- DirName:=Copy(DirName+'        ',1,8); { Pad avec espaces }
- For I:=1 To Length(DirName) Do
-  If (DirName[I]>='a')and(DirName[I]<='z') Then
-   DirName[I]:=Chr(Ord(DirName[I])-32);
-
- { Calculer secteur et nombre de secteurs à lire }
- DirSector:=GetClusterSector(Drive,BootSec,ParentCluster);
- If ParentCluster = 0 Then
-  SectorsToRead:=(BootSec.RootDirEntries*32+511)div 512
- Else
-  SectorsToRead:=BootSec.SectorsPerCluster;
-
- { Parcourir les secteurs du répertoire }
- For I:=0 To SectorsToRead-1 Do Begin
-  If ReadSector(Drive,DirSector+I,@DirBuffer) Then Begin
-   { Parcourir les entrées du secteur }
-   For J:=0 To 15 Do Begin { 16 entrées par secteur (512/32) }
-    EntryPtr:=@DirBuffer[J*32];
-
-    { Vérifier si l'entrée est valide }
-    If (EntryPtr^.FileName[0]<>#0)and(EntryPtr^.FileName[0]<>#$E5) Then Begin
-     { Construire le nom de l'entrée }
-     FoundName:='';
-     For I:=0 To 7 Do Begin
-      If EntryPtr^.FileName[I]<>' ' Then
-       FoundName:=FoundName+EntryPtr^.FileName[I];
-     End;
-
-     { Comparer avec le nom recherché }
-     If (FoundName = Copy(DirName,1,Length(FoundName)))and
-        (EntryPtr^.Attributes and $10 <> 0) Then Begin { Répertoire }
-      Entry:=EntryPtr^;
-      EntryOffset:=(I*16+J)*32;
-      FindDirectoryEntry:=True;
-      Exit;
+ For K:=0 To 10 Do Name11[K]:=' ';
+ N:=Length(DirName);
+ Dot:=0;
+ For K:=1 To N Do If (DirName[K]='.') And (Dot=0) Then Dot:=K;
+ If Dot>0 Then Begin
+  { NOM.EXT : nom sur 8 caractères, extension sur 3 }
+  For K:=1 To Dot-1 Do Begin
+   If K<=8 Then Name11[K-1]:=DirName[K];
+  End;
+  For K:=1 To 3 Do Begin
+   If (Dot+K<=N) And (DirName[Dot+K]<>' ') Then Name11[7+K]:=DirName[Dot+K];
+  End;
+ End
+ Else Begin
+  If N>11 Then N:=11;
+  For K:=1 To N Do Name11[K-1]:=DirName[K];
+ End;
+ For K:=0 To 10 Do Begin
+  C:=Name11[K];
+  If (C>='a') And (C<='z') Then Name11[K]:=Chr(Ord(C)-32);
+ End;
+ Cluster:=ParentCluster;
+ Repeat
+  DirSector:=GetClusterSector(Drive,BootSec,Cluster);
+  If Cluster=0 Then SectorsToRead:=(BootSec.RootDirEntries*32+511) Div 512
+  Else SectorsToRead:=BootSec.SectorsPerCluster;
+  For I:=0 To SectorsToRead-1 Do Begin
+   If ReadSector(Drive,DirSector+I,@DirBuffer) Then Begin
+    For J:=0 To 15 Do Begin
+     EntryPtr:=@DirBuffer[J*32];
+     If EntryPtr^.FileName[0]=#0 Then Exit;
+     If (EntryPtr^.FileName[0]<>#$E5) And ((EntryPtr^.Attributes And $08)=0) Then Begin
+      Match:=True;
+      For K:=0 To 7 Do If EntryPtr^.FileName[K]<>Name11[K] Then Match:=False;
+      For K:=0 To 2 Do If EntryPtr^.Extension[K]<>Name11[8+K] Then Match:=False;
+      If Match Then Begin
+       Entry:=EntryPtr^;
+       EntryOffset:=(I*16+J)*32;
+       FindDirectoryEntry:=True;
+       Exit;
+      End;
      End;
     End;
    End;
   End;
- End;
+  If Cluster=0 Then Exit;
+  Cluster:=GetNextCluster(Drive,BootSec,Cluster);
+ Until (Cluster<2) Or (Cluster>=$FF8);
 End;
 
 Function IsDirectoryEmpty(Drive:Byte;BootSec:BootSectorRec;DirCluster:Word):Boolean;
@@ -6814,7 +6704,7 @@ Begin
  { Vérifier si le handle est utilisé }
  If Not FileEntry.InUse Then Exit;
 
- Drive:=FileEntry.Drive - 1; { Conversion en index 0-based }
+ Drive:=FileEntry.Drive; { index 0-based, tel que stocké }
 
  { Lire boot sector }
  If Not ReadBootSector(Drive,BootSec) Then Begin
@@ -6852,7 +6742,7 @@ Begin
  { Vérifier si le handle est utilisé }
  If Not FileEntry.InUse Then Exit;
 
- Drive:=FileEntry.Drive - 1; { Conversion en index 0-based }
+ Drive:=FileEntry.Drive; { index 0-based, tel que stocké }
 
  { Lire boot sector }
  If Not ReadBootSector(Drive,BootSec) Then Begin
@@ -6984,6 +6874,8 @@ Begin
 
    LEA SI,SectorBuffer
    ADD SI,ByteInSector
+   PUSH SS
+   POP DS
 
    MOV CX,BytesThisRead
    CLD
@@ -7085,7 +6977,8 @@ Begin
  { Vérifier si le handle est utilisé }
  If Not FileEntry.InUse Then Exit;
 
- Drive:=FileEntry.Drive - 1; { Conversion en index 0-based }
+ Drive:=FileEntry.Drive; { index 0-based, tel que stocké }
+{$IFDEF KDEBUG}DbgW('D',FileEntry.Drive);DbgW('A',FileEntry.Attributes);DbgW('S',Word(FileEntry.FileSize));DbgW('P',Word(FileEntry.CurrentPos));DbgW('F',FileEntry.FirstCluster);{$ENDIF}
 
  { Lire boot sector }
  If Not ReadBootSector(Drive, BootSec) Then Begin
@@ -7234,6 +7127,8 @@ Begin
 
    LEA DI,SectorBuffer
    ADD DI,ByteInSector
+   PUSH SS
+   POP ES
 
    MOV CX,BytesThisWrite
    CLD
@@ -7382,7 +7277,7 @@ Begin
  { Vérifier si le handle est utilisé }
  If Not FileEntry.InUse Then Exit;
 
- Drive:=FileEntry.Drive - 1; { Conversion en index 0-based }
+ Drive:=FileEntry.Drive; { index 0-based, tel que stocké }
 
  { Lire boot sector }
  If Not ReadBootSector(Drive, BootSec) Then Begin
@@ -7699,7 +7594,7 @@ Begin
  { Pour les fichiers, on peut seek au-delà de la fin }
  { Mais on ne peut pas lire/écrire au-delà sans étendre le fichier }
 
- Drive:=FileEntry.Drive - 1; { Conversion en index 0-based }
+ Drive:=FileEntry.Drive; { index 0-based, tel que stocké }
 
  { Lire boot sector }
  If Not ReadBootSector(Drive, BootSec) Then Exit;
@@ -7974,7 +7869,7 @@ Begin
   4: DeviceInfo:=$80A0; { STDPRN - caractère, printer }
   Else Begin
    { Fichier normal - informations basées sur le lecteur }
-   DeviceInfo:=FileEntry.Drive - 1; { Numéro de lecteur (0=A:, 1=B:, etc.) }
+   DeviceInfo:=FileEntry.Drive; { Numéro de lecteur (0=A:, 1=B:, etc.) }
    { Pas de flags spéciaux pour les fichiers normaux }
   End;
  End;
@@ -8292,6 +8187,8 @@ Begin
   PUSH ES
 
   { Pointer vers notre string PathStr }
+  PUSH SS
+  POP DS
   LEA SI,PathStr
   MOV CL,[SI]        { Longueur de la chaîne }
   INC SI             { Pointer vers le contenu }
@@ -8328,12 +8225,12 @@ Begin
  InitializeMemoryManager:=False;
 
  { Le premier MCB commence généralement à 0x0060 (après les vecteurs d'interruption) }
- FirstMCB:=$0060;
+ FirstMCB:=ArenaBase;
 
  { Créer le premier MCB couvrant toute la mémoire conventionnelle }
  MCB.BlockType:='Z';      { Dernier bloc }
  MCB.Owner:=0;            { Bloc libre }
- MCB.BlockSize:=$9F00;    { ~640KB - adresse de départ }
+ MCB.BlockSize:=ArenaEnd-ArenaBase-1; { mémoire conventionnelle après le noyau }
  FillChar(MCB.Reserved, 3, 0);
  FillChar(MCB.ProgramName, 8, 0);
 
@@ -8388,6 +8285,8 @@ Begin
   XOR DI,DI
 
   { Pointer vers la structure MCB sur la pile }
+  PUSH SS
+  POP DS
   LEA SI,MCB
   MOV CX,16           { Taille d'un MCB }
   CLD
@@ -8408,7 +8307,7 @@ Var
 Begin
  FindFreeMCB:=False;
  Found:=False;
- CurrentSeg:=$0060; { Premier MCB }
+ CurrentSeg:=ArenaBase; { Premier MCB }
 
  While Not Found Do Begin
   If Not GetMCB(CurrentSeg, MCB) Then Break;
@@ -8490,7 +8389,7 @@ Begin
  DOS49h_FreeMemory:=9; { Invalid memory block par défaut }
 
  { Vérifier la validité du segment }
- If BlockSegment < $0061 Then Exit; { Trop bas }
+ If BlockSegment <= ArenaBase Then Exit; { Trop bas }
 
  MCBSeg:=BlockSegment - 1; { MCB est juste avant }
 
@@ -8525,7 +8424,7 @@ Begin
  DOS4Ah_ModifyMemory:=9; { Invalid memory block par défaut }
 
  { Vérifier la validité du segment }
- If BlockSegment < $0061 Then Exit;
+ If BlockSegment <= ArenaBase Then Exit;
 
  MCBSeg:=BlockSegment - 1;
 
@@ -8650,6 +8549,8 @@ Begin
   MOV ES,AX
   XOR DI,DI
 
+  PUSH SS
+  POP DS
   LEA SI,PSP
   MOV CX,256       { Taille d'un PSP }
   CLD
@@ -8688,6 +8589,8 @@ Begin
    MOV ES,AX
    XOR DI,DI
 
+   PUSH SS
+   POP DS
    LEA SI,DefaultEnv
    MOV CL,[SI]
    MOV CH,0
@@ -8751,66 +8654,330 @@ Begin
  RelocateExe:=True;
 End;
 
-{ Fonction principale 4Bh - EXEC }
+{$IFDEF KDEBUG}
+Procedure DbgW(Tag:Char;W:Word);Assembler;
+ASM
+ MOV AL,Tag
+ MOV AH,0Eh
+ XOR BX,BX
+ INT 10h
+ MOV DX,W
+ MOV CX,4
+@Nib:
+ PUSH CX
+ MOV CL,4
+ ROL DX,CL
+ POP CX
+ MOV AL,DL
+ AND AL,0Fh
+ ADD AL,48
+ CMP AL,57
+ JBE @Pr
+ ADD AL,7
+@Pr:
+ MOV AH,0Eh
+ XOR BX,BX
+ INT 10h
+ LOOP @Nib
+ MOV AL,32
+ MOV AH,0Eh
+ XOR BX,BX
+ INT 10h
+END;
+{$ENDIF}
+
+{ ---------- EXEC : chargement et lancement d'un programme DOS ---------- }
+
+{ Transfere le controle au programme : sauve le contexte du noyau (SS:SP dans le
+  PSP enfant, registres sur la pile), puis RETF vers CS:IP du programme.
+  Reprend quand le programme se termine (ExecReturn). }
+Procedure ExecEnter(ChildPSP,CodeSeg,CodeOfs,StackSeg,StackOfs:Word);Assembler;
+ASM
+ PUSH SI
+ PUSH DI
+ PUSH DS
+ PUSH ES
+ MOV ES,ChildPSP
+ MOV ES:[2Eh],SP
+ MOV ES:[30h],SS
+ MOV AX,StackSeg
+ MOV BX,StackOfs
+ MOV CX,CodeSeg
+ MOV DX,CodeOfs
+ PUSH ES
+ POP DS
+ CLI
+ MOV SS,AX
+ MOV SP,BX
+ STI
+ PUSH CX
+ PUSH DX
+ XOR AX,AX
+ XOR BX,BX
+ XOR CX,CX
+ XOR DX,DX
+ XOR SI,SI
+ XOR DI,DI
+ XOR BP,BP
+ RETF
+END;
+
+{ Retour dans le noyau, a l'appelant d'ExecEnter, quand le programme se termine. }
+Procedure ExecReturn(ChildPSP:Word);Assembler;
+ASM
+ MOV ES,ChildPSP
+ MOV AX,ES:[2Eh]
+ MOV BX,ES:[30h]
+ CLI
+ MOV SS,BX
+ MOV SP,AX
+ STI
+ POP ES
+ POP DS
+ POP DI
+ POP SI
+ POP BP
+ RET 10
+END;
+
+Procedure SetBlockOwner(BlockSeg,Owner:Word);
+Var
+ MCB: MemoryControlBlock;
+Begin
+ If GetMCB(BlockSeg-1,MCB) Then Begin
+  MCB.Owner:=Owner;
+  SetMCB(BlockSeg-1,MCB);
+ End;
+End;
+
+{ Libere tous les blocs d'un proprietaire et fusionne les blocs libres contigus }
+Procedure FreeProcessMemory(Owner:Word);
+Var
+ Cur: Word;
+ MCB,Next: MemoryControlBlock;
+ Last: Boolean;
+Begin
+ Cur:=ArenaBase;
+ Last:=False;
+ While Not Last Do Begin
+  If Not GetMCB(Cur,MCB) Then Break;
+  If MCB.Owner=Owner Then Begin
+   MCB.Owner:=0;
+   SetMCB(Cur,MCB);
+  End;
+  Last:=(MCB.BlockType='Z');
+  If Not Last Then Cur:=Cur+MCB.BlockSize+1;
+ End;
+ Cur:=ArenaBase;
+ While GetMCB(Cur,MCB) Do Begin
+  If MCB.BlockType='Z' Then Break;
+  If (MCB.Owner=0) And GetMCB(Cur+MCB.BlockSize+1,Next) And (Next.Owner=0) Then Begin
+   MCB.BlockSize:=MCB.BlockSize+Next.BlockSize+1;
+   MCB.BlockType:=Next.BlockType;
+   SetMCB(Cur,MCB);
+  End
+  Else Cur:=Cur+MCB.BlockSize+1;
+ End;
+End;
+
+{ Taille (en paragraphes) du plus grand bloc libre }
+Function LargestFreeBlock:Word;
+Var
+ Cur,Best: Word;
+ MCB: MemoryControlBlock;
+Begin
+ Cur:=ArenaBase;
+ Best:=0;
+ While GetMCB(Cur,MCB) Do Begin
+  If (MCB.Owner=0) And (MCB.BlockSize>Best) Then Best:=MCB.BlockSize;
+  If MCB.BlockType='Z' Then Break;
+  Cur:=Cur+MCB.BlockSize+1;
+ End;
+ LargestFreeBlock:=Best;
+End;
+
+Procedure BuildPSP(P,Parent,Top,EnvSeg:Word;CmdPtr:Pointer);
+Var
+ I,N,CmdSeg,CmdOfs: Word;
+Begin
+ For I:=0 To 255 Do Mem[P:I]:=0;
+ MemW[P:0]:=$20CD;
+ MemW[P:2]:=Top;
+ Mem[P:5]:=$9A;
+ MemW[P:$16]:=Parent;
+ For I:=0 To 19 Do Mem[P:$18+I]:=$FF;
+ For I:=0 To 4 Do Mem[P:$18+I]:=I;
+ MemW[P:$2C]:=EnvSeg;
+ MemW[P:$32]:=20;
+ MemW[P:$34]:=$18;
+ MemW[P:$36]:=P;
+ Mem[P:$50]:=$CD; Mem[P:$51]:=$21; Mem[P:$52]:=$CB;
+ Mem[P:$80]:=0; Mem[P:$81]:=$0D;
+ If CmdPtr<>Nil Then Begin
+  ASM
+   LES DI,CmdPtr
+   MOV CmdSeg,ES
+   MOV CmdOfs,DI
+  END;
+  N:=Mem[CmdSeg:CmdOfs];
+  If N>126 Then N:=126;
+  Mem[P:$80]:=N;
+  For I:=1 To N Do Mem[P:$80+I]:=Mem[CmdSeg:CmdOfs+I];
+  Mem[P:$81+N]:=$0D;
+ End;
+End;
+
+{ Environnement : COMSPEC + PATH, puis nombre de chaines et nom du programme }
+Function BuildEnvironment(Owner:Word;ProgName:String):Word;
+Var
+ Seg,Ofs2,I: Word;
+ Env: String;
+Begin
+ BuildEnvironment:=0;
+ Seg:=DOS48h_AllocateMemory(32);
+ If Seg=0 Then Exit;
+ SetBlockOwner(Seg,Owner);
+ Env:='COMSPEC=C:\COMMAND.EXE';
+ Ofs2:=0;
+ For I:=1 To Length(Env) Do Begin
+  Mem[Seg:Ofs2]:=Ord(Env[I]); Inc(Ofs2);
+ End;
+ Mem[Seg:Ofs2]:=0; Inc(Ofs2);
+ Env:='PATH=C:\';
+ For I:=1 To Length(Env) Do Begin
+  Mem[Seg:Ofs2]:=Ord(Env[I]); Inc(Ofs2);
+ End;
+ Mem[Seg:Ofs2]:=0; Inc(Ofs2);
+ Mem[Seg:Ofs2]:=0; Inc(Ofs2);
+ MemW[Seg:Ofs2]:=1; Inc(Ofs2,2);
+ For I:=1 To Length(ProgName) Do Begin
+  Mem[Seg:Ofs2]:=Ord(ProgName[I]); Inc(Ofs2);
+ End;
+ Mem[Seg:Ofs2]:=0;
+ BuildEnvironment:=Seg;
+End;
+
+{ Fonction principale 4Bh - EXEC (type 00h : charger et executer) }
 Function DOS4Bh_ExecProgram(ExecType:Byte;ProgramPath:String;ParamBlock:ExecParameterBlock):Word;
 Var
- PSPSeg: Word;
- LoadSeg: Word;
- EnvSeg: Word;
- ExeHdr: ExeHeader;
- IsCOM: Boolean;
- ProgPath: String;
+ Hdr: ExeHeader;
+ Path: Array[0..127] of Char;
+ Handle,Got,I,Block,ImgSeg,Need,Avail,EnvSeg,Parent,Chunk,Reloc,FixSeg,FixOfs: Word;
+ FileLen,ImgBytes: LongInt;
+ Pairs: Array[0..63] of Word;
+ Left,Todo: Word;
 Begin
- DOS4Bh_ExecProgram:=2; { File not found par défaut }
-
- { Convertir le chemin (implémentation simplifiée) }
- ProgPath:=ProgramPath;
-
- { Déterminer le type de fichier }
- IsCOM:=(Pos('.COM', UpperCase(ProgPath)) > 0);
-
- { Créer l'environnement }
- EnvSeg:=SetupEnvironment(ParamBlock.Environment, 0);
- If EnvSeg = 0 Then Begin
-  DOS4Bh_ExecProgram:=8; { Insufficient memory }
+ DOS4Bh_ExecProgram:=2;
+ If ExecType<>0 Then Begin DOS4Bh_ExecProgram:=1; Exit; End;
+ For I:=1 To Length(ProgramPath) Do Path[I-1]:=ProgramPath[I];
+ Path[Length(ProgramPath)]:=#0;
+ Handle:=DOS3Dh_OpenFile(@Path,0);
+{$IFDEF KDEBUG}DbgW('H',Handle);{$ENDIF}
+ If Handle=$FFFF Then Exit;
+ Got:=0;
+ DOS3Fh_ReadFile(Handle,@Hdr,SizeOf(Hdr),Got);
+{$IFDEF KDEBUG}DbgW('g',Got);DbgW('m',Hdr.Signature);DbgW('p',Hdr.PagesInFile);{$ENDIF}
+ If (Got<SizeOf(Hdr)) Or ((Hdr.Signature<>$5A4D) And (Hdr.Signature<>$4D5A)) Then Begin
+  DOS3Eh_CloseFile(Handle);
+  DOS4Bh_ExecProgram:=11; { format incorrect (seuls les EXE sont charges) }
   Exit;
  End;
-
- { Charger le programme }
- If IsCOM Then Begin
-  If Not LoadComFile(ProgPath, LoadSeg) Then Begin
-   DOS49h_FreeMemory(EnvSeg);
-   Exit;
-  End;
- End
- Else Begin
-  If Not LoadExeFile(ProgPath, LoadSeg, ExeHdr) Then Begin
-   DOS49h_FreeMemory(EnvSeg);
-   Exit;
-  End;
- End;
-
- { Créer le PSP }
- PSPSeg:=CreatePSP(0, LoadSeg + $1000); { Approximation }
- If PSPSeg = 0 Then Begin
-  DOS49h_FreeMemory(LoadSeg);
-  DOS49h_FreeMemory(EnvSeg);
+ If Hdr.BytesInLastPage=0 Then FileLen:=LongInt(Hdr.PagesInFile)*512
+ Else FileLen:=LongInt(Hdr.PagesInFile-1)*512+Hdr.BytesInLastPage;
+ ImgBytes:=FileLen-LongInt(Hdr.HeaderParagraphs)*16;
+ { paragraphes : PSP (16) + image + supplement minimal }
+ Need:=16+Word((ImgBytes+15) Div 16)+Hdr.MinExtraParagraphs;
+ EnvSeg:=BuildEnvironment(0,ProgramPath);
+ Avail:=LargestFreeBlock;
+ If Need>Avail Then Begin
+  DOS3Eh_CloseFile(Handle);
   DOS4Bh_ExecProgram:=8;
   Exit;
  End;
-
- { Pour type 00h (Load and Execute), transférer le contrôle }
- If ExecType = 0 Then Begin
-  { Implémentation simplifiée - ne transfère pas réellement le contrôle }
-  { Dans un vrai système, on ferait un FAR CALL vers le programme }
-
-  { Libérer les ressources pour l'instant }
-  DOS49h_FreeMemory(PSPSeg);
-  DOS49h_FreeMemory(LoadSeg);
-  DOS49h_FreeMemory(EnvSeg);
+ { donner au programme tout ce qui est possible jusqu'au maximum demande }
+ If (Hdr.MaxExtraParagraphs>=Hdr.MinExtraParagraphs) And (Hdr.MaxExtraParagraphs<>$FFFF) Then Begin
+  If Longint(Need)-Hdr.MinExtraParagraphs+Hdr.MaxExtraParagraphs<Avail Then
+   Need:=Need-Hdr.MinExtraParagraphs+Hdr.MaxExtraParagraphs
+  Else Need:=Avail;
+ End
+ Else Need:=Avail;
+ Parent:=GetCurrentPSP;
+ Block:=DOS48h_AllocateMemory(Need);
+ If Block=0 Then Begin
+  DOS3Eh_CloseFile(Handle);
+  DOS4Bh_ExecProgram:=8;
+  Exit;
  End;
+ SetBlockOwner(Block,Block);
+ If EnvSeg<>0 Then SetBlockOwner(EnvSeg,Block);
+ BuildPSP(Block,Parent,Block+Need,EnvSeg,ParamBlock.CommandLine);
+ ImgSeg:=Block+16;
+ { charger l'image par morceaux de 8 Ko (512 paragraphes) }
+ DOS42h_SeekFile(Handle,0,Hdr.HeaderParagraphs*16,0);
+ Left:=0;
+ While ImgBytes>0 Do Begin
+  If ImgBytes>8192 Then Chunk:=8192 Else Chunk:=Word(ImgBytes);
+  Got:=0;
+  DOS3Fh_ReadFile(Handle,Ptr(ImgSeg+Left*512,0),Chunk,Got);
+  If Got=0 Then Break;
+  Dec(ImgBytes,Got);
+  Inc(Left);
+ End;
+ { relocalisations }
+ If Hdr.Relocations>0 Then Begin
+  DOS42h_SeekFile(Handle,0,Hdr.RelocTableOffset,0);
+  Reloc:=Hdr.Relocations;
+  While Reloc>0 Do Begin
+   If Reloc>32 Then Todo:=32 Else Todo:=Reloc;
+   Got:=0;
+   DOS3Fh_ReadFile(Handle,@Pairs,Todo*4,Got);
+   If Got<Todo*4 Then Break;
+   For I:=0 To Todo-1 Do Begin
+    FixOfs:=Pairs[I*2];
+    FixSeg:=ImgSeg+Pairs[I*2+1];
+    MemW[FixSeg:FixOfs]:=MemW[FixSeg:FixOfs]+ImgSeg;
+   End;
+   Dec(Reloc,Todo);
+  End;
+ End;
+ DOS3Eh_CloseFile(Handle);
+ SetCurrentPSP(Block);
+ { sauver les vecteurs de terminaison dans le PSP }
+ DOS4Bh_ExecProgram:=0;
+ ExecEnter(Block,ImgSeg+Hdr.InitialCS,Hdr.InitialIP,ImgSeg+Hdr.InitialSS,Hdr.InitialSP);
+ { le programme est termine : retour ici }
+ DOS4Bh_ExecProgram:=0;
+End;
 
- DOS4Bh_ExecProgram:=0; { Succès }
+{ Pont INT 21h/4Bh : ASCIIZ DS:DX et bloc de parametres ES:BX -> parametres Pascal }
+Function ExecFromInt21(Mode:Word;NamePtr:Pointer;BlockPtr:Pointer):Word;
+Var
+ Name: String;
+ PB: ExecParameterBlock;
+ P: PChar;
+ N: Word;
+Begin
+ Name:='';
+ P:=PChar(NamePtr);
+ N:=0;
+ While (P^<>#0) And (N<127) Do Begin
+  Name:=Name+P^;
+  Inc(P);
+  Inc(N);
+ End;
+ FillChar(PB,SizeOf(PB),0);
+ ASM
+  PUSH DS
+  LDS SI,BlockPtr
+  LEA DI,PB
+  PUSH SS
+  POP ES
+  MOV CX,14
+  CLD
+  REP MOVSB
+  POP DS
+ END;
+ ExecFromInt21:=DOS4Bh_ExecProgram(Lo(Mode),Name,PB);
 End;
 
 { Charge et exécute le processeur de commandes }
@@ -9232,48 +9399,26 @@ End;
 { Fonction 4Ch - Terminate Program }
 Function DOS4Ch_TerminateProgram(ExitCode:Byte):Word;
 Var
- CurrentPSP: Word;
- ParentPSP: Word;
+ Cur,Parent: Word;
 Begin
  DOS4Ch_TerminateProgram:=0;
-
- { Obtenir le PSP courant }
- CurrentPSP:=GetCurrentPSP;
- If CurrentPSP = 0 Then CurrentPSP:=$1000; { PSP par défaut si non défini }
-
- { Lire le PSP pour obtenir le parent }
- ParentPSP:=0; { Valeur par défaut }
- ASM
-  PUSH DS
-  MOV AX,CurrentPSP
-  MOV DS,AX
-
-  { Lire ParentPSP à l'offset $16 }
-  MOV AX,[16h]       { Offset $16 = ParentPSP }
-  MOV ParentPSP,AX
-
-  POP DS
- END;
-
- { Sauvegarder le code de retour }
- { AH = 0 (terminaison normale), AL = code de sortie }
- SetLastReturnCode(ExitCode);
-
- { Fermer les handles ouverts (implémentation simplifiée) }
- { Dans un vrai DOS, on fermerait tous les handles du processus }
-
- { Libérer la mémoire du PSP et du programme }
- If CurrentPSP <> $1000 Then Begin { Ne pas libérer le PSP système }
-  DOS49h_FreeMemory(CurrentPSP);
+ Cur:=GetCurrentPSP;
+ If (Cur=0) Or (MemW[Cur:$2E]=0) Then Begin
+  { aucun programme lance par EXEC : le noyau s'arrete }
+  ASM
+   CLI
+   HLT
+  END;
+  Exit;
  End;
-
- { Restaurer le PSP parent }
- SetCurrentPSP(ParentPSP);
-
- { Dans un vrai DOS, on ferait un JMP vers le parent }
- { Pour l'instant, on retourne simplement }
-
- DOS4Ch_TerminateProgram:=0;
+ Parent:=MemW[Cur:$16];
+ SetLastReturnCode(ExitCode);
+ SetCurrentPSP(Parent);
+ FreeProcessMemory(Cur);
+ ASM
+  DEC Data.DataMOS.InDos
+ END;
+ ExecReturn(Cur);
 End;
 
 { Fonction 4Dh - Get Return Code }
@@ -9518,7 +9663,7 @@ Begin
  DOS50h_SetPSPAddress:=0; { Succès par défaut }
 
  { Valider que le segment PSP est valide }
- If PSPSegment < $0060 Then Begin { En-dessous de la zone conventionnelle }
+ If PSPSegment < ArenaBase Then Begin { En-dessous de la zone conventionnelle }
   DOS50h_SetPSPAddress:=1; { Erreur : segment invalide }
   Exit;
  End;
@@ -9557,7 +9702,7 @@ Begin
 
   { Calculer l'offset de la structure dans le segment de données }
   MOV AX,OFFSET Data
-  ADD AX,3500            { Offset approximatif vers la structure }
+  ADD AX,FTBase                { Offset approximatif vers la structure }
 
   { Retourner le pointeur dans AX:DX }
   { En Pascal, Pointer est retourné dans AX (offset) et DX (segment) }
@@ -9580,12 +9725,16 @@ Begin
  { Copier le BPB depuis l'adresse fournie }
  ASM
   PUSH DS
+  PUSH ES
   LDS SI,BPBPtr
   LEA DI,BPB
+  PUSH SS
+  POP ES
   MOV CX,TYPE BIOSParameterBlock
   CLD
   REP MOVSB
   POP DS
+  POP ES
  END;
 
  { Convertir BPB vers DPB }
@@ -9634,11 +9783,15 @@ Begin
  { Copier le DPB vers l'adresse de destination }
  ASM
   PUSH ES
+  PUSH DS
   LES DI,DPBPtr
   LEA SI,DPB
+  PUSH SS
+  POP DS
   MOV CX,TYPE DriveParameterBlock
   CLD
   REP MOVSB
+  POP DS
   POP ES
  END;
 
@@ -9673,6 +9826,8 @@ Begin
 
   LDS SI,Buffer               { DS:SI = buffer original }
   LEA DI,VerifyBuffer         { ES:DI = buffer relu }
+  PUSH SS
+  POP ES
   MOV CX,Size                 { Nombre d'octets à comparer }
   CLD                         { Direction forward }
   REPE CMPSB                  { Comparer les chaînes }
@@ -9789,7 +9944,7 @@ Begin
  DOS55h_CreateChildPSP := 8; { Insufficient memory par défaut }
 
  { Vérifier que le segment est valide }
- If NewPSPSegment < $0060 Then Begin { En-dessous de la zone conventionnelle }
+ If NewPSPSegment < ArenaBase Then Begin { En-dessous de la zone conventionnelle }
   DOS55h_CreateChildPSP := 7; { Memory control blocks destroyed }
   Exit;
  End;
@@ -9835,6 +9990,8 @@ Begin
   MOV SI, 18h        { Offset de la table des handles dans le PSP }
 
   { Copier vers le nouveau PSP }
+  PUSH SS
+  POP ES
   LEA DI, NewPSP.HandleTable
   MOV CX, 20         { 20 handles à copier }
   CLD
@@ -9873,6 +10030,8 @@ Begin
   PUSH DI
 
   { Source: notre structure NewPSP }
+  PUSH SS
+  POP DS
   LEA SI, NewPSP
 
   { Destination: segment spécifié }
@@ -10617,7 +10776,7 @@ Var
  Found: Boolean;
 Begin
  Found := False;
- CurrentSeg := $0060; { Premier MCB }
+ CurrentSeg := ArenaBase; { Premier MCB }
 
  While (CurrentSeg < $A000) And Not Found Do Begin
   If GetMCB(CurrentSeg, MCB) Then Begin
@@ -10648,7 +10807,7 @@ Begin
  Found := False;
  BestSize := $FFFF; { Taille maximale }
  BestSeg := 0;
- CurrentSeg := $0060; { Premier MCB }
+ CurrentSeg := ArenaBase; { Premier MCB }
 
  While CurrentSeg < $A000 Do Begin
   If GetMCB(CurrentSeg, MCB) Then Begin
@@ -10679,7 +10838,7 @@ Var
 Begin
  Found := False;
  LastSeg := 0;
- CurrentSeg := $0060; { Premier MCB }
+ CurrentSeg := ArenaBase; { Premier MCB }
 
  { Parcourir tous les blocs pour trouver le dernier qui convient }
  While CurrentSeg < $A000 Do Begin
@@ -10702,23 +10861,27 @@ End;
 
 { Fonction améliorée d'allocation mémoire avec stratégies }
 Function AllocateMemoryWithStrategy(Size:Word;Strategy:Word):Word;
+{ Premier bloc libre assez grand ; le reste du bloc devient un nouveau bloc libre. }
 Var
- Segment: Word;
- Success: Boolean;
+ Cur: Word;
+ MCB: MemoryControlBlock;
 Begin
  AllocateMemoryWithStrategy := 0; { Erreur par défaut }
-
- Case Strategy Of
-  0: Success := FindMemoryFirstFit(Size, Segment);  { First Fit }
-  1: Success := FindMemoryBestFit(Size, Segment);   { Best Fit }
-  2: Success := FindMemoryLastFit(Size, Segment);   { Last Fit }
-  Else Success := FindMemoryFirstFit(Size, Segment); { Par défaut }
- End;
-
- If Success Then Begin
-  { Créer le MCB pour marquer le bloc comme utilisé }
-  If CreateMCB(Segment - 1, Size, GetCurrentPSP, False) Then
-   AllocateMemoryWithStrategy := Segment;
+ Cur := ArenaBase;
+ While GetMCB(Cur, MCB) Do Begin
+  If (MCB.Owner = 0) And (MCB.BlockSize >= Size) Then Begin
+   If MCB.BlockSize > Size + 1 Then Begin
+    CreateMCB(Cur + Size + 1, MCB.BlockSize - Size - 1, 0, MCB.BlockType = 'Z');
+    MCB.BlockType := 'M';
+    MCB.BlockSize := Size;
+   End;
+   MCB.Owner := GetCurrentPSP;
+   SetMCB(Cur, MCB);
+   AllocateMemoryWithStrategy := Cur + 1;
+   Exit;
+  End;
+  If MCB.BlockType = 'Z' Then Exit;
+  Cur := Cur + MCB.BlockSize + 1;
  End;
 End;
 
@@ -11102,6 +11265,8 @@ Var
  TempFileName: String;
  TempFullPath: String;
  Counter: Word;
+ CounterWork: Word;
+ DigitIndex: Byte;
  Handle: Word;
  PathStr: String;
  Drive: Byte;
@@ -11133,10 +11298,13 @@ Begin
  Counter := 1;
  Repeat
   { Format: TMPxxxxx.TMP où xxxxx est un nombre }
-  Str(Counter, TempFileName);
-  While Length(TempFileName) < 5 Do
-   TempFileName := '0' + TempFileName;
-  TempFileName := 'TMP' + TempFileName + '.TMP';
+  { Conversion decimale sur 5 chiffres sans le runtime SYSTEM }
+  TempFileName := 'TMP00000.TMP';
+  CounterWork := Counter;
+  For DigitIndex := 8 DownTo 4 Do Begin
+   TempFileName[DigitIndex] := Chr(Ord('0') + (CounterWork Mod 10));
+   CounterWork := CounterWork Div 10;
+  End;
 
   TempFullPath := PathStr + TempFileName;
 
