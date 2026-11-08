@@ -241,6 +241,7 @@ Const
  CDBase=114;         { offset de CurrentDir dans DataMOS (apres FindState) }
  CDSize=67;          { Drive(1) + Cluster(2) + Path(1+63) }
  FTBase=1856;        { CDBase + 26*CDSize : debut de FileTable dans DataMOS }
+ FxBase=2486;        { FTBase + 20*17 + 9 + 280 + 1 : apres PendingLF ; 20 x (secteur LongInt + index Byte) }
  ArenaBase=$1080;
  ArenaEnd=$9000;
  VerDos=7;          { Version de DOS }
@@ -277,6 +278,25 @@ Type
   Date: Word;                       { Date de modification }
   FirstCluster: Word;               { Cluster de départ (poids faible) }
   Size: LongInt;                    { Taille du fichier }
+ End;
+
+  { Volume FAT compact et entree de repertoire (couche d'ecriture Fx*) }
+ TFxVol = Record
+  Drive:Byte;
+  SPC:Byte;
+  NFat:Byte;
+  Is16:Boolean;
+  Res:Word;
+  SPF:Word;
+  RootEnt:Word;
+  Clusters:Word;
+  FirstData:LongInt;
+ End;
+ TFxSec = Array[0..511] of Byte;
+ TFxEnt = Record
+  Attr:Byte;
+  Cluster:Word;
+  Size:LongInt;
  End;
 
   { Structure pour verrous de fichiers (File Locking) }
@@ -537,6 +557,7 @@ Function GetClusterSector(Drive:Byte;BootSec:BootSectorRec;Cluster:Word):LongInt
 
 { Fonctions principales pour 3Ah et 3Bh }
 Function DOS3Ah_RemoveDirectory(PathPtr:Pointer):Word;Near;Forward;
+Function DOS39h_MakeDirectory(PathPtr:Pointer):Word;Near;Forward;
 
 { Procédures spécifiques pour fonction 3Bh - Change Directory }
 Function FindDirectoryByPath(Drive:Byte;BootSec:BootSectorRec;Path:String;Var DirCluster:Word):Boolean;Near;Forward;
@@ -951,6 +972,12 @@ Procedure Data;Assembler;ASM
  { FileLock[19] }
  DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0
  DB 0          { PendingLF }
+ { FxLoc : emplacement de l'entree de repertoire de chaque handle (20 x 5 octets) }
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
 
  { Structure Liste des Listes pour fonction 52h - séparée de DataMOS }
 @DOSListOfLists:
@@ -2899,43 +2926,32 @@ Procedure Intr21h;Assembler;ASM
  { Interruption 21h - Fonction 39h: Create Subdirectory                        }
  {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
 @39h:
- { Pour cette implémentation simplifiée, on retourne temporairement succès }
- { L'implémentation complète sera ajoutée dans une version ultérieure }
-
- { Vérifier que DS:DX pointe sur un chemin valide }
- PUSH AX
+ PUSH BX
+ PUSH CX
  PUSH SI
- MOV SI,DX                  { SI = pointeur sur chemin }
-
- { Vérifier longueur minimale }
- CMP Byte Ptr [SI],0        { Chaîne vide ? }
- JE @39hError
-
- { Parcourir la chaîne pour vérifier validité }
- MOV CX,0                   { Compteur }
-@39hCheckLoop:
- MOV AL,[SI]                { Caractère courant }
- CMP AL,0                   { Fin de chaîne ? }
- JE @39hPathOK
- CMP AL,' '                 { Espace ? }
- JE @39hError               { Espaces non autorisés }
- INC SI                     { Caractère suivant }
- INC CX                     { Compter }
- CMP CX,79                  { Trop long ? }
- JA @39hError
- JMP @39hCheckLoop
-
-@39hPathOK:
- { Chemin valide - pour l'instant on simule le succès }
- XOR AX,AX                  { AX = 0 (succès) }
+ PUSH DI
+ PUSH ES
+ PUSH DX
+ PUSH DS
+ PUSH DS
+ PUSH DX
+ PUSH CS
+ POP DS
+ CALL DOS39h_MakeDirectory
+ POP DS
+ OR AX,AX
+ JZ @39hOk
+ STC
  JMP @39hEnd
-
-@39hError:
- MOV AX,3                   { Path not found }
-
+@39hOk:
+ CLC
 @39hEnd:
+ POP DX
+ POP ES
+ POP DI
  POP SI
- POP CX                     { Récupérer AX original dans CX }
+ POP CX
+ POP BX
  JMP @Xit
 
  {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
@@ -3816,31 +3832,30 @@ Procedure Intr21h;Assembler;ASM
  { Interruption 21h - Fonction 56h: Rename/Move File                         }
  {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
 @56h:
- PUSH BX                    { Sauvegarder les registres }
+ PUSH BX
  PUSH CX
  PUSH SI
  PUSH DI
-
- { DS:DX pointe vers l'ancien nom, ES:DI vers le nouveau nom }
- PUSH ES                    { Passer ES:DI comme paramètre (nouveau nom) }
- PUSH DI
- PUSH DS                    { Passer DS:DX comme paramètre (ancien nom) }
+ PUSH ES
  PUSH DX
-
- CALL DOS56h_RenameFile     { Appeler fonction Pascal }
- ADD SP,8                   { Nettoyer la pile (4 paramètres * 2 bytes) }
-
- { AX contient le code de retour (0=succès, autre=erreur) }
- CMP AX,0
- JNE @56h_Error
-
- CLC                        { Clear Carry Flag - succès }
- JMP @56h_Done
-
-@56h_Error:
- STC                        { Set Carry Flag - erreur }
-
-@56h_Done:
+ PUSH DS
+ PUSH DS
+ PUSH DX
+ PUSH ES
+ PUSH DI
+ PUSH CS
+ POP DS
+ CALL DOS56h_RenameFile
+ POP DS
+ OR AX,AX
+ JZ @56hOk
+ STC
+ JMP @56hEnd
+@56hOk:
+ CLC
+@56hEnd:
+ POP DX
+ POP ES
  POP DI
  POP SI
  POP CX
@@ -6009,88 +6024,616 @@ Begin
  End;
 End;
 
-Function DOS3Ah_RemoveDirectory(PathPtr:Pointer):Word;
-{ Fonction principale pour supprimer un répertoire }
+{ ===== Couche FAT en ecriture (FAT12/FAT16) =====
+  Volume compact (pas de copie du secteur de boot de 512 octets sur la pile), entrees de repertoire
+  manipulees directement dans le tampon d'un secteur (decalages : nom 0-10, attribut 11, date 24,
+  premier cluster 26, taille 28). L'emplacement de l'entree de repertoire de chaque handle est
+  memorise dans Data.DataMOS.FxLoc (FxBase) pour mettre a jour la taille a la fermeture. }
+Function FxGetSec(H:Byte):LongInt;Assembler;
+ASM
+ MOV AL,H
+ MOV AH,5
+ MUL AH
+ ADD AX,FxBase
+ MOV BX,AX
+ MOV AX,WORD PTR [Data + BX]
+ MOV DX,WORD PTR [Data + BX + 2]
+END;
+
+Function FxGetIdx(H:Byte):Byte;Assembler;
+ASM
+ MOV AL,H
+ MOV AH,5
+ MUL AH
+ ADD AX,FxBase+4
+ MOV BX,AX
+ MOV AL,BYTE PTR [Data + BX]
+END;
+
+Procedure FxSetLoc(H:Byte;Sec:LongInt;Idx:Byte);Assembler;
+ASM
+ MOV AL,H
+ MOV AH,5
+ MUL AH
+ ADD AX,FxBase
+ MOV BX,AX
+ MOV AX,WORD PTR [Sec]
+ MOV WORD PTR [Data + BX],AX
+ MOV AX,WORD PTR [Sec + 2]
+ MOV WORD PTR [Data + BX + 2],AX
+ MOV AL,Idx
+ MOV BYTE PTR [Data + BX + 4],AL
+END;
+
+Function FxVol(Drive:Byte;Var V:TFxVol):Boolean;
 Var
- Path:String;
- Drive:Byte;
- DirName:String;
- BootSec:BootSectorRec;
- ParentCluster:Word;
- Entry:DirectoryEntry;
- EntryOffset:Word;
- DirCluster:Word;
- P:^Char;
- I:Byte;
+ Buf:TFxSec;
+ Tot,Root:LongInt;
 Begin
- DOS3Ah_RemoveDirectory:=3; { Par défaut: Path not found }
+ FxVol:=False;
+ If Not ReadSector(Drive,0,@Buf) Then Exit;
+ V.Drive:=Drive;
+ V.SPC:=Buf[13];
+ V.Res:=Word(Buf[14])+Word(Buf[15])*256;
+ V.NFat:=Buf[16];
+ V.RootEnt:=Word(Buf[17])+Word(Buf[18])*256;
+ V.SPF:=Word(Buf[22])+Word(Buf[23])*256;
+ Tot:=Word(Buf[19])+Word(Buf[20])*256;
+ If Tot=0 Then
+  Tot:=Word(Buf[32])+Word(Buf[33])*256+(LongInt(Buf[34])+LongInt(Buf[35])*256)*65536;
+ If V.SPC=0 Then Exit;
+ Root:=(LongInt(V.RootEnt)*32+511) Div 512;
+ V.FirstData:=LongInt(V.Res)+LongInt(V.NFat)*V.SPF+Root;
+ V.Clusters:=Word((Tot-V.FirstData) Div V.SPC);
+ V.Is16:=V.Clusters>=4085;
+ FxVol:=True;
+End;
 
- { Convertir pointeur en chaîne Pascal }
- P:=PathPtr;
- Path:='';
- I:=0;
- While (P^ <> #0) and (I < 255) Do Begin
-  Path:=Path + P^;
-  Inc(P);
-  Inc(I);
+Function FxGet(Var V:TFxVol;C:Word):Word;
+Var
+ B:Array[0..1023] of Byte;
+ Off,S:LongInt;
+ O,R:Word;
+Begin
+ FxGet:=$FFFF;
+ If V.Is16 Then Off:=LongInt(C)*2 Else Off:=LongInt(C)*3 Div 2;
+ S:=V.Res+Off Div 512;
+ O:=Word(Off Mod 512);
+ If Not ReadSector(V.Drive,S,@B) Then Exit;
+ If (Not V.Is16) And (O=511) Then
+  If Not ReadSector(V.Drive,S+1,@B[512]) Then Exit;
+ R:=Word(B[O])+Word(B[O+1])*256;
+ If V.Is16 Then Begin
+  If R>=$FFF8 Then R:=$FFFF;
+ End Else Begin
+  If (C And 1)=0 Then R:=R And $0FFF Else R:=R Shr 4;
+  If R>=$0FF8 Then R:=$FFFF;
  End;
+ FxGet:=R;
+End;
 
- { Analyser le chemin }
- If Not ParsePath(Path,Drive,DirName) Then Begin
-  DOS3Ah_RemoveDirectory:=3; { Path not found }
-  Exit;
+Procedure FxSet(Var V:TFxVol;C:Word;Val:Word);
+Var
+ B:Array[0..1023] of Byte;
+ Off,S:LongInt;
+ O:Word;
+ K:Byte;
+ Two:Boolean;
+Begin
+ If V.Is16 Then Off:=LongInt(C)*2 Else Off:=LongInt(C)*3 Div 2;
+ O:=Word(Off Mod 512);
+ Two:=(Not V.Is16) And (O=511);
+ For K:=0 To V.NFat-1 Do Begin
+  S:=LongInt(V.Res)+LongInt(K)*V.SPF+Off Div 512;
+  If ReadSector(V.Drive,S,@B) Then Begin
+   If Two Then ReadSector(V.Drive,S+1,@B[512]);
+   If V.Is16 Then Begin
+    B[O]:=Val And $FF;
+    B[O+1]:=Val Shr 8;
+   End Else If (C And 1)=0 Then Begin
+    B[O]:=Val And $FF;
+    B[O+1]:=(B[O+1] And $F0) Or ((Val Shr 8) And $0F);
+   End Else Begin
+    B[O]:=(B[O] And $0F) Or ((Val And $0F) Shl 4);
+    B[O+1]:=(Val Shr 4) And $FF;
+   End;
+   WriteSector(V.Drive,S,@B);
+   If Two Then WriteSector(V.Drive,S+1,@B[512]);
+  End;
  End;
+End;
 
- { Lire le secteur de boot }
- If Not ReadBootSector(Drive,BootSec) Then Begin
-  DOS3Ah_RemoveDirectory:=15; { Invalid drive }
-  Exit;
- End;
-
- { Trouver le répertoire parent }
- If Not FindParentDirectory(Drive,BootSec,Path,ParentCluster) Then Begin
-  DOS3Ah_RemoveDirectory:=3; { Path not found }
-  Exit;
- End;
-
- { Trouver l'entrée du répertoire à supprimer }
- If Not FindDirectoryEntry(Drive,BootSec,ParentCluster,DirName,Entry,EntryOffset) Then Begin
-  DOS3Ah_RemoveDirectory:=2; { File not found }
-  Exit;
- End;
-
- { Vérifier que c'est bien un répertoire }
- If (Entry.Attributes and $10) = 0 Then Begin
-  DOS3Ah_RemoveDirectory:=16; { Cannot remove current directory }
-  Exit;
- End;
-
- { Construire le numéro de cluster }
- DirCluster:=Entry.FirstClusterLow or (Word(Entry.FirstClusterHigh) shl 16);
-
- { Vérifier si le répertoire est vide }
- If Not IsDirectoryEmpty(Drive,BootSec,DirCluster) Then Begin
-  DOS3Ah_RemoveDirectory:=16; { Directory not empty }
-  Exit;
- End;
-
- { Libérer les clusters du répertoire }
- If DirCluster <> 0 Then Begin
-  If Not FreeFATChain(Drive,BootSec,DirCluster) Then Begin
-   DOS3Ah_RemoveDirectory:=5; { Access denied }
+Function FxAlloc(Var V:TFxVol;Prev:Word):Word;
+{ Premier cluster libre a partir de Prev+1 (puis 2) ; marque fin de chaine et le relie a Prev }
+Var
+ B:Array[0..1023] of Byte;
+ C,Start,K,O,R:Word;
+ Off,CS,S:LongInt;
+Begin
+ FxAlloc:=0;
+ CS:=-1;
+ Start:=2;
+ If Prev>=2 Then Start:=Prev+1;
+ For K:=0 To V.Clusters-1 Do Begin
+  C:=Start+K;
+  If C>V.Clusters+1 Then C:=C-V.Clusters;
+  If V.Is16 Then Off:=LongInt(C)*2 Else Off:=LongInt(C)*3 Div 2;
+  S:=V.Res+Off Div 512;
+  If S<>CS Then Begin
+   If Not ReadSector(V.Drive,S,@B) Then Exit;
+   ReadSector(V.Drive,S+1,@B[512]);
+   CS:=S;
+  End;
+  O:=Word(Off Mod 512);
+  R:=Word(B[O])+Word(B[O+1])*256;
+  If V.Is16 Then Begin
+   If R=0 Then Begin R:=1 End Else R:=2;
+  End Else Begin
+   If (C And 1)=0 Then R:=R And $0FFF Else R:=R Shr 4;
+   If R=0 Then R:=1 Else R:=2;
+  End;
+  If R=1 Then Begin
+   FxSet(V,C,$FFFF);
+   If Prev>=2 Then FxSet(V,Prev,C);
+   FxAlloc:=C;
    Exit;
   End;
  End;
-
- { Supprimer l'entrée du répertoire parent }
- If Not DeleteDirEntry(Drive,BootSec,ParentCluster,EntryOffset) Then Begin
-  DOS3Ah_RemoveDirectory:=5; { Access denied }
-  Exit;
- End;
-
- DOS3Ah_RemoveDirectory:=0; { Succès }
 End;
 
+Procedure FxFreeChain(Var V:TFxVol;C:Word);
+Var Nx:Word;
+Begin
+ While (C>=2) And (C<>$FFFF) Do Begin
+  Nx:=FxGet(V,C);
+  FxSet(V,C,0);
+  C:=Nx;
+ End;
+End;
+
+{ Secteur N du repertoire Dir (0 = racine) }
+Function FxDirSec(Var V:TFxVol;Dir,N:Word;Var S:LongInt):Boolean;
+Var C,K:Word;
+Begin
+ FxDirSec:=False;
+ If Dir=0 Then Begin
+  If LongInt(N)>=(LongInt(V.RootEnt)*32) Div 512 Then Exit;
+  S:=LongInt(V.Res)+LongInt(V.NFat)*V.SPF+N;
+  FxDirSec:=True;
+  Exit;
+ End;
+ C:=Dir;
+ K:=N Div V.SPC;
+ While K>0 Do Begin
+  C:=FxGet(V,C);
+  If C=$FFFF Then Exit;
+  Dec(K);
+ End;
+ S:=V.FirstData+LongInt(C-2)*V.SPC+N Mod V.SPC;
+ FxDirSec:=True;
+End;
+
+{ Nom 8.3 -> 11 caracteres (majuscules, complete par des espaces) }
+Procedure FxName11(Var S:String;Var N:String);
+Var I,J:Byte;
+Begin
+ N:='           ';
+ If (S='.') Or (S='..') Then Begin
+  N[1]:='.';
+  If S='..' Then N[2]:='.';
+  Exit;
+ End;
+ I:=1;
+ J:=1;
+ While (I<=Length(S)) And (S[I]<>'.') Do Begin
+  If J<=8 Then Begin N[J]:=UpCase(S[I]); Inc(J) End;
+  Inc(I);
+ End;
+ If I<=Length(S) Then Begin
+  Inc(I);
+  J:=9;
+  While I<=Length(S) Do Begin
+   If J<=11 Then Begin N[J]:=UpCase(S[I]); Inc(J) End;
+   Inc(I);
+  End;
+ End;
+End;
+
+{ Cherche Nm (11 caracteres) dans le repertoire Dir : emplacement (Sec,Idx) et contenu ; FSec/FIdx = premier emplacement libre }
+Function FxScan(Var V:TFxVol;Dir:Word;Var Nm:String;Var Sec:LongInt;Var Idx:Byte;
+                Var FSec:LongInt;Var FIdx:Integer;Var E:TFxEnt):Boolean;
+Var
+ Buf:TFxSec;
+ N,P:Word;
+ I,K:Byte;
+ S:LongInt;
+ Same:Boolean;
+Begin
+ FxScan:=False;
+ FIdx:=-1;
+ N:=0;
+ While FxDirSec(V,Dir,N,S) Do Begin
+  If Not ReadSector(V.Drive,S,@Buf) Then Exit;
+  For I:=0 To 15 Do Begin
+   P:=I*32;
+   If Buf[P]=0 Then Begin
+    If FIdx<0 Then Begin FSec:=S; FIdx:=I End;
+    Exit;
+   End;
+   If Buf[P]=$E5 Then Begin
+    If FIdx<0 Then Begin FSec:=S; FIdx:=I End;
+   End Else Begin
+    Same:=True;
+    For K:=0 To 10 Do
+     If Chr(Buf[P+K])<>Nm[K+1] Then Same:=False;
+    If Same And ((Buf[P+11] And $08)=0) Then Begin
+     Sec:=S;
+     Idx:=I;
+     E.Attr:=Buf[P+11];
+     E.Cluster:=Word(Buf[P+26])+Word(Buf[P+27])*256;
+     E.Size:=Word(Buf[P+28])+Word(Buf[P+29])*256+(LongInt(Buf[P+30])+LongInt(Buf[P+31])*256)*65536;
+     FxScan:=True;
+     Exit;
+    End;
+   End;
+  End;
+  Inc(N);
+ End;
+End;
+
+{ Ecrit une entree de repertoire dans le tampon a la position P }
+Procedure FxPutEnt(Var Buf:TFxSec;P:Word;Var Nm:String;Attr:Byte;Cl:Word;Size:LongInt);
+Var K:Byte;
+Begin
+ FillChar(Buf[P],32,0);
+ For K:=0 To 10 Do Buf[P+K]:=Ord(Nm[K+1]);
+ Buf[P+11]:=Attr;
+ Buf[P+24]:=$21;
+ Buf[P+26]:=Cl And $FF;
+ Buf[P+27]:=Cl Shr 8;
+ Buf[P+28]:=Size And $FF;
+ Buf[P+29]:=(Size Shr 8) And $FF;
+ Buf[P+30]:=(Size Shr 16) And $FF;
+ Buf[P+31]:=(Size Shr 24) And $FF;
+End;
+
+Function FxWalk(Var V:TFxVol;DirP:String;Start:Word;Var Dir:Word):Boolean;
+Var
+ I,J,Idx:Byte;
+ Comp,Nm:String;
+ Sec,FS:LongInt;
+ FI:Integer;
+ E:TFxEnt;
+Begin
+ FxWalk:=False;
+ Dir:=Start;
+ I:=1;
+ While I<=Length(DirP) Do Begin
+  If DirP[I]='\' Then Inc(I) Else Begin
+   J:=I;
+   While (J<=Length(DirP)) And (DirP[J]<>'\') Do Inc(J);
+   Comp:=Copy(DirP,I,J-I);
+   I:=J;
+   FxName11(Comp,Nm);
+   If Not FxScan(V,Dir,Nm,Sec,Idx,FS,FI,E) Then Exit;
+   If (E.Attr And $10)=0 Then Exit;
+   Dir:=E.Cluster;
+  End;
+ End;
+ FxWalk:=True;
+End;
+
+{ Chemin ASCIIZ -> volume, repertoire parent (cluster) et nom 11 caracteres }
+Function FxOpenPath(PathPtr:Pointer;Var V:TFxVol;Var Dir:Word;Var Nm:String):Boolean;
+Var
+ P:PChar;
+ Path,DirP,FN:String;
+ Dr,I,Q:Byte;
+ Absolu:Boolean;
+ Start:Word;
+Begin
+ FxOpenPath:=False;
+ P:=PChar(PathPtr);
+ Path:='';
+ I:=0;
+ While (P^<>#0) And (I<255) Do Begin
+  Path:=Path+P^;
+  Inc(P);
+  Inc(I);
+ End;
+ If Not ParseFilePath(Path,Dr,DirP,FN) Then Exit;
+ If Not FxVol(Dr,V) Then Exit;
+ Q:=1;
+ If (Length(Path)>=2) And (Path[2]=':') Then Q:=3;
+ Absolu:=(Q<=Length(Path)) And (Path[Q]='\');
+ If Absolu Then Start:=0 Else Start:=GetCurrentDirCluster(Dr);
+ If Not FxWalk(V,DirP,Start,Dir) Then Exit;
+ FxName11(FN,Nm);
+ FxOpenPath:=True;
+End;
+
+Function FxOpen(PathPtr:Pointer;Mode:Byte):Word;
+Var
+ V:TFxVol;
+ Dir,H:Word;
+ Nm:String;
+ Sec,FS:LongInt;
+ Idx:Byte;
+ FI:Integer;
+ E:TFxEnt;
+Begin
+ FxOpen:=$FFFF;
+ If Not FxOpenPath(PathPtr,V,Dir,Nm) Then Begin SetStandardError(3); Exit End;
+ If Not FxScan(V,Dir,Nm,Sec,Idx,FS,FI,E) Then Begin SetStandardError(2); Exit End;
+ If (E.Attr And $10)<>0 Then Begin SetStandardError(5); Exit End;
+ If ((Mode And 3)<>0) And ((E.Attr And $01)<>0) Then Begin SetStandardError(5); Exit End;
+ If Not AllocateFileHandle(V.Drive,E.Cluster,E.Size,Mode And 3,H) Then Begin SetStandardError(4); Exit End;
+ FxSetLoc(H,Sec,Idx);
+ FxOpen:=H;
+End;
+
+Function FxCreate(PathPtr:Pointer;Attr:Byte;FailIfExists:Boolean):Word;
+Var
+ V:TFxVol;
+ Dir,H:Word;
+ Nm:String;
+ Sec,FS:LongInt;
+ Idx:Byte;
+ FI:Integer;
+ E:TFxEnt;
+ Buf:TFxSec;
+ P:Word;
+Begin
+ FxCreate:=$FFFF;
+ If Not FxOpenPath(PathPtr,V,Dir,Nm) Then Begin SetStandardError(3); Exit End;
+ If FxScan(V,Dir,Nm,Sec,Idx,FS,FI,E) Then Begin
+  If FailIfExists Then Begin SetStandardError(80); Exit End;
+  If (E.Attr And $11)<>0 Then Begin SetStandardError(5); Exit End;
+  If E.Cluster>=2 Then FxFreeChain(V,E.Cluster);
+  If Not ReadSector(V.Drive,Sec,@Buf) Then Begin SetStandardError(5); Exit End;
+  P:=Idx*32;
+  FxPutEnt(Buf,P,Nm,Attr Or $20,0,0);
+ End Else Begin
+  If FI<0 Then Begin SetStandardError(5); Exit End;
+  Sec:=FS;
+  Idx:=FI;
+  If Not ReadSector(V.Drive,Sec,@Buf) Then Begin SetStandardError(5); Exit End;
+  P:=Idx*32;
+  FxPutEnt(Buf,P,Nm,Attr Or $20,0,0);
+ End;
+ If Not WriteSector(V.Drive,Sec,@Buf) Then Begin SetStandardError(5); Exit End;
+ If Not AllocateFileHandle(V.Drive,0,0,2,H) Then Begin SetStandardError(4); Exit End;
+ FxSetLoc(H,Sec,Idx);
+ FxCreate:=H;
+End;
+
+{ Mise a jour de l'entree de repertoire (premier cluster, taille) }
+Procedure FxFlush(H:Word);
+Var
+ Buf:TFxSec;
+ S,Size:LongInt;
+ P,Cl:Word;
+ Drive:Byte;
+Begin
+ S:=FxGetSec(H);
+ If S=0 Then Exit;
+ Drive:=GetFileTableDrive(H);
+ If Not ReadSector(Drive,S,@Buf) Then Exit;
+ P:=FxGetIdx(H)*32;
+ Cl:=GetFileTableFirstCluster(H);
+ Size:=GetFileTableFileSize(H);
+ Buf[P+26]:=Cl And $FF;
+ Buf[P+27]:=Cl Shr 8;
+ Buf[P+28]:=Size And $FF;
+ Buf[P+29]:=(Size Shr 8) And $FF;
+ Buf[P+30]:=(Size Shr 16) And $FF;
+ Buf[P+31]:=(Size Shr 24) And $FF;
+ WriteSector(Drive,S,@Buf);
+End;
+
+Function FxWriteData(H:Word;Buffer:Pointer;Count:Word;Var Written:Word):Word;
+Var
+ V:TFxVol;
+ Sb:Array[0..511] of Byte;
+ First,Cur,Off,Nx,CSize,SOff,N:Word;
+ Pos,Size,S:LongInt;
+ Src:Pointer;
+ BufSeg,BufOfs:Word;
+ Err:Word;
+Begin
+ FxWriteData:=6;
+ Written:=0;
+ If H>=20 Then Exit;
+ If Not GetFileTableInUse(H) Then Exit;
+ If (GetFileTableAttributes(H) And 3)=0 Then Begin FxWriteData:=5; Exit End;
+ If Not FxVol(GetFileTableDrive(H),V) Then Begin FxWriteData:=5; Exit End;
+ ASM
+  LES DI,Buffer
+  MOV BufSeg,ES
+  MOV BufOfs,DI
+ END;
+ First:=GetFileTableFirstCluster(H);
+ Cur:=GetFileTableCurrentCluster(H);
+ Off:=GetFileTableClusterOffset(H);
+ Pos:=GetFileTableCurrentPos(H);
+ Size:=GetFileTableFileSize(H);
+ CSize:=V.SPC*512;
+ Err:=0;
+ While (Count>0) And (Err=0) Do Begin
+  If First=0 Then Begin
+   First:=FxAlloc(V,0);
+   If First=0 Then Err:=5 Else Begin Cur:=First; Off:=0 End;
+  End Else If Cur=0 Then Begin Cur:=First; Off:=0 End;
+  If (Err=0) And (Off>=CSize) Then Begin
+   Nx:=FxGet(V,Cur);
+   If Nx=$FFFF Then Nx:=FxAlloc(V,Cur);
+   If Nx=0 Then Err:=5 Else Begin Cur:=Nx; Off:=0 End;
+  End;
+  If Err=0 Then Begin
+   SOff:=Off Mod 512;
+   N:=512-SOff;
+   If N>Count Then N:=Count;
+   S:=V.FirstData+LongInt(Cur-2)*V.SPC+Off Div 512;
+   If N<512 Then ReadSector(V.Drive,S,@Sb);
+   Src:=Ptr(BufSeg,BufOfs);
+   Move(Src^,Sb[SOff],N);
+   If Not WriteSector(V.Drive,S,@Sb) Then Err:=5
+   Else Begin
+    Inc(BufOfs,N);
+    Inc(Written,N);
+    Dec(Count,N);
+    Inc(Off,N);
+    Inc(Pos,N);
+    If Pos>Size Then Size:=Pos;
+   End;
+  End;
+ End;
+ SetFileTableFirstCluster(H,First);
+ SetFileTableCurrentCluster(H,Cur);
+ SetFileTableClusterOffset(H,Off);
+ SetFileTableCurrentPos(H,Pos);
+ SetFileTableFileSize(H,Size);
+ FxWriteData:=Err;
+End;
+
+Function FxDelete(PathPtr:Pointer):Word;
+Var
+ V:TFxVol;
+ Dir:Word;
+ Nm:String;
+ Sec,FS:LongInt;
+ Idx:Byte;
+ FI:Integer;
+ E:TFxEnt;
+ Buf:TFxSec;
+Begin
+ FxDelete:=3;
+ If Not FxOpenPath(PathPtr,V,Dir,Nm) Then Begin SetStandardError(3); Exit End;
+ FxDelete:=2;
+ If Not FxScan(V,Dir,Nm,Sec,Idx,FS,FI,E) Then Begin SetStandardError(2); Exit End;
+ FxDelete:=5;
+ If (E.Attr And $11)<>0 Then Begin SetStandardError(5); Exit End;
+ If E.Cluster>=2 Then FxFreeChain(V,E.Cluster);
+ If Not ReadSector(V.Drive,Sec,@Buf) Then Begin SetStandardError(5); Exit End;
+ Buf[Idx*32]:=$E5;
+ If Not WriteSector(V.Drive,Sec,@Buf) Then Begin SetStandardError(5); Exit End;
+ FxDelete:=0;
+End;
+
+Function FxRename(OldPtr,NewPtr:Pointer):Word;
+Var
+ V,V2:TFxVol;
+ Dir,Dir2:Word;
+ Nm,Nm2:String;
+ Sec,FS,Sec2,FS2:LongInt;
+ Idx,Idx2:Byte;
+ FI,FI2:Integer;
+ E,E2:TFxEnt;
+ Buf:TFxSec;
+ Ent:Array[0..31] of Byte;
+ K:Byte;
+Begin
+ FxRename:=3;
+ If Not FxOpenPath(OldPtr,V,Dir,Nm) Then Begin SetStandardError(3); Exit End;
+ If Not FxOpenPath(NewPtr,V2,Dir2,Nm2) Then Begin SetStandardError(3); Exit End;
+ FxRename:=2;
+ If Not FxScan(V,Dir,Nm,Sec,Idx,FS,FI,E) Then Begin SetStandardError(2); Exit End;
+ FxRename:=5;
+ If V.Drive<>V2.Drive Then Begin SetStandardError(17); FxRename:=17; Exit End;
+ If FxScan(V2,Dir2,Nm2,Sec2,Idx2,FS2,FI2,E2) Then Begin SetStandardError(5); Exit End;
+ If Not ReadSector(V.Drive,Sec,@Buf) Then Begin SetStandardError(5); Exit End;
+ If Dir=Dir2 Then Begin
+  For K:=0 To 10 Do Buf[Idx*32+K]:=Ord(Nm2[K+1]);
+  If Not WriteSector(V.Drive,Sec,@Buf) Then Begin SetStandardError(5); Exit End;
+ End Else Begin
+  If FI2<0 Then Begin SetStandardError(5); Exit End;
+  For K:=0 To 31 Do Ent[K]:=Buf[Idx*32+K];
+  For K:=0 To 10 Do Ent[K]:=Ord(Nm2[K+1]);
+  Buf[Idx*32]:=$E5;
+  If Not WriteSector(V.Drive,Sec,@Buf) Then Begin SetStandardError(5); Exit End;
+  If Not ReadSector(V.Drive,FS2,@Buf) Then Begin SetStandardError(5); Exit End;
+  For K:=0 To 31 Do Buf[FI2*32+K]:=Ent[K];
+  If Not WriteSector(V.Drive,FS2,@Buf) Then Begin SetStandardError(5); Exit End;
+ End;
+ FxRename:=0;
+End;
+
+Function FxMkDir(PathPtr:Pointer):Word;
+Var
+ V:TFxVol;
+ Dir,C:Word;
+ Nm,Dot:String;
+ Sec,FS:LongInt;
+ Idx:Byte;
+ FI:Integer;
+ E:TFxEnt;
+ Buf:TFxSec;
+ K:Byte;
+Begin
+ FxMkDir:=3;
+ If Not FxOpenPath(PathPtr,V,Dir,Nm) Then Begin SetStandardError(3); Exit End;
+ FxMkDir:=5;
+ If FxScan(V,Dir,Nm,Sec,Idx,FS,FI,E) Then Begin SetStandardError(5); Exit End;
+ If FI<0 Then Begin SetStandardError(5); Exit End;
+ C:=FxAlloc(V,0);
+ If C=0 Then Begin SetStandardError(5); Exit End;
+ { cluster du nouveau repertoire : "." et ".." puis entrees vides }
+ FillChar(Buf,512,0);
+ Dot:='.          ';
+ FxPutEnt(Buf,0,Dot,$10,C,0);
+ Dot:='..         ';
+ FxPutEnt(Buf,32,Dot,$10,Dir,0);
+ WriteSector(V.Drive,V.FirstData+LongInt(C-2)*V.SPC,@Buf);
+ FillChar(Buf,512,0);
+ For K:=1 To V.SPC-1 Do WriteSector(V.Drive,V.FirstData+LongInt(C-2)*V.SPC+K,@Buf);
+ { entree dans le repertoire parent }
+ If Not ReadSector(V.Drive,FS,@Buf) Then Begin SetStandardError(5); Exit End;
+ FxPutEnt(Buf,FI*32,Nm,$10,C,0);
+ If Not WriteSector(V.Drive,FS,@Buf) Then Begin SetStandardError(5); Exit End;
+ FxMkDir:=0;
+End;
+
+Function FxRmDir(PathPtr:Pointer):Word;
+Var
+ V:TFxVol;
+ Dir:Word;
+ Nm:String;
+ Sec,FS,S:LongInt;
+ Idx,I:Byte;
+ FI:Integer;
+ E:TFxEnt;
+ Buf:TFxSec;
+ N:Word;
+Begin
+ FxRmDir:=3;
+ If Not FxOpenPath(PathPtr,V,Dir,Nm) Then Begin SetStandardError(3); Exit End;
+ If Not FxScan(V,Dir,Nm,Sec,Idx,FS,FI,E) Then Begin SetStandardError(3); Exit End;
+ FxRmDir:=5;
+ If (E.Attr And $10)=0 Then Begin SetStandardError(5); Exit End;
+ { le repertoire doit etre vide (hors "." et "..") }
+ N:=0;
+ While FxDirSec(V,E.Cluster,N,S) Do Begin
+  If Not ReadSector(V.Drive,S,@Buf) Then Begin SetStandardError(5); Exit End;
+  For I:=0 To 15 Do
+   If (Buf[I*32]<>0) And (Buf[I*32]<>$E5) And (Buf[I*32]<>Ord('.')) Then Begin SetStandardError(5); Exit End;
+  Inc(N);
+ End;
+ If E.Cluster>=2 Then FxFreeChain(V,E.Cluster);
+ If Not ReadSector(V.Drive,Sec,@Buf) Then Begin SetStandardError(5); Exit End;
+ Buf[Idx*32]:=$E5;
+ If Not WriteSector(V.Drive,Sec,@Buf) Then Begin SetStandardError(5); Exit End;
+ FxRmDir:=0;
+End;
+
+Function DOS3Ah_RemoveDirectory(PathPtr:Pointer):Word;
+Begin
+ DOS3Ah_RemoveDirectory:=FxRmDir(PathPtr);
+End;
+
+Function DOS39h_MakeDirectory(PathPtr:Pointer):Word;
+Begin
+ DOS39h_MakeDirectory:=FxMkDir(PathPtr);
+End;
 {==============================================================================}
 { FONCTIONS POUR CHANGER DE RÉPERTOIRE (Fonction 3Bh)                        }
 {==============================================================================}
@@ -6537,50 +7080,9 @@ End;
 
 { Fonction principale 3Ch }
 Function DOS3Ch_CreateOpenFile(PathPtr:Pointer):Word;
-Var
- Path: String;
- Drive: Byte;
- DirPath,FileName: String;
- BootSec: BootSectorRec;
- FileHandle: Word;
- P: PChar;
- I: Byte;
- Result: Word;
 Begin
- DOS3Ch_CreateOpenFile:=$FFFF; { Erreur par défaut }
-
- { Convertir pointeur ASCIIZ en string Pascal }
- P:=PChar(PathPtr);
- Path:='';
- I:=0;
- While (P^ <> #0) and (I < 255) Do Begin
-  Path:=Path + P^;
-  Inc(P);
-  Inc(I);
- End;
-
- { Analyser le chemin }
- If Not ParseFilePath(Path,Drive,DirPath,FileName) Then Begin
-  DOS3Ch_CreateOpenFile:=$FFFF; { Invalid path }
-  Exit;
- End;
-
- { Lire boot sector }
- If Not ReadBootSector(Drive,BootSec) Then Begin
-  DOS3Ch_CreateOpenFile:=$FFFF; { Invalid drive }
-  Exit;
- End;
-
- { Trouver ou créer le fichier }
- Result:=FindOrCreateFile(Drive,BootSec,DirPath,FileName,0,FileHandle);
-
- { Si succès, retourner le handle }
- If Result = 0 Then
-  DOS3Ch_CreateOpenFile:=FileHandle
- Else
-  DOS3Ch_CreateOpenFile:=Result;
+ DOS3Ch_CreateOpenFile:=FxCreate(PathPtr,0,False);
 End;
-
 { Valider mode d'accès pour fonction 3Dh }
 Function ValidateAccessMode(AccessMode:Byte):Boolean;
 Begin
@@ -6635,94 +7137,14 @@ End;
 
 { Fonction principale 3Dh }
 Function DOS3Dh_OpenFile(PathPtr:Pointer;AccessMode:Byte):Word;
-Var
- Path: String;
- Drive: Byte;
- DirPath,FileName: String;
- BootSec: BootSectorRec;
- DirCluster: Word;
- Entry: DirectoryEntry;
- EntryOffset: Word;
- FileHandle: Word;
- P: PChar;
- I: Byte;
- Result: Word;
 Begin
- DOS3Dh_OpenFile:=$FFFF; { Erreur par défaut }
-
- { Valider le mode d'accès }
  If Not ValidateAccessMode(AccessMode) Then Begin
   SetStandardError(ERROR_INVALID_FUNCTION);
-  DOS3Dh_OpenFile:=$FFFF; { Invalid access mode }
-  Exit;
- End;
-
- { Convertir pointeur ASCIIZ en string Pascal }
- P:=PChar(PathPtr);
- Path:='';
- I:=0;
- While (P^ <> #0) and (I < 255) Do Begin
-  Path:=Path + P^;
-  Inc(P);
-  Inc(I);
- End;
-
- { Analyser le chemin }
- If Not ParseFilePath(Path,Drive,DirPath,FileName) Then Begin
-  SetStandardError(ERROR_PATH_NOT_FOUND);
-  DOS3Dh_OpenFile:=$FFFF; { Invalid path }
-  Exit;
- End;
-
- { Lire boot sector }
- If Not ReadBootSector(Drive,BootSec) Then Begin
-  SetStandardError(ERROR_PATH_NOT_FOUND);
-  DOS3Dh_OpenFile:=$FFFF; { Invalid drive }
-  Exit;
- End;
-
- { Trouver le répertoire parent }
- If DirPath = '' Then
-  DirCluster:=0 { Répertoire racine }
- Else Begin
-  If Not FindDirectoryByPath(Drive,BootSec,DirPath,DirCluster) Then Begin
-   SetStandardError(ERROR_PATH_NOT_FOUND);
-   DOS3Dh_OpenFile:=$FFFF; { Path not found }
-   Exit;
-  End;
- End;
-
- { Chercher le fichier }
- If Not FindDirectoryEntry(Drive,BootSec,DirCluster,FileName + '        ',Entry,EntryOffset) Then Begin
-  SetStandardError(ERROR_FILE_NOT_FOUND);
-  DOS3Dh_OpenFile:=$FFFF; { File not found }
-  Exit;
- End;
-
- { Vérifier que c'est bien un fichier (pas un répertoire) }
- If (Entry.Attributes and $10) <> 0 Then Begin
-  SetStandardError(ERROR_ACCESS_DENIED);
-  DOS3Dh_OpenFile:=$FFFF; { Access denied - c'est un répertoire }
-  Exit;
- End;
-
- { Ouvrir selon le mode d'accès }
- Case AccessMode and $03 Of
-  0: Result:=OpenFileReadOnly(Drive,Entry,FileHandle);
-  1: Result:=OpenFileWriteOnly(Drive,Entry,FileHandle);
-  2: Result:=OpenFileReadWrite(Drive,Entry,FileHandle);
- End;
-
- { Si succès, retourner le handle }
- If Result = 0 Then Begin
-  ClearExtendedError; { Effacer les erreurs en cas de succès }
-  DOS3Dh_OpenFile:=FileHandle;
- End Else Begin
-  SetStandardError(ERROR_ACCESS_DENIED); { Erreur générique si échec ouverture }
   DOS3Dh_OpenFile:=$FFFF;
+  Exit;
  End;
+ DOS3Dh_OpenFile:=FxOpen(PathPtr,AccessMode);
 End;
-
 { Flush les buffers de fichier vers le disque }
 Function FlushFileBuffers(Handle:Word):Word;
 Var
@@ -6795,54 +7217,21 @@ End;
 
 { Fermer un handle de fichier }
 Function CloseFileHandle(Handle:Word):Word;
-Var
- FileEntry: FileTableEntry;
- Result: Word;
 Begin
- CloseFileHandle:=6; { Invalid handle par défaut }
-
- { Vérifier la validité du handle }
- If Handle >= 20 Then Exit;
-
- If Not GetFileTableEntry(Handle,FileEntry) Then Exit;
-
- { Vérifier si le handle est utilisé }
- If Not FileEntry.InUse Then Begin
-  CloseFileHandle:=6; { Invalid handle }
-  Exit;
- End;
-
- { Flush les buffers si le fichier a été modifié }
- If (FileEntry.Attributes and $01) <> 0 Then Begin { Mode écriture }
-  Result:=FlushFileBuffers(Handle);
-  If Result <> 0 Then Begin
-   CloseFileHandle:=Result;
-   Exit;
-  End;
-
-  { Mettre à jour l'entrée de répertoire }
-  Result:=UpdateDirectoryEntry(Handle);
-  If Result <> 0 Then Begin
-   CloseFileHandle:=Result;
-   Exit;
-  End;
- End;
-
- { Marquer le handle comme libre }
- FileEntry.InUse:=False;
- FileEntry.Drive:=0;
- FileEntry.FirstCluster:=0;
- FileEntry.FileSize:=0;
- FileEntry.CurrentPos:=0;
- FileEntry.Attributes:=0;
- FileEntry.CurrentCluster:=0;
- FileEntry.ClusterOffset:=0;
-
- SetFileTableEntry(Handle,FileEntry);
-
- CloseFileHandle:=0; { Succès }
+ CloseFileHandle:=6;
+ If Handle>=20 Then Exit;
+ If Not GetFileTableInUse(Handle) Then Exit;
+ If (GetFileTableAttributes(Handle) And 3)<>0 Then FxFlush(Handle);
+ SetFileTableInUse(Handle,False);
+ SetFileTableFirstCluster(Handle,0);
+ SetFileTableFileSize(Handle,0);
+ SetFileTableCurrentPos(Handle,0);
+ SetFileTableAttributes(Handle,0);
+ SetFileTableCurrentCluster(Handle,0);
+ SetFileTableClusterOffset(Handle,0);
+ FxSetLoc(Handle,0,0);
+ CloseFileHandle:=0;
 End;
-
 { Fonction principale 3Eh }
 Function DOS3Eh_CloseFile(Handle:Word):Word;
 Begin
@@ -7288,121 +7677,9 @@ End;
 
 { Écrire les données d'un fichier }
 Function WriteFileData(Handle:Word;Buffer:Pointer;BytesToWrite:Word;Var BytesWritten:Word):Word;
-Var
- FileEntry: FileTableEntry;
- Drive: Byte;
- BootSec: BootSectorRec;
- CurrentCluster: Word;
- ClusterSize: Word;
- RemainingInCluster: Word;
- BytesToWriteNow: Word;
- BufferOfs: Word;
- BufferSeg: Word;
- TotalBytesWritten: Word;
- Result: Word;
- NewCluster: Word;
 Begin
- WriteFileData:=6; { Invalid handle par défaut }
- BytesWritten:=0;
-
- { Vérifier la validité du handle }
- If Handle >= 20 Then Exit;
-
- If Not GetFileTableEntry(Handle, FileEntry) Then Exit;
-
- { Vérifier si le handle est utilisé }
- If Not FileEntry.InUse Then Exit;
-
- Drive:=FileEntry.Drive; { index 0-based, tel que stocké }
-
- { Lire boot sector }
- If Not ReadBootSector(Drive, BootSec) Then Begin
-  WriteFileData:=5; { Access denied }
-  Exit;
- End;
-
- { Vérifier si on peut écrire (pas en mode lecture seule) }
- If (FileEntry.Attributes and $02) = 0 Then Begin { Mode lecture seule }
-  WriteFileData:=5; { Access denied }
-  Exit;
- End;
-
- TotalBytesWritten:=0;
-
- { Extraire segment et offset du pointeur }
- ASM
-  LES DI,Buffer
-  MOV BufferSeg,ES
-  MOV BufferOfs,DI
- END;
-
- CurrentCluster:=FileEntry.CurrentCluster;
- If CurrentCluster = 0 Then CurrentCluster:=FileEntry.FirstCluster;
- If CurrentCluster = 0 Then Begin
-  { Premier cluster du fichier }
-  CurrentCluster:=AllocateNewCluster(Drive, BootSec, 0);
-  If CurrentCluster = 0 Then Begin
-   WriteFileData:=5; { Access denied - disque plein }
-   Exit;
-  End;
-  FileEntry.FirstCluster:=CurrentCluster;
-  FileEntry.CurrentCluster:=CurrentCluster;
- End;
-
- ClusterSize:=BootSec.SectorsPerCluster * BootSec.BytesPerSector;
-
- While BytesToWrite > 0 Do Begin
-  { Calculer combien on peut écrire dans le cluster courant }
-  RemainingInCluster:=ClusterSize - FileEntry.ClusterOffset;
-  BytesToWriteNow:=BytesToWrite;
-  If BytesToWriteNow > RemainingInCluster Then
-   BytesToWriteNow:=RemainingInCluster;
-
-  { Écrire dans le cluster courant }
-  Result:=WriteToCluster(Drive, BootSec, CurrentCluster, FileEntry.ClusterOffset, Ptr(BufferSeg, BufferOfs), BytesToWriteNow);
-  If Result <> 0 Then Begin
-   WriteFileData:=Result;
-   Exit;
-  End;
-
-  { Mettre à jour les pointeurs et compteurs }
-  Inc(BufferOfs, BytesToWriteNow);
-
-  { Gérer le débordement de segment }
-  If BufferOfs >= $10000 Then Begin
-   Inc(BufferSeg, $1000);
-   Dec(BufferOfs, $10000);
-  End;
-
-  Inc(TotalBytesWritten, BytesToWriteNow);
-  Dec(BytesToWrite, BytesToWriteNow);
-  Inc(FileEntry.CurrentPos, BytesToWriteNow);
-  Inc(FileEntry.ClusterOffset, BytesToWriteNow);
-
-  { Mettre à jour la taille du fichier si nécessaire }
-  If FileEntry.CurrentPos > FileEntry.FileSize Then
-   FileEntry.FileSize:=FileEntry.CurrentPos;
-
-  { Si on a fini ce cluster et qu'il reste des données, allouer un nouveau cluster }
-  If (FileEntry.ClusterOffset >= ClusterSize) and (BytesToWrite > 0) Then Begin
-   NewCluster:=AllocateNewCluster(Drive, BootSec, CurrentCluster);
-   If NewCluster = 0 Then Begin
-    WriteFileData:=5; { Access denied - disque plein }
-    Exit;
-   End;
-   CurrentCluster:=NewCluster;
-   FileEntry.CurrentCluster:=CurrentCluster;
-   FileEntry.ClusterOffset:=0;
-  End;
- End;
-
- { Mettre à jour l'entrée de fichier }
- SetFileTableEntry(Handle, FileEntry);
-
- BytesWritten:=TotalBytesWritten;
- WriteFileData:=0; { Succès }
+ WriteFileData:=FxWriteData(Handle,Buffer,BytesToWrite,BytesWritten);
 End;
-
 { Fonction principale 40h }
 Function DOS40h_WriteFile(Handle:Word;Buffer:Pointer;BytesToWrite:Word;Var BytesWritten:Word):Word;
 Begin
@@ -7484,82 +7761,9 @@ End;
 
 { Fonction principale 41h }
 Function DOS41h_DeleteFile(PathPtr:Pointer):Word;
-Var
- Path: String;
- Drive: Byte;
- DirPath,FileName: String;
- BootSec: BootSectorRec;
- DirCluster: Word;
- Entry: DirectoryEntry;
- EntryOffset: Word;
- P: PChar;
- I: Byte;
- Handle: Word;
- FileEntry: FileTableEntry;
 Begin
- DOS41h_DeleteFile:=2; { File not found par défaut }
-
- { Convertir pointeur ASCIIZ en string Pascal }
- P:=PChar(PathPtr);
- Path:='';
- I:=0;
- While (P^ <> #0) and (I < 255) Do Begin
-  Path:=Path + P^;
-  Inc(P);
-  Inc(I);
- End;
-
- { Analyser le chemin }
- If Not ParseFilePath(Path,Drive,DirPath,FileName) Then Begin
-  DOS41h_DeleteFile:=3; { Path not found }
-  Exit;
- End;
-
- { Lire boot sector }
- If Not ReadBootSector(Drive,BootSec) Then Begin
-  DOS41h_DeleteFile:=2; { File not found }
-  Exit;
- End;
-
- { Trouver le répertoire parent }
- If DirPath = '' Then
-  DirCluster:=0 { Répertoire racine }
- Else Begin
-  If Not FindDirectoryByPath(Drive,BootSec,DirPath,DirCluster) Then Begin
-   DOS41h_DeleteFile:=3; { Path not found }
-   Exit;
-  End;
- End;
-
- { Vérifier que le fichier existe }
- If Not FindDirectoryEntry(Drive,BootSec,DirCluster,FileName + '        ',Entry,EntryOffset) Then Begin
-  DOS41h_DeleteFile:=2; { File not found }
-  Exit;
- End;
-
- { Vérifier que c'est bien un fichier (pas un répertoire) }
- If (Entry.Attributes and $10) <> 0 Then Begin
-  DOS41h_DeleteFile:=5; { Access denied - c'est un répertoire }
-  Exit;
- End;
-
- { Vérifier si le fichier est ouvert }
- For Handle:=0 To 19 Do Begin
-  If GetFileTableEntry(Handle, FileEntry) Then Begin
-   If FileEntry.InUse and (FileEntry.FirstCluster = Entry.FirstClusterLow) Then Begin
-    DOS41h_DeleteFile:=5; { Access denied - fichier ouvert }
-    Exit;
-   End;
-  End;
- End;
-
- { Supprimer l'entrée de répertoire }
- If DeleteDirectoryEntry(Drive, BootSec, DirCluster, FileName + '        ') Then
-  DOS41h_DeleteFile:=0 { Succès }
- Else
-  DOS41h_DeleteFile:=5; { Access denied }
+ DOS41h_DeleteFile:=FxDelete(PathPtr);
 End;
-
 { Calculer le cluster et l'offset à partir d'une position dans le fichier }
 Function CalculateClusterFromPosition(Drive:Byte;BootSec:BootSectorRec;
                                       FirstCluster:Word;Position:LongInt;
@@ -10550,106 +10754,9 @@ End;
 { Entrée: DS:DX pointe vers l'ancien nom, ES:DI vers le nouveau nom }
 { Sortie: AX = 0 (succès) ou code d'erreur DOS }
 Function DOS56h_RenameFile(OldPathPtr:Pointer;NewPathPtr:Pointer):Word;
-Var
- OldPath, NewPath: String;
- OldDrive, NewDrive: Byte;
- OldDirPath, OldFileName: String;
- NewDirPath, NewFileName: String;
- OldEntry: DirectoryEntryFAT;
- EntryOffset: Word;
- P: PChar;
- I: Byte;
 Begin
- DOS56h_RenameFile := 2; { File not found par défaut }
-
- { Convertir les pointeurs ASCIIZ en chaînes Pascal }
- P := PChar(OldPathPtr);
- OldPath := '';
- I := 0;
- While (P^ <> #0) And (I < 255) Do Begin
-  OldPath := OldPath + P^;
-  Inc(P);
-  Inc(I);
- End;
-
- P := PChar(NewPathPtr);
- NewPath := '';
- I := 0;
- While (P^ <> #0) And (I < 255) Do Begin
-  NewPath := NewPath + P^;
-  Inc(P);
-  Inc(I);
- End;
-
- { Analyser les chemins }
- If Not ParseFullPath(OldPath, OldDrive, OldDirPath, OldFileName) Then Begin
-  DOS56h_RenameFile := 2; { File not found }
-  Exit;
- End;
-
- If Not ParseFullPath(NewPath, NewDrive, NewDirPath, NewFileName) Then Begin
-  DOS56h_RenameFile := 3; { Path not found }
-  Exit;
- End;
-
- { Vérifier que c'est sur le même lecteur (DOS ne permet pas le déplacement entre lecteurs) }
- If OldDrive <> NewDrive Then Begin
-  DOS56h_RenameFile := 17; { Not same device }
-  Exit;
- End;
-
- { Pour cette implémentation, on ne supporte que le renommage dans le même répertoire }
- { Un système complet supporterait le déplacement entre répertoires }
- If UpperCase(OldDirPath) <> UpperCase(NewDirPath) Then Begin
-  DOS56h_RenameFile := 3; { Path not found }
-  Exit;
- End;
-
- { Chercher le fichier source }
- If Not FindDirectoryEntryByName(OldDrive, 0, OldFileName, OldEntry, EntryOffset) Then Begin
-  DOS56h_RenameFile := 2; { File not found }
-  Exit;
- End;
-
- { Vérifier que ce n'est pas un répertoire (pour cette implémentation simplifiée) }
- If (OldEntry.Attributes And $10) <> 0 Then Begin
-  DOS56h_RenameFile := 5; { Access denied }
-  Exit;
- End;
-
- { Vérifier que le nouveau nom n'existe pas déjà }
- If FindDirectoryEntryByName(NewDrive, 0, NewFileName, OldEntry, EntryOffset) Then Begin
-  DOS56h_RenameFile := 80; { File already exists }
-  Exit;
- End;
-
- { Restaurer l'entrée originale (elle a été écrasée par la recherche du nouveau nom) }
- If Not FindDirectoryEntryByName(OldDrive, 0, OldFileName, OldEntry, EntryOffset) Then Begin
-  DOS56h_RenameFile := 2; { File not found }
-  Exit;
- End;
-
- { Mettre à jour le nom dans l'entrée de répertoire }
- If Not UpdateDirectoryEntryName(OldDrive, 0, EntryOffset, NewFileName) Then Begin
-  DOS56h_RenameFile := 5; { Access denied }
-  Exit;
- End;
-
- DOS56h_RenameFile := 0; { Succès }
-
- { Note: Cette implémentation gère le renommage basique dans le répertoire racine.
-   Un système DOS complet supporterait :
-   - Le déplacement entre sous-répertoires
-   - La gestion des noms longs (VFAT)
-   - Les attributs étendus
-   - La gestion des liens et raccourcis
-   - La validation complète des noms de fichiers
-   - La gestion des fichiers ouverts (verrouillage)
-
-   Les interruptions 25h/26h sont utilisées pour l'accès direct aux secteurs
-   permettant une manipulation FAT12/FAT16 authentique. }
+ DOS56h_RenameFile:=FxRename(OldPathPtr,NewPathPtr);
 End;
-
 { Fonctions utilitaires pour gestion des dates/heures DOS }
 
 { Convertit les composants date/heure en format DOS }
@@ -11547,58 +11654,9 @@ End;
 
 { Fonction 5Bh - Create New File }
 Function DOS5Bh_CreateNewFile(PathPtr:Pointer;Attributes:Word):Word;
-Var
- PathStr: String;
- Handle: Word;
- P: PChar;
- I: Byte;
 Begin
- DOS5Bh_CreateNewFile := $FFFF; { Erreur par défaut }
-
- { Convertir pointeur ASCIIZ en string Pascal }
- P := PChar(PathPtr);
- PathStr := '';
- I := 0;
- While (P^ <> #0) and (I < 255) Do Begin
-  PathStr := PathStr + P^;
-  Inc(P);
-  Inc(I);
- End;
- If Length(PathStr) = 0 Then Begin
-  SetExtendedError(ERROR_INVALID_PARAMETER, ERRCLASS_BADCALL, ERRACT_USER, ERRLOC_UNK);
-  Exit;
- End;
-
- { D'abord, vérifier si le fichier existe déjà }
- Handle := DOS3Dh_OpenFile(PathPtr, 0); { Mode lecture seule }
- If Handle <> $FFFF Then Begin
-  { Le fichier existe déjà - c'est une erreur pour 5Bh }
-  DOS3Eh_CloseFile(Handle);
-  SetExtendedError(ERROR_FILE_EXISTS, ERRCLASS_EXISTS, ERRACT_USER, ERRLOC_DISK);
-  Exit;
- End;
-
- { Le fichier n'existe pas, le créer }
- Handle := DOS3Ch_CreateOpenFile(PathPtr);
- If Handle = $FFFF Then Begin
-  SetExtendedError(ERROR_PATH_NOT_FOUND, ERRCLASS_NOTFND, ERRACT_USER, ERRLOC_DISK);
-  Exit;
- End;
-
- { Définir les attributs si nécessaires }
- If Attributes <> 0 Then Begin
-  If DOS43h_GetSetFileAttributes(PathPtr, 1, Attributes) = $FFFF Then Begin
-   { Erreur lors de la définition des attributs - fermer le fichier }
-   DOS3Eh_CloseFile(Handle);
-   DOS5Bh_CreateNewFile := $FFFF;
-   Exit;
-  End;
- End;
-
- ClearExtendedError;
- DOS5Bh_CreateNewFile := Handle;
+ DOS5Bh_CreateNewFile:=FxCreate(PathPtr,Byte(Attributes),True);
 End;
-
 { Fonctions utilitaires pour File Locking }
 
 { Trouver un slot libre dans la table des verrous }
