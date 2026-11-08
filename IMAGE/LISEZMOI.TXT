@@ -1,0 +1,50 @@
+IMAGE - Images disque amorcables de MSDOS-0
+===========================================
+
+DOS144A.IMG   Disquette 1,44 Mo (FAT12, 2880 secteurs) amorcable contenant :
+              - IO.SYS, MSDOS.SYS, COMMAND.COM (dossier SYSTEM, noyau
+                KERNEL\MSDOS.PAS fabrique par KERNEL\MAKER.PAS) ;
+              - toutes les commandes de BIN16 (APPEND.EXE ... XCOPY.EXE).
+              Secteur de boot : celui de MS-DOS 6.22 (ecrit par SYS.PAS) ;
+              IO.SYS et MSDOS.SYS sont les deux premieres entrees de la
+              racine et sont contigus, comme sur une vraie disquette systeme.
+
+SYSTEM\       Fichiers systeme utilises pour fabriquer l'image.
+
+MAKEIMG.BAT   Reconstruit DOS144A.IMG avec TOOLS\MAKEDISK.EXE.
+
+Comment l'image est fabriquee
+-----------------------------
+TOOLS\MAKEDISK.PAS orchestre les commandes du depot :
+
+  FORMAT.PAS     cree et formate le fichier d'image  (FORMAT fich 1440 /CREATE)
+  SYS.PAS        copie IO.SYS, MSDOS.SYS, COMMAND.COM, ecrit le secteur de
+                 boot MS-DOS (et, pour un disque dur, le chargeur MBR et la
+                 partition active)                    (SYS /IMG:fich [/ACTIVE])
+  DISKPC.PAS     copie les commandes dans l'image      (TOOLS\DISKPC.PAS)
+  UNDISKPC.PAS   extrait le contenu d'une image        (TOOLS\UNDISKPC.PAS)
+
+  MAKEDISK image.img [/FLOPPY[:taille]] [/HD[:Mo]] [/FS:FAT12|FAT16]
+                     [/KERNEL:dossier] [/CMDS:dossier] [/MASK:masque,...]
+                     [/ADD:fichier] [/TOOLS:dossier] [/EXTRACT:dossier]
+                     [/NOBUILD] [/V]
+
+Exemples :
+  MAKEDISK DOS144A.IMG /KERNEL:IMAGE\SYSTEM /CMDS:BIN16
+  MAKEDISK DISQUE.IMG /HD:64 /KERNEL:IMAGE\SYSTEM /CMDS:BIN16
+  MAKEDISK DOS144A.IMG /NOBUILD /EXTRACT:CONTENU
+
+Compilation des outils (TPC ou Turbo Pascal 7) : FORMAT.PAS, SYS.PAS,
+TOOLS\MAKEDISK.PAS, TOOLS\DISKPC.PAS et TOOLS\UNDISKPC.PAS ; MAKEDISK lance
+les autres outils (dossier de MAKEDISK, /TOOLS:, courant ou PATH).
+
+Demarrage de l'image
+--------------------
+- Sur PC / VM : monter DOS144A.IMG comme disquette A: et demarrer dessus.
+  Le noyau detecte le lecteur d'amorcage (DL du BIOS) : A: pour une
+  disquette, C: pour un disque dur ; CONFIG.SYS, COMMAND.COM et COMSPEC sont
+  cherches sur ce lecteur.
+- Banc d'essai headless de l'emulateur DEVENV (dev-cools\DEVENV.PAS) :
+    devenv /KERNELTEST,dossier /KTBOOTIMG:IMAGE\DOS144A.IMG /KTSCRIPT:t.txt
+  (image <= 2,88 Mo : disquette 00h ; sinon disque dur 80h). Le secteur de
+  boot est execute en 0000:7C00 : VBR -> IO.SYS -> COMMAND.COM (invite A:\>).

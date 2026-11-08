@@ -827,6 +827,8 @@ Function LoadExeFile(FileName:String;Var LoadSegment:Word;
 Function LoadComFile(FileName:String;Var LoadSegment:Word):Boolean;Near;Forward;
 Function CreatePSP(ParentPSP:Word;TopMemory:Word):Word;Near;Forward;
 Function SetupEnvironment(EnvSeg:Word;ParentPSP:Word):Word;Near;Forward;
+Function BootLetter:Char;Near;Forward;
+Procedure Data;Near;Forward;
 Function RelocateExe(LoadSeg:Word;ExeHdr:ExeHeader;FileName:String):Boolean;
   Near;Forward;
 
@@ -1129,10 +1131,18 @@ Begin
   POP SI
   POP ES
   POP DS
+  MOV AL,[BP-2]
   MOV SP,BP
   ADD SP,6
   MOV BP,SP
   SUB SP,128
+  PUSH CS
+  POP DS
+  AND AL,80h
+  JZ @BootA
+  MOV AL,2
+@BootA:
+  MOV BYTE PTR [Data + 2],AL
  END;
  { Le noyau est chargé comme IO.SYS : DS=CS pour les chaînes et constantes que
    le
@@ -1151,7 +1161,6 @@ Begin
  ConPutChar(13);
  ConPutChar(10);
  { Initialiser répertoires courants via les fonctions d'accès Code Segment }
- SetCurrentDrive(2); { C: par défaut }
  For I:=0 To NDrv-1 Do Begin
   SetCurrentDirDrive(I, I);
   SetCurrentDirCluster(I, 0); { Répertoire racine }
@@ -9985,6 +9994,7 @@ Begin
 
   { Créer un environnement minimal }
   DefaultEnv:='PATH=C:\';
+  DefaultEnv[6]:=BootLetter;
 
   { Copier l'environnement }
   ASM
@@ -10254,6 +10264,13 @@ Begin
  End;
 End;
 
+{ Lettre du lecteur d'amorcage (lecteur courant au demarrage) }
+Function BootLetter:Char;Assembler;
+ASM
+ MOV AL,BYTE PTR [Data + 2]
+ ADD AL,65
+END;
+
 { Environnement : COMSPEC + PATH, puis nombre de chaines et nom du programme }
 Function BuildEnvironment(Owner:Word;ProgName:String):Word;
 Var
@@ -10265,6 +10282,7 @@ Begin
  If Seg=0 Then Exit;
  SetBlockOwner(Seg,Owner);
  Env:='COMSPEC=C:\COMMAND.EXE';
+ Env[9]:=BootLetter;
  If Mem[CfgSegGet:12]<>0 Then Begin
   Env:='COMSPEC=';
   For I:=1 To Mem[CfgSegGet:12] Do Env:=Env+Chr(Mem[CfgSegGet:12+I]);
@@ -10275,6 +10293,7 @@ Begin
  End;
  Mem[Seg:Ofs2]:=0; Inc(Ofs2);
  Env:='PATH=C:\';
+ Env[6]:=BootLetter;
  For I:=1 To Length(Env) Do Begin
   Mem[Seg:Ofs2]:=Ord(Env[I]); Inc(Ofs2);
  End;
@@ -10908,7 +10927,7 @@ Begin
  PB.FCB1:=Ptr(CfS,140);
  PB.FCB2:=Ptr(CfS,140);
  If Dev Then Begin
-  Pth:='C:\DEVLOAD.EXE';
+  Pth:='\DEVLOAD.EXE';
   A:=V;
  End Else Begin
   Pth:='';
@@ -10988,8 +11007,8 @@ Begin
   MOV WORD PTR [Data + FxBase + 126],AX
  END;
  { C:\CONFIG.SYS }
- Nm:='C:\CONFIG.SYS';
- For I:=1 To 13 Do Mem[CfS:299+I]:=Ord(Nm[I]);
+ Nm:='\CONFIG.SYS';
+ For I:=1 To 11 Do Mem[CfS:299+I]:=Ord(Nm[I]);
  H:=DOS3Dh_OpenFile(Ptr(CfS,300),0);
  If H<>$FFFF Then Begin
   Got:=0;
@@ -11055,11 +11074,11 @@ Begin
 
  Result:=CfgShell;
  { Essayer de charger COMMAND.COM en premier }
- If Result <> 0 Then Result:=DOS4Bh_ExecProgram(0, 'C:\COMMAND.COM',
+ If Result <> 0 Then Result:=DOS4Bh_ExecProgram(0, '\COMMAND.COM',
    ParamBlock);
  If Result <> 0 Then Begin
   { Si COMMAND.COM échoue, essayer COMMAND.EXE }
-  Result:=DOS4Bh_ExecProgram(0, 'C:\COMMAND.EXE', ParamBlock);
+  Result:=DOS4Bh_ExecProgram(0, '\COMMAND.EXE', ParamBlock);
   If Result <> 0 Then Begin
    { Si les deux échouent, essayer dans le répertoire courant }
    Result:=DOS4Bh_ExecProgram(0, 'COMMAND.COM', ParamBlock);

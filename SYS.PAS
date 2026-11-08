@@ -95,7 +95,8 @@ Var
  CurrParam:String;
  { Support /IMG:file - destination dans un fichier image disque }
  UseImg:Boolean;          { True si /IMG:file actif }
- NoBoot:Boolean;          { True si /NOBOOT : ne pas reecrire le secteur de boot }
+ NoBoot:Boolean;
+   { True si /NOBOOT : ne pas reecrire le secteur de boot }
  InfoOnly:Boolean;        { True si /INFO : seulement analyser }
  ActiveReq:Byte;          { 0=non touche, 1..4 = numero de partition a activer }
  ImgPath:String;          { Chemin du fichier image }
@@ -211,7 +212,8 @@ Begin
  End;
 End;
 
-Function GetFileInfo(Drive:Char;Const FileName:String;Var Entry:TDirEntry):Boolean;
+Function GetFileInfo(Drive:Char;Const FileName:String;
+  Var Entry:TDirEntry):Boolean;
 Var
  DirSector:TSector;
  i:Integer;
@@ -252,8 +254,10 @@ Begin
 
   { Copier les secteurs }
  For CurrentSector:=0 to SectorsToRead-1 do Begin
-  If Not ReadSector(DrvCode(SourceDrv),SourceSector+CurrentSector,Buffer,1)Then Exit;
-  If Not WriteSector(DrvCode(DestDrv),DestSector+CurrentSector,Buffer,1)Then Exit;
+  If Not ReadSector(DrvCode(SourceDrv),SourceSector+CurrentSector,Buffer,
+    1)Then Exit;
+  If Not WriteSector(DrvCode(DestDrv),DestSector+CurrentSector,Buffer,
+    1)Then Exit;
  End;
  CopySystemFile := True;
 End;
@@ -311,7 +315,8 @@ Begin
  FileMode:=2; { lecture/ecriture }
  {$I-} Reset(ImgFile,1); {$I+}
  If IOResult<>0 Then Begin
-  WriteLn('Erreur: Impossible d''ouvrir l''image "',FN,'" en lecture/ecriture.');
+  WriteLn('Erreur: Impossible d''ouvrir l''image "',FN,
+    '" en lecture/ecriture.');
   Exit;
  End;
  FSize:=FileSize(ImgFile);
@@ -327,7 +332,8 @@ Begin
  If((Hdr[0]=Ord('T'))and(Hdr[1]=Ord('D')))or
    ((Hdr[0]=Ord('t'))and(Hdr[1]=Ord('d')))Then Begin
   WriteLn('Erreur: Image TeleDisk (TD0) en ecriture non supportee.');
-  WriteLn('  Convertir d''abord vers une image brute (.IMG) avec UNDISKPC ou similaire.');
+  WriteLn('  Convertir d''abord vers une image brute (.IMG) avec UNDISKPC ou ' +
+    'similaire.');
   Close(ImgFile); Exit;
  End;
 
@@ -345,7 +351,8 @@ Begin
  For i:=1 to Length(SigStr) do
   If Hdr[i-1]<>Ord(SigStr[i])Then Begin TextSig:=False; Break; End;
  If TextSig Then Begin
-  WriteLn('Erreur: Descripteur VMDK texte detecte; ouvrir directement le fichier -flat.vmdk.');
+  WriteLn('Erreur: Descripteur VMDK texte detecte; ouvrir directement le ' +
+    'fichier -flat.vmdk.');
   Close(ImgFile); Exit;
  End;
 
@@ -360,10 +367,12 @@ Begin
    { Disk Type @offset 60, big-endian: 2=fixed, 3=dynamic, 4=differencing }
    DiskType:=BE32(Footer,60);
    If DiskType=2 Then Begin
-    ImgKind:=1; { VHD fixe : ecriture supportee, payload aux LBA 0..(FSize-512)/512 }
+    ImgKind:=1; { VHD fixe : ecriture supportee,
+      payload aux LBA 0..(FSize-512)/512 }
    End Else
    If DiskType=3 Then Begin
-    WriteLn('Erreur: Image VHD dynamique en ecriture non supportee (allocation BAT requise).');
+    WriteLn('Erreur: Image VHD dynamique en ecriture non supportee ' +
+      '(allocation BAT requise).');
     WriteLn('  Convertir d''abord vers VHD fixe ou IMG brute.');
     Close(ImgFile); Exit;
    End Else
@@ -481,11 +490,13 @@ Begin
    SPCTry:=SPC;
    While(Clusters>=4085)and(SPCTry<64)do Begin
     SPCTry:=SPCTry shl 1;
-    DataSec:=TotalSec-ReservedSec-NumFATs*BP.SecPerFAT-(LongInt(RootEnt)*32 div 512);
+    DataSec:=TotalSec-ReservedSec-NumFATs*BP.SecPerFAT-(LongInt(RootEnt)*32 div
+      512);
     Clusters:=DataSec div SPCTry;
    End;
    If Clusters>=4085 Then Begin
-    WriteLn('Erreur: Volume trop gros pour FAT12 (',Clusters,' clusters >= 4085).');
+    WriteLn('Erreur: Volume trop gros pour FAT12 (',Clusters,
+      ' clusters >= 4085).');
     WriteLn('  Utiliser /FORMAT:FAT16 pour les volumes > ~3 Mo.');
     Exit;
    End;
@@ -493,10 +504,12 @@ Begin
   End;
  End Else Begin
   If Clusters<4085 Then Begin
-   WriteLn('Avertissement: Volume petit, FAT12 serait plus approprie (',Clusters,' clusters).');
+   WriteLn('Avertissement: Volume petit, FAT12 serait plus approprie (',
+     Clusters,' clusters).');
   End;
   If Clusters>=65525 Then Begin
-   WriteLn('Erreur: Volume trop gros pour FAT16 (',Clusters,' clusters >= 65525).');
+   WriteLn('Erreur: Volume trop gros pour FAT16 (',Clusters,
+     ' clusters >= 65525).');
    WriteLn('  FAT32 n''est pas supporte par SYS.');
    Exit;
   End;
@@ -560,12 +573,14 @@ Begin
  Buf[$48]:=$AC; Buf[$49]:=$08; Buf[$4A]:=$C0; Buf[$4B]:=$74; Buf[$4C]:=$09;
  Buf[$4D]:=$B4; Buf[$4E]:=$0E; Buf[$4F]:=$BB; Buf[$50]:=$07; Buf[$51]:=$00;
  Buf[$52]:=$CD; Buf[$53]:=$10; Buf[$54]:=$EB; Buf[$55]:=$F2;
- Buf[$56]:=$30; Buf[$57]:=$E4; Buf[$58]:=$CD; Buf[$59]:=$16; Buf[$5A]:=$CD; Buf[$5B]:=$19;
+ Buf[$56]:=$30; Buf[$57]:=$E4; Buf[$58]:=$CD; Buf[$59]:=$16; Buf[$5A]:=$CD;
+   Buf[$5B]:=$19;
  Buf[$5C]:=$0D; Buf[$5D]:=$0A;
  Buf[$5E]:=Ord('N'); Buf[$5F]:=Ord('o'); Buf[$60]:=Ord('n');
  Buf[$61]:=Ord('-'); Buf[$62]:=Ord('s'); Buf[$63]:=Ord('y'); Buf[$64]:=Ord('s');
  Buf[$65]:=Ord('t'); Buf[$66]:=Ord('e'); Buf[$67]:=Ord('m');
- Buf[$68]:=Ord(' '); Buf[$69]:=Ord('d'); Buf[$6A]:=Ord('i'); Buf[$6B]:=Ord('s'); Buf[$6C]:=Ord('k');
+ Buf[$68]:=Ord(' '); Buf[$69]:=Ord('d'); Buf[$6A]:=Ord('i'); Buf[$6B]:=Ord('s');
+   Buf[$6C]:=Ord('k');
  Buf[$6D]:=$0D; Buf[$6E]:=$0A; Buf[$6F]:=0;
  Buf[510]:=$55; Buf[511]:=$AA;
 End;
@@ -644,7 +659,8 @@ Begin
  End;
 
  WriteLn('Formatage FAT', BPB.FATBits, ' : ', BPB.TotalClusters,
-         ' clusters, ', BPB.SecPerClus, ' sec/cluster, FAT=', BPB.SecPerFAT, ' sec.');
+         ' clusters, ', BPB.SecPerClus, ' sec/cluster, FAT=', BPB.SecPerFAT,
+           ' sec.');
 
  { Ecrire secteur de boot de la partition }
  BuildBootSector(Sec,BPB);
@@ -706,7 +722,8 @@ Begin
   End;
   If Not((PartType=$01)or(PartType=$04)or(PartType=$06)or
         (PartType=$0B)or(PartType=$0C)or(PartType=$0E))Then Begin
-   WriteLn('Erreur: Type partition $',PartType,' non supporte. FAT12/16 requise.');
+   WriteLn('Erreur: Type partition $',PartType,
+     ' non supporte. FAT12/16 requise.');
    Exit;
   End;
   BPB.PartLBA:=PartStart;
@@ -743,7 +760,8 @@ Begin
  If BPB.TotalClusters<4085 Then BPB.FATBits:=12
  Else If BPB.TotalClusters<65525 Then BPB.FATBits:=16
  Else Begin
-  WriteLn('Erreur: Volume FAT32 detecte (',BPB.TotalClusters,' clusters).'); Exit;
+  WriteLn('Erreur: Volume FAT32 detecte (',BPB.TotalClusters,' clusters).');
+    Exit;
  End;
  FATBytes:=LongInt(BPB.SecPerFAT)*512;
  If FATBytes>MAX_FAT_BYTES Then Begin
@@ -984,38 +1002,67 @@ Begin
  CopySrcFileToImage:=True;
 End;
 
-Function WriteMinimalBootSector:Boolean;
+{ Secteur de demarrage MS-DOS 6.22 (code d'amorcage generique) : cherche IO.SYS
+  et MSDOS.SYS comme deux premieres entrees de la racine, les charge de facon
+  contigue en 0070:0000 et y saute. Seuls le BPB et le numero d'unite sont
+  adaptes a l'image (disquette : unite 00h, disque dur : unite 80h). }
 Const
- BootStub:Array[0..49] of Byte = (
-  $FA,                                 { cli }
-  $31,$C0,                             { xor ax,ax }
-  $8E,$D8,                             { mov ds,ax }
-  $8E,$C0,                             { mov es,ax }
-  $BE,$5D,$7C,                         { mov si,7C5D (msg) }
-  $AC,                                 { lodsb }
-  $08,$C0,                             { or al,al }
-  $74,$09,                             { jz halt (offset +9 -> 0x57) }
-  $B4,$0E,                             { mov ah,0Eh }
-  $BB,$07,$00,                         { mov bx,0007 }
-  $CD,$10,                             { int 10h }
-  $EB,$F2,                             { jmp short loop }
-  $30,$E4,                             { xor ah,ah }
-  $CD,$16,                             { int 16h (wait key) }
-  $CD,$19,                             { int 19h (reboot) }
-  $0D,$0A,
-  $4E,$6F,$6E,$2D,$73,$79,$73,$74,$65,$6D,$20,
-  $64,$69,$73,$6B,
-  $0D,$0A,$00
+ BootCode:Array[0..511] of Byte = (
+  $EB,$3C,$90,$4D,$53,$44,$4F,$53,$35,$2E,$30,$00,$02,$40,$01,$00,
+  $02,$00,$02,$00,$00,$F8,$00,$01,$3F,$00,$80,$00,$3F,$00,$00,$00,
+  $41,$DC,$3F,$00,$80,$00,$29,$8A,$85,$17,$3B,$4E,$4F,$20,$4E,$41,
+  $4D,$45,$20,$20,$20,$20,$46,$41,$54,$31,$36,$20,$20,$20,$FA,$33,
+  $C0,$8E,$D0,$BC,$00,$7C,$16,$07,$BB,$78,$00,$36,$C5,$37,$1E,$56,
+  $16,$53,$BF,$3E,$7C,$B9,$0B,$00,$FC,$F3,$A4,$06,$1F,$C6,$45,$FE,
+  $0F,$8B,$0E,$18,$7C,$88,$4D,$F9,$89,$47,$02,$C7,$07,$3E,$7C,$FB,
+  $CD,$13,$72,$79,$33,$C0,$39,$06,$13,$7C,$74,$08,$8B,$0E,$13,$7C,
+  $89,$0E,$20,$7C,$A0,$10,$7C,$F7,$26,$16,$7C,$03,$06,$1C,$7C,$13,
+  $16,$1E,$7C,$03,$06,$0E,$7C,$83,$D2,$00,$A3,$50,$7C,$89,$16,$52,
+  $7C,$A3,$49,$7C,$89,$16,$4B,$7C,$B8,$20,$00,$F7,$26,$11,$7C,$8B,
+  $1E,$0B,$7C,$03,$C3,$48,$F7,$F3,$01,$06,$49,$7C,$83,$16,$4B,$7C,
+  $00,$BB,$00,$05,$8B,$16,$52,$7C,$A1,$50,$7C,$E8,$92,$00,$72,$1D,
+  $B0,$01,$E8,$AC,$00,$72,$16,$8B,$FB,$B9,$0B,$00,$BE,$E0,$7D,$F3,
+  $A6,$75,$0A,$8D,$7F,$20,$B9,$0B,$00,$F3,$A6,$74,$18,$BE,$9E,$7D,
+  $E8,$5F,$00,$33,$C0,$CD,$16,$5E,$1F,$8F,$04,$8F,$44,$02,$CD,$19,
+  $58,$58,$58,$EB,$E8,$8B,$47,$1A,$48,$48,$8A,$1E,$0D,$7C,$32,$FF,
+  $F7,$E3,$03,$06,$49,$7C,$13,$16,$4B,$7C,$BB,$00,$07,$B9,$03,$00,
+  $50,$52,$51,$E8,$3A,$00,$72,$D8,$B0,$01,$E8,$54,$00,$59,$5A,$58,
+  $72,$BB,$05,$01,$00,$83,$D2,$00,$03,$1E,$0B,$7C,$E2,$E2,$8A,$2E,
+  $15,$7C,$8A,$16,$24,$7C,$8B,$1E,$49,$7C,$A1,$4B,$7C,$EA,$00,$00,
+  $70,$00,$AC,$0A,$C0,$74,$29,$B4,$0E,$BB,$07,$00,$CD,$10,$EB,$F2,
+  $3B,$16,$18,$7C,$73,$19,$F7,$36,$18,$7C,$FE,$C2,$88,$16,$4F,$7C,
+  $33,$D2,$F7,$36,$1A,$7C,$88,$16,$25,$7C,$A3,$4D,$7C,$F8,$C3,$F9,
+  $C3,$B4,$02,$8B,$16,$4D,$7C,$B1,$06,$D2,$E6,$0A,$36,$4F,$7C,$8B,
+  $CA,$86,$E9,$8A,$16,$24,$7C,$8A,$36,$25,$7C,$CD,$13,$C3,$0D,$0A,
+  $44,$69,$73,$71,$75,$65,$20,$6E,$6F,$6E,$2D,$73,$79,$73,$74,$8A,
+  $6D,$65,$2F,$65,$72,$72,$65,$75,$72,$20,$64,$69,$73,$71,$75,$65,
+  $0D,$0A,$52,$65,$6D,$70,$6C,$61,$63,$65,$7A,$20,$65,$74,$20,$70,
+  $72,$65,$73,$73,$65,$7A,$20,$74,$6F,$75,$63,$68,$65,$0D,$0A,$00,
+  $49,$4F,$20,$20,$20,$20,$20,$20,$53,$59,$53,$4D,$53,$44,$4F,$53,
+  $20,$20,$20,$53,$59,$53,$00,$00,$00,$00,$00,$00,$00,$00,$55,$AA
  );
-Var Buf:TSector; J:Integer;
+
+Function WriteBootSector:Boolean;
+Var
+ Old,Buf:TSector;
+ J:Integer;
+ FS:String[8];
 Begin
- WriteMinimalBootSector:=False;
- If Not ImgReadLBA(BPB.PartLBA,Buf,1)Then Exit;
- { JMP a l'offset 0x3F (cf BPB FAT16: stub apres offset 0x3E) }
- Buf[0]:=$EB; Buf[1]:=$3C; Buf[2]:=$90;
- For J:=0 to 49 do Buf[$3F+J]:=BootStub[J];
- Buf[510]:=$55; Buf[511]:=$AA;
- WriteMinimalBootSector:=ImgWriteLBA(BPB.PartLBA,Buf,1);
+ WriteBootSector:=False;
+ If Not ImgReadLBA(BPB.PartLBA,Old,1)Then Exit;
+ Move(BootCode,Buf,512);
+ { BPB et parametres etendus de l'image (octets 3 a 61) }
+ For J:=3 to 61 do Buf[J]:=Old[J];
+ If(Old[21]=$F0)or(BPB.PartLBA=0)Then Buf[36]:=$00 Else Buf[36]:=$80;
+ Buf[38]:=$29;
+ If(Old[39]or Old[40]or Old[41]or Old[42])=0 Then Begin
+  Buf[39]:=$13;Buf[40]:=$57;Buf[41]:=$9B;Buf[42]:=$DF
+ End;
+ If Old[43]=0 Then For J:=43 to 53 do Buf[J]:=32;
+ If BPB.FATBits=12 Then FS:='FAT12   ' Else FS:='FAT16   ';
+ Move(FS[1],Buf[54],8);
+ Buf[510]:=$55;Buf[511]:=$AA;
+ WriteBootSector:=ImgWriteLBA(BPB.PartLBA,Buf,1)
 End;
 
 Function BuildSourcePath(Const FN:String):String;
@@ -1061,18 +1108,22 @@ Begin
  Else If Pos('IBM',OEM)>0 Then DetectOSFromBootSec:='PC-DOS/IBM'
  Else If Pos('FRDOS',OEM)>0 Then DetectOSFromBootSec:='FreeDOS'
  Else If Pos('DRDOS',OEM)>0 Then DetectOSFromBootSec:='DR-DOS'
- Else If(Pos('NTFS',OEM)>0)Then DetectOSFromBootSec:='Windows NT/2000/XP+ (NTFS)'
+ Else If(Pos('NTFS',
+   OEM)>0)Then DetectOSFromBootSec:='Windows NT/2000/XP+ (NTFS)'
  Else If(Pos('EXFAT',OEM)>0)Then DetectOSFromBootSec:='Windows (exFAT)'
- Else If(Pos('OS2',OEM)>0)or(Pos('HPFS',OEM)>0)Then DetectOSFromBootSec:='OS/2 (HPFS)'
+ Else If(Pos('OS2',OEM)>0)or(Pos('HPFS',
+   OEM)>0)Then DetectOSFromBootSec:='OS/2 (HPFS)'
  Else If(Pos('CORAILSY',OEM)>0)Then DetectOSFromBootSec:='Corail SYS (genere)'
- Else If(Pos('MTOOL',OEM)>0)or(Pos('mkfs',OEM)>0)Then DetectOSFromBootSec:='Linux mkfs/mtools'
+ Else If(Pos('MTOOL',OEM)>0)or(Pos('mkfs',
+   OEM)>0)Then DetectOSFromBootSec:='Linux mkfs/mtools'
  Else DetectOSFromBootSec:='Inconnu (OEM "'+OEM+'")';
 End;
 
 Function DetectFATFiles(Var Buf:TSector;Var FoundDOS:String):Boolean;
 { Buf = secteur du repertoire racine. Detecte les fichiers systeme presents. }
 Var Slot,J:Integer; EntryOfs:Word; Nm:String;
-    HasIO,HasMSDOS,HasIBMBIO,HasIBMDOS,HasKERNEL,HasPTSBIO,HasRXDOSBIO,HasCMD:Boolean;
+    HasIO,HasMSDOS,HasIBMBIO,HasIBMDOS,HasKERNEL,HasPTSBIO,HasRXDOSBIO,
+      HasCMD:Boolean;
     HasOS2BOOT,HasOS2LDR,HasOS2KRNL:Boolean;
     HasNTLDR,HasNTDETECT,HasBOOTINI:Boolean;
 Begin
@@ -1197,7 +1248,8 @@ Begin
  End Else Begin
   WriteLn('Layout           : Aucun BPB ni MBR valide.');
   WriteLn('Verdict          : Image vide ou non formatee.');
-  WriteLn('Action suggeree  : SYS /IMG:',ImgPath,' /FORMAT:FAT12 (ou FAT16) /DOS:MS-DOS');
+  WriteLn('Action suggeree  : SYS /IMG:',ImgPath,
+    ' /FORMAT:FAT12 (ou FAT16) /DOS:MS-DOS');
   Exit;
  End;
 
@@ -1233,7 +1285,8 @@ Begin
  TmpBPB.TotalSec:=GetLE16Buf(SecBoot,19);
  If TmpBPB.TotalSec=0 Then TmpBPB.TotalSec:=GetLE32Buf(SecBoot,32);
  If(TmpBPB.NumFATs=0)or(TmpBPB.RootEntries=0)or(TmpBPB.SecPerFAT=0)Then Begin
-  WriteLn('Verdict          : BPB FAT32 ou non-FAT (NumFATs/RootEntries/SecPerFAT nul).');
+  WriteLn('Verdict          : BPB FAT32 ou non-FAT ' +
+    '(NumFATs/RootEntries/SecPerFAT nul).');
   Exit;
  End;
  RootLBA:=TmpBPB.PartLBA+TmpBPB.ReservedSec+
@@ -1244,7 +1297,8 @@ Begin
  If TotalCl<4085 Then FATBits:=12
  Else If TotalCl<65525 Then FATBits:=16
  Else FATBits:=32;
- WriteLn('Type FAT estime  : FAT',FATBits,' (',TotalCl,' unites d''allocation de donnees)');
+ WriteLn('Type FAT estime  : FAT',FATBits,' (',TotalCl,
+   ' unites d''allocation de donnees)');
 
  If FATBits=32 Then Begin
   WriteLn('Verdict          : Volume FAT32 (non supporte par SYS).');
@@ -1363,13 +1417,27 @@ Begin
  Else If(U='DR-DOS')or(U='DRDOS')or(U='DR')Then Fam:=DOS_DRDOS
  Else If(U='FREEDOS')or(U='FREE')or(U='FDOS')Then Fam:=DOS_FREEDOS
  Else If(U='RXDOS')or(U='RX')Then Fam:=DOS_RXDOS
- Else If(U='WIN95')or(U='WIN9X')or(U='W95')or(U='MSDOS7')or(U='MS-DOS7')or(U='WINDOWS95')Then Fam:=DOS_WIN95
+ Else
+   If(U='WIN95')or(U='WIN9X')or(U='W95')or(U='MSDOS7')or(U='MS-DOS7')or
+     (U='WINDOWS95')Then Fam:=DOS_WIN95
  Else If(U='PTS-DOS')or(U='PTSDOS')or(U='PTS')Then Fam:=DOS_PTSDOS
  Else If(U='OS/2')or(U='OS2')or(U='IBMOS2')Then Fam:=DOS_OS2
  Else If(U='NT')or(U='WINNT')or(U='WIN-NT')or(U='WINDOWS-NT')or(U='WINNT4')or
-   (U='WIN2K')or(U='W2K')or(U='WINXP')or(U='XP')or(U='WIN2000')Then Fam:=DOS_WINNT
+   (U='WIN2K')or(U='W2K')or(U='WINXP')or(U='XP')or(U='WIN2000')Then
+     Fam:=DOS_WINNT
  Else ParseDosFamily:=False;
 End;
+
+Const
+ { Chargeur MBR minimal : se recopie en 0000:0600, cherche l'entree active
+   de la table de partition, charge son secteur de boot en 0000:7C00 et y
+   saute (DL = 80h). Sinon INT 18h. }
+ MbrCode:Array[0..$4C]of Byte=(
+  $FA,$33,$C0,$8E,$D0,$BC,$00,$7C,$8E,$D8,$8E,$C0,$FB,$FC,$BE,$00,
+  $7C,$BF,$00,$06,$B9,$00,$01,$F3,$A5,$EA,$1E,$06,$00,$00,$BE,$BE,
+  $07,$B1,$04,$80,$3C,$80,$74,$09,$83,$C6,$10,$E2,$F6,$CD,$18,$EB,
+  $FE,$8B,$14,$8B,$4C,$02,$BB,$00,$7C,$B8,$01,$02,$CD,$13,$72,$EE,
+  $81,$3E,$FE,$7D,$55,$AA,$75,$E5,$EA,$00,$7C,$00,$00);
 
 { Marque la partition PartNum (1..4) comme active dans la table de partition
   du MBR, et desactive les trois autres. Necessite un MBR valide (signature
@@ -1391,7 +1459,8 @@ Begin
   Exit;
  End;
  If(Sec0[510]<>$55)or(Sec0[511]<>$AA)Then Begin
-  WriteLn('Erreur: pas de signature MBR (55AA), impossible d''activer une partition.');
+  WriteLn('Erreur: pas de signature MBR (55AA), impossible d''activer une ' +
+    'partition.');
   Exit;
  End;
  Ofs:=$1BE+(LongInt(PartNum)-1)*16;
@@ -1400,6 +1469,10 @@ Begin
   WriteLn('Erreur: la partition #',PartNum,' est vide (type=0).');
   Exit;
  End;
+ { MBR sans code d'amorcage : installer le chargeur minimal }
+ PT:=0;
+ For K:=0 to 445 do PT:=PT or Sec0[K];
+ If PT=0 Then Move(MbrCode,Sec0,SizeOf(MbrCode));
  { Desactiver toutes les partitions, puis activer celle demandee }
  For K:=0 to 3 do Sec0[$1BE+K*16]:=$00;
  Sec0[Ofs]:=$80;
@@ -1420,7 +1493,8 @@ BEGIN
   WriteLn('              [/FORMAT:FAT12|FAT16] [/DOS:famille]');
   WriteLn('              [/NOBOOT] [/ACTIVE[:N]] [/INFO]');
   WriteLn;
-  WriteLn(' source:        Lecteur source des fichiers systeme (defaut: rep. courant)');
+  WriteLn(' source:        Lecteur source des fichiers systeme (defaut: rep. ' +
+    'courant)');
   WriteLn(' destination:   Lecteur cible (omis si /IMG: est specifie)');
   WriteLn(' /IMG:fichier   Ecrit les fichiers systeme dans une image disque');
   WriteLn('                au lieu d''un lecteur reel. Formats acceptes :');
@@ -1428,34 +1502,45 @@ BEGIN
   WriteLn('                  - VHD fixe VirtualBox (lecture/ecriture)');
   WriteLn('                Les formats TeleDisk (.TD0), VHD dynamique et');
   WriteLn('                VMDK sparse ne sont supportes qu''en lecture par');
-  WriteLn('                UNDISKPC; les convertir vers .IMG brute au prealable.');
-  WriteLn(' /FORMAT:FAT12  Formate la partition cible en FAT12 avant transfert.');
-  WriteLn(' /FORMAT:FAT16  Formate la partition cible en FAT16 avant transfert.');
+  WriteLn('                UNDISKPC; les convertir vers .IMG brute au ' +
+    'prealable.');
+  WriteLn(' /FORMAT:FAT12  Formate la partition cible en FAT12 avant ' +
+    'transfert.');
+  WriteLn(' /FORMAT:FAT16  Formate la partition cible en FAT16 avant ' +
+    'transfert.');
   WriteLn('                Si l''image n''a pas de MBR, un MBR avec une seule');
   WriteLn('                partition couvrant toute l''image est cree.');
-  WriteLn(' /DOS:famille   Selectionne la famille DOS (defaut: MS-DOS). Valeurs :');
+  WriteLn(' /DOS:famille   Selectionne la famille DOS (defaut: MS-DOS). ' +
+    'Valeurs :');
   WriteLn('                  MS-DOS   -> IO.SYS, MSDOS.SYS, COMMAND.COM');
   WriteLn('                  PC-DOS   -> IBMBIO.COM, IBMDOS.COM, COMMAND.COM');
   WriteLn('                  DR-DOS   -> IBMBIO.COM, IBMDOS.COM, COMMAND.COM');
   WriteLn('                  FreeDOS  -> KERNEL.SYS, COMMAND.COM');
   WriteLn('                  RxDOS    -> RXDOSBIO.SYS, RXDOS.SYS, COMMAND.COM');
-  WriteLn('                  Win95    -> IO.SYS, MSDOS.SYS, COMMAND.COM (MS-DOS 7)');
+  WriteLn('                  Win95    -> IO.SYS, MSDOS.SYS, COMMAND.COM ' +
+    '(MS-DOS 7)');
   WriteLn('                  PTS-DOS  -> PTSBIO.SYS, PTSDOS.SYS, COMMAND.COM');
   WriteLn('                  OS/2     -> OS2BOOT, OS2LDR, OS2KRNL');
-  WriteLn('                  WinNT    -> NTLDR, NTDETECT.COM, BOOT.INI (NT/2K/XP)');
-  WriteLn(' /NOBOOT        Ne pas reecrire le secteur de boot de l''image apres');
+  WriteLn('                  WinNT    -> NTLDR, NTDETECT.COM, BOOT.INI ' +
+    '(NT/2K/XP)');
+  WriteLn(' /NOBOOT        Ne pas reecrire le secteur de boot de l''image ' +
+    'apres');
   WriteLn('                le transfert (le /FORMAT en cree deja un correct).');
-  WriteLn(' /ACTIVE[:N]    Marque la partition N (1..4, defaut 1) comme active');
-  WriteLn('                (bootable) dans le MBR, et desactive les autres. Utile');
+  WriteLn(' /ACTIVE[:N]    Marque la partition N (1..4, defaut 1) comme ' +
+    'active');
+  WriteLn('                (bootable) dans le MBR, et desactive les autres. ' +
+    'Utile');
   WriteLn('                pour les images de disque dur multi-partitions.');
   WriteLn(' /INFO          Analyse l''image et affiche le type de partition,');
   WriteLn('                le secteur de boot, le BPB, le type FAT et le DOS');
   WriteLn('                installe. Aucune ecriture n''est effectuee.');
   WriteLn;
   WriteLn('En mode /IMG:, les fichiers IO.SYS, MSDOS.SYS et COMMAND.COM sont');
-  WriteLn('lus depuis le repertoire courant (ou source: si specifie) puis ecrits');
+  WriteLn('lus depuis le repertoire courant (ou source: si specifie) puis ' +
+    'ecrits');
   WriteLn('dans le repertoire racine FAT12/FAT16 de l''image, avec allocation');
-  WriteLn('correcte des unites d''allocation et mise a jour de toutes les copies de ');
+  WriteLn('correcte des unites d''allocation et mise a jour de toutes les ' +
+    'copies de ');
   WriteLn('la FAT.');
   Halt;
  End;
@@ -1468,15 +1553,20 @@ BEGIN
  SourceDrive:=#0; DestDrive:=#0;
  For i:=1 to ParamCount do Begin
   CurrParam:=ParamStr(i);
-  If StartsWith(CurrParam,'/IMG:')Then ImgPath:=Copy(CurrParam,6,Length(CurrParam)-5)
+  If StartsWith(CurrParam,'/IMG:')Then ImgPath:=Copy(CurrParam,6,
+    Length(CurrParam)-5)
   Else
-  If StartsWith(CurrParam,'-IMG:')Then ImgPath:=Copy(CurrParam,6,Length(CurrParam)-5)
+  If StartsWith(CurrParam,'-IMG:')Then ImgPath:=Copy(CurrParam,6,
+    Length(CurrParam)-5)
   Else
-  If StartsWith(CurrParam,'--IMG:')Then ImgPath:=Copy(CurrParam,7,Length(CurrParam)-6)
+  If StartsWith(CurrParam,'--IMG:')Then ImgPath:=Copy(CurrParam,7,
+    Length(CurrParam)-6)
   Else
   If StartsWith(CurrParam,'/DOS:')Then Begin
-   If Not ParseDosFamily(Copy(CurrParam,6,Length(CurrParam)-5),DosFamily)Then Begin
-    WriteLn('Erreur: famille DOS inconnue : ',Copy(CurrParam,6,Length(CurrParam)-5));
+   If Not ParseDosFamily(Copy(CurrParam,6,Length(CurrParam)-5),
+     DosFamily)Then Begin
+    WriteLn('Erreur: famille DOS inconnue : ',Copy(CurrParam,6,
+      Length(CurrParam)-5));
     WriteLn('  Valeurs acceptees: MS-DOS, PC-DOS, DR-DOS, FreeDOS, RxDOS.');
     Halt(1);
    End;
@@ -1484,19 +1574,23 @@ BEGIN
   End
   Else
   If StartsWith(CurrParam,'-DOS:')Then Begin
-   If Not ParseDosFamily(Copy(CurrParam,6,Length(CurrParam)-5),DosFamily)Then Halt(1);
+   If Not ParseDosFamily(Copy(CurrParam,6,Length(CurrParam)-5),
+     DosFamily)Then Halt(1);
    SetupDosFamily(DosFamily);
   End
   Else
   If StartsWith(CurrParam,'--DOS:')Then Begin
-   If Not ParseDosFamily(Copy(CurrParam,7,Length(CurrParam)-6),DosFamily)Then Halt(1);
+   If Not ParseDosFamily(Copy(CurrParam,7,Length(CurrParam)-6),
+     DosFamily)Then Halt(1);
    SetupDosFamily(DosFamily);
   End
   Else
-  If(UpperStr(CurrParam)='/FORMAT:FAT12')or(UpperStr(CurrParam)='-FORMAT:FAT12')or
+  If(UpperStr(CurrParam)='/FORMAT:FAT12')or
+    (UpperStr(CurrParam)='-FORMAT:FAT12')or
     (UpperStr(CurrParam)='--FORMAT:FAT12')Then FormatReq:=12
   Else
-  If(UpperStr(CurrParam)='/FORMAT:FAT16')or(UpperStr(CurrParam)='-FORMAT:FAT16')or
+  If(UpperStr(CurrParam)='/FORMAT:FAT16')or
+    (UpperStr(CurrParam)='-FORMAT:FAT16')or
     (UpperStr(CurrParam)='--FORMAT:FAT16')Then FormatReq:=16
   Else
   If(UpperStr(CurrParam)='/NOBOOT')or(UpperStr(CurrParam)='-NOBOOT')or
@@ -1519,7 +1613,8 @@ BEGIN
    End;
   End
   Else
-  If(Length(CurrParam)>=9)and(Copy(UpperStr(CurrParam),1,9)='--ACTIVE:')Then Begin
+  If(Length(CurrParam)>=9)and(Copy(UpperStr(CurrParam),1,
+    9)='--ACTIVE:')Then Begin
    Val(Copy(CurrParam,10,Length(CurrParam)-9),ActiveReq,ErrorCode);
    If(ErrorCode<>0)or(ActiveReq<1)or(ActiveReq>4)Then Begin
     WriteLn('Erreur: /ACTIVE attend un numero de partition entre 1 et 4.');
@@ -1537,7 +1632,8 @@ BEGIN
   { Mode image : la "destination" est le fichier image }
   UseImg:=True;
   If(SourceDrive<>#0)and(DestDrive<>#0)Then
-   WriteLn('Avertissement: parametre destination ignore car /IMG: est specifie.');
+   WriteLn('Avertissement: parametre destination ignore car /IMG: est ' +
+     'specifie.');
   DestDrive:='@'; { sentinel }
   If Not OpenImage(ImgPath)Then Halt(1);
   Case ImgKind of
@@ -1562,11 +1658,13 @@ BEGIN
    { FormatImage a deja rempli BPB; pas besoin de LoadBPB }
   End Else Begin
    If Not LoadBPB Then Begin
-    WriteLn('Astuce: utilisez /FORMAT:FAT12 ou /FORMAT:FAT16 pour formater l''image.');
+    WriteLn('Astuce: utilisez /FORMAT:FAT12 ou /FORMAT:FAT16 pour formater ' +
+      'l''image.');
     FreeMem(FATBuf,MAX_FAT_BYTES); Close(ImgFile); Halt(1);
    End;
    WriteLn('  FAT', BPB.FATBits, ': ', BPB.TotalClusters,
-           ' unites d''allocation, ', BPB.SecPerClus, ' secteur(s)/unite d''allocation, ',
+           ' unites d''allocation, ', BPB.SecPerClus,
+             ' secteur(s)/unite d''allocation, ',
            BPB.RootEntries, ' entrees racine.');
   End;
   If Not LoadFAT Then Begin
@@ -1589,7 +1687,7 @@ BEGIN
    If Not SaveFAT Then Begin
     WriteLn('Erreur: Ecriture de la FAT.'); Success:=False;
    End Else If Not NoBoot Then Begin
-    If WriteMinimalBootSector Then WriteLn('Secteur de boot minimal ecrit.')
+    If WriteBootSector Then WriteLn('Secteur de boot ecrit.')
     Else WriteLn('Avertissement: Ecriture du secteur de boot echouee.');
    End;
    If Success and(ActiveReq>0)Then Begin

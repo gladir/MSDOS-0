@@ -10,6 +10,10 @@ Clone de MS-DOS en langage de programmation Pascal (Turbo Pascal ou Free Pascal)
 ![image](https://github.com/user-attachments/assets/6391ac0e-afd7-48e0-afea-cd560ba4b231)
 
 
+<h2>Images disque amorcables</h2>
+
+Le dossier [IMAGE](IMAGE/LISEZMOI.TXT) contient `DOS144A.IMG`, une disquette 1,44 Mo amorcable (noyau + commandes). Le programme `TOOLS\MAKEDISK.PAS` permet de créer des images de disquette ou de disque dur à l'aide de `FORMAT`, `SYS`, `DISKPC` et `UNDISKPC`.
+
 <h2>Liste des fichiers</h2>
 
 Voici la liste des différents fichiers proposés dans MSDOS-0 :
