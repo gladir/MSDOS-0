@@ -562,6 +562,9 @@ Function GetClusterSector(Drive:Byte;BootSec:BootSectorRec;Cluster:Word):LongInt
 Function DOS3Ah_RemoveDirectory(PathPtr:Pointer):Word;Near;Forward;
 Function DOS39h_MakeDirectory(PathPtr:Pointer):Word;Near;Forward;
 Function DOS36h_DiskFree(Drive:Byte;Var R:TFxFree):Word;Near;Forward;
+Procedure InitPartition;Near;Forward;
+Procedure SetPartOfs(V:LongInt);Near;Forward;
+Function DiskTransfer(Op:Byte;Drive:Byte;Sector:LongInt;Buffer:Pointer):Boolean;Near;Forward;
 
 { Procédures spécifiques pour fonction 3Bh - Change Directory }
 Function FindDirectoryByPath(Drive:Byte;BootSec:BootSectorRec;Path:String;Var DirCluster:Word):Boolean;Near;Forward;
@@ -799,6 +802,198 @@ Var
  I:Byte;
  IntSeg, IntOfs: Word;
 Begin
+ { Chargeur de la suite d'IO.SYS : le secteur de boot (MS-DOS 5/6) ne charge que les 3 premiers secteurs
+   du fichier en 0070:0000 (DL = unite de boot, BPB en 0000:7C00). On relit ici le reste depuis la racine
+   du volume (fichier contigu) ; sous /KERNELTEST (fichier deja entierement charge) la relecture est sans
+   effet. Ce code doit rester dans les 1536 premiers octets du fichier. }
+ ASM
+  PUSH BP
+  MOV BP,SP
+  SUB SP,24
+  PUSH DS
+  PUSH ES
+  PUSH SI
+  PUSH DI
+  MOV [BP-2],DL
+  JMP @Main
+@Rd:
+  PUSH AX
+  PUSH BX
+  PUSH CX
+  PUSH DX
+  MOV CX,[7C18h]
+  CMP DX,CX
+  JAE @RdErr
+  DIV CX
+  INC DL
+  MOV [BP-18],DL
+  XOR DX,DX
+  MOV CX,[7C1Ah]
+  DIV CX
+  MOV DH,DL
+  MOV CH,AL
+  MOV AL,AH
+  AND AL,3
+  MOV CL,6
+  SHL AL,CL
+  OR AL,[BP-18]
+  MOV CL,AL
+  MOV DL,[BP-2]
+  MOV AX,0201h
+  INT 13h
+  POP DX
+  POP CX
+  POP BX
+  POP AX
+  DB 0C3h
+@RdErr:
+  STC
+  POP DX
+  POP CX
+  POP BX
+  POP AX
+  DB 0C3h
+@Main:
+  XOR AX,AX
+  MOV DS,AX
+  MOV AX,[7DFEh]
+  CMP AX,0AA55h
+  JE @HaveBPB
+  MOV AX,8000h
+  MOV ES,AX
+  MOV DS,AX
+  MOV BX,7C00h
+  MOV AX,0201h
+  MOV CX,0001h
+  XOR DH,DH
+  MOV DL,[BP-2]
+  INT 13h
+  JC @Done
+@HaveBPB:
+  MOV AL,[7C10h]
+  XOR AH,AH
+  MOV CX,[7C16h]
+  MUL CX
+  ADD AX,[7C0Eh]
+  ADC DX,0
+  ADD AX,[7C1Ch]
+  ADC DX,[7C1Eh]
+  MOV [BP-4],AX
+  MOV [BP-6],DX
+  MOV AX,[7C11h]
+  MOV CL,5
+  SHL AX,CL
+  ADD AX,[7C0Bh]
+  DEC AX
+  XOR DX,DX
+  MOV CX,[7C0Bh]
+  DIV CX
+  MOV [BP-8],AX
+  MOV CX,AX
+  MOV AX,[BP-4]
+  MOV DX,[BP-6]
+@RootLoop:
+  OR CX,CX
+  JZ @Done
+  PUSH CX
+  PUSH AX
+  PUSH DX
+  MOV BX,8000h
+  MOV ES,BX
+  XOR BX,BX
+  CALL @Rd
+  JC @RootErr
+  XOR DI,DI
+  MOV CX,16
+@Ent:
+  PUSH CX
+  MOV AX,ES:[DI]
+  CMP AX,4F49h
+  JNE @NoMatch
+  MOV AX,ES:[DI+2]
+  CMP AX,2020h
+  JNE @NoMatch
+  MOV AX,ES:[DI+4]
+  CMP AX,2020h
+  JNE @NoMatch
+  MOV AX,ES:[DI+6]
+  CMP AX,2020h
+  JNE @NoMatch
+  MOV AX,ES:[DI+8]
+  CMP AX,5953h
+  JNE @NoMatch
+  MOV AL,ES:[DI+10]
+  CMP AL,53h
+  JE @Found
+@NoMatch:
+  POP CX
+  ADD DI,32
+  LOOP @Ent
+  POP DX
+  POP AX
+  POP CX
+  ADD AX,1
+  ADC DX,0
+  DEC CX
+  JMP @RootLoop
+@RootErr:
+  ADD SP,6
+  JMP @Done
+@Found:
+  MOV AX,ES:[DI+1Ah]
+  MOV [BP-10],AX
+  MOV AX,ES:[DI+1Ch]
+  MOV DX,ES:[DI+1Eh]
+  ADD SP,8
+  ADD AX,511
+  ADC DX,0
+  MOV CL,9
+  SHR AX,CL
+  MOV CL,7
+  SHL DX,CL
+  OR AX,DX
+  MOV [BP-12],AX
+  MOV AX,[BP-4]
+  MOV DX,[BP-6]
+  ADD AX,[BP-8]
+  ADC DX,0
+  MOV [BP-14],AX
+  MOV [BP-16],DX
+  MOV AX,[BP-10]
+  SUB AX,2
+  MOV CL,[7C0Dh]
+  XOR CH,CH
+  MUL CX
+  ADD AX,[BP-14]
+  ADC DX,[BP-16]
+  MOV [BP-4],AX
+  MOV [BP-6],DX
+  MOV SI,3
+@Ld:
+  CMP SI,[BP-12]
+  JAE @Done
+  MOV AX,SI
+  MOV CL,5
+  SHL AX,CL
+  ADD AX,70h
+  MOV ES,AX
+  XOR BX,BX
+  MOV AX,[BP-4]
+  MOV DX,[BP-6]
+  ADD AX,SI
+  ADC DX,0
+  CALL @Rd
+  JC @Done
+  INC SI
+  JMP @Ld
+@Done:
+  POP DI
+  POP SI
+  POP ES
+  POP DS
+  MOV SP,BP
+  POP BP
+ END;
  { Le noyau est chargé comme IO.SYS : DS=CS pour les chaînes et constantes que le
    compilateur place dans le segment du noyau (pas de segment de données séparé). }
  ASM
@@ -837,6 +1032,9 @@ Begin
  SetIntVec($2F,CSeg,Ofs(Intr2Fh));
  SetIntVec($33,CSeg,Ofs(Intr33h));
 
+ { Partition du disque dur (lecteur C:) }
+ InitPartition;
+
  { Initialiser le gestionnaire de mémoire }
  InitializeMemoryManager;
 
@@ -850,6 +1048,16 @@ Begin
   JMP @Halt
   DB 'DEBUT DU NOYAU MSDOS-0'
  END;
+End;
+
+{ Debut de la partition du disque dur C: (0 si le disque commence par un secteur de boot FAT : superfloppy) }
+Procedure InitPartition;
+Var Buf:Array[0..511] of Byte;
+Begin
+ SetPartOfs(0);
+ If DiskTransfer($02,2,0,@Buf) Then
+  If (Buf[0]<>$EB) And (Buf[0]<>$E9) And (Buf[510]=$55) And (Buf[511]=$AA) Then
+   SetPartOfs(Word(Buf[$1C6])+Word(Buf[$1C7])*256+(LongInt(Buf[$1C8])+LongInt(Buf[$1C9])*256)*65536);
 End;
 
 Procedure Data;Assembler;ASM
@@ -983,6 +1191,8 @@ Procedure Data;Assembler;ASM
  DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
  DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
  DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ { PartOfs : debut de la partition du disque dur (secteurs, 4 octets) }
+ DB 0,0,0,0
 
  { Structure Liste des Listes pour fonction 52h - séparée de DataMOS }
 @DOSListOfLists:
@@ -4886,7 +5096,8 @@ Const
 ASM
  { Initialiser tous les verrous comme non utilisés }
  MOV CX,20                  { 20 entrées }
- MOV DI,OFFSET DataMOS.FileLocks
+ MOV DI,OFFSET Data.DataMOS
+ ADD DI,OFFSET DataMOS.FileLocks
 @InitLoop:
  MOV BYTE PTR [DI].FileLockEntry.InUse,0
  ADD DI,FileLockEntrySize
@@ -5467,6 +5678,20 @@ ASM
 END;
 
 { Lecture/ecriture d'un secteur logique : lecteur DOS (0=A:, 1=B:, 2=C:...) }
+Function GetPartOfs:LongInt;Assembler;
+ASM
+ MOV AX,WORD PTR [Data + FxBase + 100]
+ MOV DX,WORD PTR [Data + FxBase + 102]
+END;
+
+Procedure SetPartOfs(V:LongInt);Assembler;
+ASM
+ MOV AX,WORD PTR [V]
+ MOV WORD PTR [Data + FxBase + 100],AX
+ MOV AX,WORD PTR [V + 2]
+ MOV WORD PTR [Data + FxBase + 102],AX
+END;
+
 Function DiskTransfer(Op:Byte;Drive:Byte;Sector:LongInt;Buffer:Pointer):Boolean;
 Var
  BiosDrv: Byte;
@@ -5474,7 +5699,10 @@ Var
  Cyl,Tmp: LongInt;
 Begin
  DiskTransfer:=False;
- If Drive<2 Then BiosDrv:=Drive Else BiosDrv:=$80+(Drive-2);
+ If Drive<2 Then BiosDrv:=Drive Else Begin
+  BiosDrv:=$80+(Drive-2);
+  Sector:=Sector+GetPartOfs;
+ End;
  GetGeometry(BiosDrv,SPT,Heads);
  Sec:=Word(Sector Mod SPT)+1;
  Tmp:=Sector Div SPT;
