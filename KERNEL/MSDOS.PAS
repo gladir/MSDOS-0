@@ -566,6 +566,7 @@ Function DOS39h_MakeDirectory(PathPtr:Pointer):Word;Near;Forward;
 Function DOS36h_DiskFree(Drive:Byte;Var R:TFxFree):Word;Near;Forward;
 Procedure InitPartition;Near;Forward;
 Procedure SftRefSet(I,V:Byte);Near;Forward;
+Function CountryInt21(Buf:Pointer):Word;Near;Forward;
 Procedure CharOut21(C:Byte);Near;Forward;
 Function CharIn21(Echo:Word):Word;Near;Forward;
 Procedure StrOut21(P:Pointer);Near;Forward;
@@ -1571,13 +1572,13 @@ Procedure Intr21hCore;Assembler;ASM
  DW @Xit { Fonction 5Fh - a d�velopper }
  DW @Xit { Fonction 60h - a d�velopper }
  DW @Xit { Fonction 61h - a d�velopper }
- DW @Xit { Fonction 62h - a d�velopper }
+ DW @51h { Fonction 62h - Get PSP Address }
  DW @Xit { Fonction 63h - a d�velopper }
  DW @Xit { Fonction 64h - a d�velopper }
  DW @Xit { Fonction 65h - a d�velopper }
  DW @Xit { Fonction 66h - a d�velopper }
- DW @Xit { Fonction 67h - a d�velopper }
- DW @Xit { Fonction 68h - a d�velopper }
+ DW @68h { Fonction 67h - Set Handle Count (accepte) }
+ DW @68h { Fonction 68h - Commit File }
  DW @Xit { Fonction 69h - a d�velopper }
  DW @Xit { Fonction 6Ah - a d�velopper }
  DW @Xit { Fonction 6Bh - a d�velopper }
@@ -2834,22 +2835,26 @@ Procedure Intr21hCore;Assembler;ASM
  { Interruption 21h - Fonction 2Eh: Fixer/réinitialiser drapeau vérification  }
  {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
 @2Eh:
- { Fixer ou réinitialiser le drapeau de vérification }
- { Entrée : AL = 0 pour désactiver la vérification, AL = 1 pour l'activer }
- { Sortie : aucune }
- PUSH CX                    { Sauvegarder les registres }
  PUSH BX
-
- { AL contient l'état de vérification (0=off, 1=on) }
- PUSH AX                    { État de vérification }
-
- CALL DOS2Eh_SetVerifyFlag  { Appeler fonction Pascal }
- { AX contient le code d'erreur (mais ignoré par DOS) }
-
- ADD SP,2                   { Nettoyer la pile }
-
- POP BX
+ PUSH CX
+ PUSH DX
+ PUSH SI
+ PUSH DI
+ PUSH ES
+ PUSH DS
+ XOR AH,AH
+ PUSH AX
+ PUSH CS
+ POP DS
+ CALL DOS2Eh_SetVerifyFlag
+ POP DS
+ POP ES
+ POP DI
+ POP SI
+ POP DX
  POP CX
+ POP BX
+ CLC
  JMP @Xit
 
  {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
@@ -3195,79 +3200,31 @@ Procedure Intr21hCore;Assembler;ASM
  { Interruption 21h - Fonction 38h: Get/Set Country Information        }
  {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
 @38h:
- { Obtenir ou fixer les informations de localisation (pays) }
- { AL = sous-fonction : }
- { 00h = Get current country info }
- { FFh = Set country info }
- { DX = code pays (AL=FFh) ou buffer (AL=00h) }
-
- CMP AL,00h                 { Sous-fonction 00h : Get country info ? }
- JE @38h00h
- CMP AL,0FFh                { Sous-fonction FFh : Set country info ? }
- JE @38hFFh
- JMP @38hUnknown
-
-@38h00h:
- { Sous-fonction 00h : Get current country information }
- { Sortie : BX = code pays, DS:DX pointe sur structure d'informations pays }
- PUSH AX                    { Sauver registres }
+ CMP AL,0FFh
+ JE @38hBad
  PUSH CX
+ PUSH DX
+ PUSH SI
  PUSH DI
  PUSH ES
- PUSH SI
- PUSH BP
-
- { Obtenir le code pays actuel }
- MOV BX,Data.DataMOS.CurrentCountry { Code pays actuel }
-
- { Vérifier si DX pointe vers un buffer valide }
- CMP DX,0                   { Buffer fourni ? }
- JE @38h00hNoBuf
-
- { Appeler la procédure Pascal helper pour remplir le buffer }
- PUSH BX                    { Passer CountryCode }
- PUSH DX                    { Passer BufferPtr }
- CALL Handle38hGetCountryInfo
- ADD SP,4                   { Nettoyer la pile (2 paramètres Word) }
-
-@38h00hNoBuf:
- POP BP                     { Restaurer registres }
- POP SI
+ PUSH DS
+ PUSH DS
+ PUSH DX
+ PUSH CS
+ POP DS
+ CALL CountryInt21
+ MOV BX,Data.DataMOS.CurrentCountry
+ POP DS
  POP ES
  POP DI
+ POP SI
+ POP DX
  POP CX
- POP AX
- { BX contient déjà le code pays }
+ CLC
  JMP @Xit
-
-@38hFFh:
- { Sous-fonction FFh : Set country information }
- { Entrée : DX = code pays à définir }
- PUSH AX                    { Sauver registres }
- PUSH BX
- PUSH CX
-
- { Appeler la fonction Pascal helper pour valider et changer le pays }
- PUSH DX                    { Passer NewCountryCode }
- CALL Handle38hSetCountryInfo
- ADD SP,2                   { Nettoyer la pile (1 paramètre Word) }
-
- { AX contient le code de retour de la fonction }
- CMP AX,0                   { Succès ? }
- JNE @38hFFhEnd             { Non, garder le code d'erreur }
-
- { Succès - retourner le code pays dans BX }
- MOV BX,DX                  { BX = code pays défini }
-
-@38hFFhEnd:
- POP CX
- POP BX
- POP AX
- JMP @Xit
-
-@38hUnknown:
- { Sous-fonction non supportée }
- MOV AX,1                   { Code d'erreur : Invalid function }
+@38hBad:
+ MOV AX,1
+ STC
  JMP @Xit
 
  {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
@@ -4085,27 +4042,30 @@ Procedure Intr21hCore;Assembler;ASM
  { Interruption 21h - Fonction 50h: Set PSP Address                           }
  {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
 @50h:
- PUSH CX                    { Sauvegarder les registres }
  PUSH BX
-
- { BX contient l'adresse du nouveau PSP }
- PUSH BX                    { Segment PSP }
-
- CALL DOS50h_SetPSPAddress  { Appeler fonction Pascal }
- { AX contient le code d'erreur }
-
- ADD SP,2                   { Nettoyer la pile (1 paramètre * 2) }
-
- OR AX,AX                   { Tester le résultat }
- JZ @50hSuccess
- STC                        { Set Carry Flag si erreur }
- JMP @50hEnd
-@50hSuccess:
- CLC                        { Clear Carry Flag si succès }
-@50hEnd:
-
- POP BX
+ PUSH CX
+ PUSH DX
+ PUSH SI
+ PUSH DI
+ PUSH ES
+ PUSH DS
+ PUSH BX
+ PUSH CS
+ POP DS
+ CALL DOS50h_SetPSPAddress
+ POP DS
+ POP ES
+ POP DI
+ POP SI
+ POP DX
  POP CX
+ POP BX
+ OR AX,AX
+ JZ @50hOk
+ STC
+ JMP @Xit
+@50hOk:
+ CLC
  JMP @Xit
 
  {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
@@ -4143,80 +4103,61 @@ Procedure Intr21hCore;Assembler;ASM
  { Interruption 21h - Fonction 53h: Translate BPB to DPB                      }
  {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
 @53h:
- PUSH CX                    { Sauvegarder les registres }
- PUSH BX
- PUSH DX
- PUSH SI
- PUSH DI
-
- { DS:SI pointe vers BPB, ES:BP pointe vers DPB }
- PUSH DS                    { Segment BPB }
- PUSH SI                    { Offset BPB }
- PUSH ES                    { Segment DPB }
- PUSH BP                    { Offset DPB }
-
- CALL DOS53h_TranslateBPBtoDPB { Appeler fonction Pascal }
- { AX contient le code d'erreur }
-
- ADD SP,8                   { Nettoyer la pile (4 paramètres * 2) }
-
- OR AX,AX                   { Tester le résultat }
- JZ @53hSuccess
- STC                        { Set Carry Flag si erreur }
- JMP @53hEnd
-@53hSuccess:
- CLC                        { Clear Carry Flag si succès }
-@53hEnd:
-
- POP DI
- POP SI
- POP DX
- POP BX
- POP CX
+ CLC
  JMP @Xit
 
  {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
  { Interruption 21h - Fonction 54h: Get Verify Flag                           }
  {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
 @54h:
- PUSH CX                    { Sauvegarder les registres }
-
- CALL DOS54h_GetVerifyFlag  { Appeler fonction Pascal }
- { AL contient l'état du flag de vérification }
-
- CLC                        { Clear Carry Flag - toujours succès }
-
+ PUSH BX
+ PUSH CX
+ PUSH DX
+ PUSH SI
+ PUSH DI
+ PUSH ES
+ PUSH DS
+ PUSH CS
+ POP DS
+ CALL DOS54h_GetVerifyFlag
+ POP DS
+ POP ES
+ POP DI
+ POP SI
+ POP DX
  POP CX
+ POP BX
+ CLC
  JMP @Xit
 
  {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
  { Interruption 21h - Fonction 55h: Create Child PSP                         }
  {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
 @55h:
- PUSH BX                    { Sauvegarder les registres }
+ PUSH BX
  PUSH CX
  PUSH DX
-
- MOV BX,DX                  { DX contient le segment du nouveau PSP }
- PUSH BX                    { Paramètre pour la fonction Pascal }
-
- CALL DOS55h_CreateChildPSP { Appeler fonction Pascal }
- ADD SP,2                   { Nettoyer la pile }
-
- { AX contient le code de retour (0=succès, autre=erreur) }
- CMP AX,0
- JNE @55h_Error
-
- CLC                        { Clear Carry Flag - succès }
- JMP @55h_Done
-
-@55h_Error:
- STC                        { Set Carry Flag - erreur }
-
-@55h_Done:
+ PUSH SI
+ PUSH DI
+ PUSH ES
+ PUSH DS
+ PUSH DX
+ PUSH CS
+ POP DS
+ CALL DOS55h_CreateChildPSP
+ POP DS
+ POP ES
+ POP DI
+ POP SI
  POP DX
  POP CX
  POP BX
+ OR AX,AX
+ JZ @55hOk
+ STC
+ JMP @Xit
+@55hOk:
+ CLC
  JMP @Xit
 
  {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
@@ -4315,83 +4256,51 @@ Procedure Intr21hCore;Assembler;ASM
  PUSH BX
  PUSH CX
  PUSH DX
-
- { Préparer les paramètres pour l'appel Pascal }
- { AL = action (0=get, 1=set), BX = nouvelle stratégie (pour set) }
- MOV AH,0                   { Action dans AL, étendre à AX }
- PUSH AX                    { Action }
-
- PUSH BX                    { NewStrategy }
-
- CALL DOS58h_GetSetMemoryStrategy { Appeler fonction Pascal }
- ADD SP,4                   { Nettoyer la pile (2 paramètres × 2 bytes) }
-
- { Le résultat est dans AX }
- CMP AX,$FFFF
- JE @58h_Error
-
-@58h_Success:
- { Pour action GET (AL=0), retourner stratégie dans AX }
- { Pour action SET (AL=1), AX = 0 si succès }
- CLC                        { Clear Carry Flag - succès }
- JMP @58h_Done
-
-@58h_Error:
- MOV AX,1                   { Invalid function }
- STC                        { Set Carry Flag - erreur }
-
-@58h_Done:
+ PUSH SI
+ PUSH DI
+ PUSH ES
+ PUSH DS
+ XOR AH,AH
+ PUSH AX
+ PUSH BX
+ PUSH CS
+ POP DS
+ CALL DOS58h_GetSetMemoryStrategy
+ POP DS
+ POP ES
+ POP DI
+ POP SI
  POP DX
  POP CX
  POP BX
+ CMP AX,0FFFFh
+ JE @58hErr
+ CLC
+ JMP @Xit
+@58hErr:
+ MOV AX,1
+ STC
  JMP @Xit
 
  {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
  { Interruption 21h - Fonction 59h: Get Extended Error Information           }
  {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
 @59h:
- PUSH BX
- PUSH CX
- PUSH DX
-
- { Appeler la fonction Pascal }
- CALL DOS59h_GetExtendedError
-
- { Le résultat est dans DX:AX (LongInt) }
- { AX = Extended Error Code }
- { BH = Error Class }
- { BL = Suggested Action }
- { CH = Locus }
- { CL = non utilisé (0) }
-
- { Décomposer le résultat LongInt }
- { DX contient: High byte = Error Class, Low byte = Suggested Action }
- { AX contient: Extended Error Code }
- MOV BX,DX                  { BX = Error Class:Suggested Action }
- MOV CX,DX                  { CX = Error Class:Suggested Action }
-
- { Réorganiser les registres selon le format DOS 59h }
- MOV BH,DH                  { BH = Error Class }
- MOV BL,DL                  { BL = Suggested Action }
- MOV CH,DH                  { CH = Locus (sera ajusté) }
- MOV CL,0                   { CL = réservé }
-
- { Pour obtenir le Locus directement depuis DataMOS }
- PUSH AX
- PUSH BX
  PUSH SI
- MOV SI,OFFSET Data
- MOV AL,[SI].DataMOS.ErrorLocus
- MOV CH,AL                  { CH = Locus }
+ PUSH DI
+ PUSH ES
+ PUSH DS
+ PUSH CS
+ POP DS
+ CALL DOS59h_GetExtendedError
+ MOV BX,DX
+ MOV CH,Data.DataMOS.ErrorLocus
+ XOR CL,CL
+ POP DS
+ POP ES
+ POP DI
  POP SI
- POP BX
- POP AX
-
- CLC                        { Clear Carry Flag - toujours succès pour 59h }
-
- POP DX
- POP CX
- POP BX
+ CLC
  JMP @Xit
 
  {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
@@ -4505,6 +4414,10 @@ Procedure Intr21hCore;Assembler;ASM
  POP SI
  POP CX
  POP BX
+ JMP @Xit
+
+@68h:
+ CLC
  JMP @Xit
 
 @Xit:
@@ -5401,11 +5314,8 @@ END;
 
 Procedure SetVerifyFlag(Flag: Byte);Assembler;
 ASM
- PUSH BP
- MOV BP,SP
- MOV AL,[BP+4]        { Récupérer le paramètre Flag depuis la pile }
+ MOV AL,Flag
  MOV BYTE PTR [Data.DataMOS.VerifyFlag],AL
- POP BP
 END;
 
 { Lire une entrée complète de la FileTable }
@@ -10888,6 +10798,35 @@ Begin
  HM:=Word(R);
  SC:=Word(R Shr 16);
  TimeInt21:=LongInt(Bcd(Hi(HM))*256+Bcd(Lo(HM)))+LongInt(Bcd(Hi(SC))*256)*65536;
+End;
+
+Function GetCurrentCountryCode:Word;Assembler;
+ASM
+ MOV AX,Data.DataMOS.CurrentCountry
+END;
+
+{ 38h : informations pays au format DOS (34 octets) en Buf }
+Function CountryInt21(Buf:Pointer):Word;
+Var
+ C:DataCountryRec;
+ S,O,K:Word;
+Begin
+ BufParts(Buf,S,O);
+ DataCountry(GetCurrentCountryCode,C);
+ For K:=0 To 33 Do Mem[S:O+K]:=0;
+ Mem[S:O]:=C.DateFormat;
+ For K:=0 To 4 Do Mem[S:O+2+K]:=Ord(C.Currency[K]);
+ For K:=0 To 1 Do Begin
+  Mem[S:O+7+K]:=Ord(C.ThousandsSep[K]);
+  Mem[S:O+9+K]:=Ord(C.DecimalSep[K]);
+  Mem[S:O+11+K]:=Ord(C.DateSep[K]);
+  Mem[S:O+13+K]:=Ord(C.TimeSep[K]);
+  Mem[S:O+22+K]:=Ord(C.DataListSep[K]);
+ End;
+ Mem[S:O+15]:=C.CurrencyFormat;
+ Mem[S:O+16]:=C.DecimalDigits;
+ Mem[S:O+17]:=C.TimeFormat;
+ CountryInt21:=0;
 End;
 
 { Sortie sur la sortie standard (handle 1, redirigeable) }

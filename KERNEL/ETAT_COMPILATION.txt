@@ -46,6 +46,7 @@ Tests (tous dans KERNEL/ ou reproduits par /tmp)
 * TESTH.PAS : handles, DUP/FORCEDUP, 43h, 44h, 57h, 5Ah, 5Bh, 5Ch, FCB (47 verifications) - a executer sous le noyau
   (pauses : taper "go" six fois). TSTRESS.PAS : fichiers de 200 Ko, ajout, Truncate, trou, 120 fichiers dans un
   repertoire, suppression, renommage, RD/MD, texte. TUP.PAS : filtre stdin->stdout pour les tuyaux et redirections.
+* TDOS.PAS : 30h 2Ah 2Ch 38h 54h/2Eh 58h 59h 62h 51h/50h 34h 19h 36h 48h/49h/4Ah 25h/35h 0Bh 67h 68h. TVER.PAS : 2Eh/54h.
 * DOSBox donne les memes resultats que le noyau pour TSTRESS (sauf constantes 30*4096 : voir TPC).
 * fatchk.py (outil de test local) verifie la coherence d'un volume FAT16 : chaines, clusters partages ou perdus,
   FAT1 = FAT2, '.' et '..' ; aucune erreur apres les scenarios.
