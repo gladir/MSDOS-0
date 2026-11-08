@@ -6973,6 +6973,57 @@ Begin
  WriteSector(Drive,S,@Buf);
 End;
 
+{ Ecrit Gap octets nuls a la fin du fichier (position courante = taille) }
+Function FxWriteData(H:Word;Buffer:Pointer;Count:Word;Var Written:Word):Word;Forward;
+
+Procedure FxFillGap(H:Word;Gap:LongInt);
+Var Z:Array[0..511] of Byte;
+ N,W:Word;
+Begin
+ FillChar(Z,512,0);
+ While Gap>0 Do Begin
+  If Gap>512 Then N:=512 Else N:=Word(Gap);
+  FxWriteData(H,@Z,N,W);
+  If W=0 Then Exit;
+  Dec(Gap,W);
+ End;
+End;
+
+{ 40h avec 0 octet : le fichier est tronque (ou prolonge) a la position courante }
+Function FxTruncate(H:Word):Word;
+Var V:TFxVol;
+ Pos,Size:LongInt;
+ First,Cur,Off,Nx:Word;
+Begin
+ FxTruncate:=0;
+ Pos:=GetFileTableCurrentPos(H);
+ Size:=GetFileTableFileSize(H);
+ If Pos=Size Then Exit;
+ If Pos>Size Then Begin
+  SetFileTableCurrentPos(H,Size);
+  FxFillGap(H,Pos-Size);
+  Exit;
+ End;
+ If Not FxVol(GetFileTableDrive(H),V) Then Begin
+  FxTruncate:=5;
+  Exit;
+ End;
+ First:=GetFileTableFirstCluster(H);
+ Cur:=GetFileTableCurrentCluster(H);
+ Off:=GetFileTableClusterOffset(H);
+ If Pos=0 Then Begin
+  If First>=2 Then FxFreeChain(V,First);
+  SetFileTableFirstCluster(H,0);
+  SetFileTableCurrentCluster(H,0);
+  SetFileTableClusterOffset(H,0);
+ End Else If Cur>=2 Then Begin
+  Nx:=FxGet(V,Cur);
+  FxSet(V,Cur,$FFFF);
+  If (Nx>=2) And (Nx<>$FFFF) Then FxFreeChain(V,Nx);
+ End;
+ SetFileTableFileSize(H,Pos);
+End;
+
 Function FxWriteData(H:Word;Buffer:Pointer;Count:Word;Var Written:Word):Word;
 Var
  V:TFxVol;
@@ -6994,12 +7045,28 @@ Begin
   MOV BufSeg,ES
   MOV BufOfs,DI
  END;
+ If Count=0 Then Begin
+  FxWriteData:=FxTruncate(H);
+  Exit;
+ End;
+ Pos:=GetFileTableCurrentPos(H);
+ Size:=GetFileTableFileSize(H);
+ If Pos>Size Then Begin
+  SetFileTableCurrentPos(H,Size);
+  FxFillGap(H,Pos-Size);
+ End;
  First:=GetFileTableFirstCluster(H);
  Cur:=GetFileTableCurrentCluster(H);
  Off:=GetFileTableClusterOffset(H);
  Pos:=GetFileTableCurrentPos(H);
  Size:=GetFileTableFileSize(H);
  CSize:=V.SPC*512;
+ If (First>=2) And ((Cur=$FFFF) Or (Cur<2)) Then Begin
+  { apres une lecture jusqu'a la fin : revenir sur le dernier cluster de la chaine }
+  Cur:=First;
+  While (FxGet(V,Cur)<>$FFFF) And (FxGet(V,Cur)>=2) Do Cur:=FxGet(V,Cur);
+  Off:=CSize;
+ End;
  Err:=0;
  While (Count>0) And (Err=0) Do Begin
   If First=0 Then Begin
@@ -9358,84 +9425,61 @@ End;
 { Fonction principale 42h - Seek File }
 Function DOS42h_SeekFile(Handle:Word;OffsetHi,OffsetLo:Word;Method:Byte):LongInt;
 Var
- FileEntry: FileTableEntry;
- NewPosition: LongInt;
- Offset: LongInt;
- TargetCluster: Word;
- ClusterOffset: Word;
- Drive: Byte;
- BootSec: BootSectorRec;
+ V:TFxVol;
+ P,Q,Size:LongInt;
+ First,Cur,Off,CSize,N:Word;
 Begin
- DOS42h_SeekFile:=$FFFFFFFF; { Erreur par défaut }
-
- { Vérifier la validité du handle }
- If Handle >= 20 Then Exit;
-
- If Not GetFileTableEntry(Handle, FileEntry) Then Exit;
-
- { Vérifier si le handle est utilisé }
- If Not FileEntry.InUse Then Exit;
-
- { Construire l'offset 32-bit }
- Offset:=(LongInt(OffsetHi) shl 16) or OffsetLo;
-
- { Calculer la nouvelle position selon la méthode }
+ DOS42h_SeekFile:=$FFFFFFFF;
+ If (Handle>=20) Or Not GetFileTableInUse(Handle) Then Begin
+  SetStandardError(6);
+  Exit;
+ End;
+ Size:=GetFileTableFileSize(Handle);
+ P:=(LongInt(OffsetHi) Shl 16) Or OffsetLo;
  Case Method Of
-  0: NewPosition:=Offset;                        { Depuis le début }
-  1: NewPosition:=FileEntry.CurrentPos + Offset; { Depuis position courante }
-  2: NewPosition:=FileEntry.FileSize + Offset;   { Depuis la fin }
-  Else Exit; { Méthode invalide }
- End;
-
- { Vérifier que la position est valide }
- If NewPosition < 0 Then Exit;
-
- { Pour les fichiers, on peut seek au-delà de la fin }
- { Mais on ne peut pas lire/écrire au-delà sans étendre le fichier }
-
- Drive:=FileEntry.Drive; { index 0-based, tel que stocké }
-
- { Lire boot sector }
- If Not ReadBootSector(Drive, BootSec) Then Exit;
-
- { Si la nouvelle position est dans le fichier, calculer le cluster }
- If NewPosition <= FileEntry.FileSize Then Begin
-  If NewPosition = 0 Then Begin
-   { Position au début du fichier }
-   FileEntry.CurrentCluster:=FileEntry.FirstCluster;
-   FileEntry.ClusterOffset:=0;
-  End
+  0:;
+  1:P:=P+GetFileTableCurrentPos(Handle);
+  2:P:=P+Size;
   Else Begin
-   { Calculer le cluster et l'offset }
-   If Not CalculateClusterFromPosition(Drive, BootSec,
-           FileEntry.FirstCluster, NewPosition, TargetCluster,
-           ClusterOffset) Then Exit;
-   FileEntry.CurrentCluster:=TargetCluster;
-   FileEntry.ClusterOffset:=ClusterOffset;
-  End;
- End
- Else Begin
-  { Position au-delà de la fin du fichier - utiliser le dernier cluster }
-  If FileEntry.FileSize = 0 Then Begin
-   FileEntry.CurrentCluster:=FileEntry.FirstCluster;
-   FileEntry.ClusterOffset:=0;
-  End
-  Else Begin
-   If Not CalculateClusterFromPosition(Drive, BootSec,
-           FileEntry.FirstCluster, FileEntry.FileSize - 1,
-           TargetCluster, ClusterOffset) Then Exit;
-   FileEntry.CurrentCluster:=TargetCluster;
-   { L'offset sera géré lors de la prochaine opération de lecture/écriture }
+   SetStandardError(1);
+   Exit;
   End;
  End;
-
- { Mettre à jour la position courante }
- FileEntry.CurrentPos:=NewPosition;
-
- { Sauvegarder l'entrée modifiée }
- If Not SetFileTableEntry(Handle, FileEntry) Then Exit;
-
- DOS42h_SeekFile:=NewPosition;
+ If P<0 Then Begin
+  SetStandardError(131);
+  Exit;
+ End;
+ First:=GetFileTableFirstCluster(Handle);
+ Cur:=First;
+ Off:=0;
+ If First>=2 Then Begin
+  If Not FxVol(GetFileTableDrive(Handle),V) Then Begin
+   SetStandardError(5);
+   Exit;
+  End;
+  CSize:=V.SPC*512;
+  { cluster qui contient la position (au plus la fin du fichier ; plus loin, un trou sera comble a l'ecriture) }
+  Q:=P;
+  If Q>Size Then Q:=Size;
+  N:=Word(Q Div CSize);
+  Off:=Word(Q Mod CSize);
+  If (Off=0) And (N>0) Then Begin
+   Dec(N);
+   Off:=CSize;
+  End;
+  While N>0 Do Begin
+   Cur:=FxGet(V,Cur);
+   If (Cur<2) Or (Cur=$FFFF) Then Begin
+    SetStandardError(5);
+    Exit;
+   End;
+   Dec(N);
+  End;
+ End;
+ SetFileTableCurrentCluster(Handle,Cur);
+ SetFileTableClusterOffset(Handle,Off);
+ SetFileTableCurrentPos(Handle,P);
+ DOS42h_SeekFile:=P;
 End;
 
 { Obtenir les attributs d'un fichier }
