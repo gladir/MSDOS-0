@@ -327,6 +327,7 @@ Type
   UMBLinkState:Word;        { État de liaison des UMB }
   { Table des verrous de fichiers }
   FileLocks: Array[0..19] of FileLockEntry; { Max 20 verrous simultanés }
+  PendingLF: Byte;          { console : LF a rendre apres un CR lu caractere par caractere }
  End;
 
  { Structure pour les informations pays }
@@ -617,6 +618,16 @@ Function DOS4Ah_ModifyMemory(BlockSegment:Word;NewSize:Word):Word;Near;Forward;
 Function DOS4Bh_ExecProgram(ExecType:Byte;ProgramPath:String;ParamBlock:ExecParameterBlock):Word;Near;Forward;
 Function DOS4Ch_TerminateProgram(ExitCode:Byte):Word;Near;Forward;
 Function ExecFromInt21(Mode:Word;NamePtr:Pointer;BlockPtr:Pointer):Word;Near;Forward;
+Function ReadInt21(Handle:Word;Buf:Pointer;Count:Word;Var Got:Word):Word;Near;Forward;
+Function WriteInt21(Handle:Word;Buf:Pointer;Count:Word;Var Got:Word):Word;Near;Forward;
+Function AllocInt21(Size:Word):Word;Near;Forward;
+Function FindFirstInt21(NamePtr:Pointer;Attr:Word):Word;Near;Forward;
+Function FindNextInt21:Word;Near;Forward;
+Function LargestFreeBlock:Word;Near;Forward;
+Procedure SetDTA(S,O:Word);Near;Forward;
+Function PendingLFSet:Boolean;Near;Forward;
+Procedure ClearPendingLF;Near;Forward;
+Procedure SetPendingLF;Near;Forward;
 {$IFDEF KDEBUG}
 Procedure DbgW(Tag:Char;W:Word);Near;Forward;
 {$ENDIF}
@@ -933,6 +944,7 @@ Procedure Data;Assembler;ASM
  DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0
  { FileLock[19] }
  DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ DB 0          { PendingLF }
 
  { Structure Liste des Listes pour fonction 52h - séparée de DataMOS }
 @DOSListOfLists:
@@ -1126,12 +1138,20 @@ Begin
 End;
 
 Procedure Intr21h;Assembler;ASM
+ STI
  INC Data.DataMOS.InDos
- MOV BL,AH
 @CallFunc:
+ { saut vers la fonction AH en conservant BX (parametre des fonctions) }
+ PUSH BX
+ MOV BL,AH
  XOR BH,BH
  SHL BX,1
- JMP @Label.Word[BX]
+ MOV BX,@Label.Word[BX]
+ PUSH BP
+ MOV BP,SP
+ XCHG BX,[BP+2]
+ POP BP
+ DB 0C3h               { RET proche vers la fonction }
 @Label:
  DW @00h { Fonction 00h - Terminer le programme }
  DW @01h { Fonction 01h - Entree de caractere avec echo }
@@ -2891,334 +2911,291 @@ Procedure Intr21h;Assembler;ASM
  { Interruption 21h - Fonction 3Ah: Remove Directory (supprimer répertoire)   }
  {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
 @3Ah:
- { Entrée: DS:DX pointe sur le chemin ASCIIZ }
- { Sortie: AX = code d'erreur (0 = succès) }
- { Carry Flag: 0 = succès, 1 = erreur }
-
- PUSH CX                    { Sauver registres }
+ PUSH BX
+ PUSH CX
  PUSH SI
  PUSH DI
-
- MOV SI,DX                  { SI pointe sur le chemin }
-
- { Appeler la fonction Pascal pour supprimer le répertoire }
- PUSH DS                    { Paramètre: segment chaîne }
- PUSH SI                    { Paramètre: offset chaîne }
+ PUSH DS
+ PUSH DS
+ PUSH DX
+ PUSH CS
+ POP DS
  CALL DOS3Ah_RemoveDirectory
- ADD SP,4                   { Nettoyer pile (2 paramètres) }
-
- { AX contient le résultat (0 = succès, autre = code erreur) }
- OR AX,AX                   { Tester le résultat }
- JZ @3AhSuccess             { Si 0, succès }
-
- { Erreur }
- STC                        { Set Carry Flag }
+ POP DS
+ OR AX,AX
+ JZ @3AhOk
+ STC
  JMP @3AhEnd
-
-@3AhSuccess:
- CLC                        { Clear Carry Flag }
-
+@3AhOk:
+ CLC
 @3AhEnd:
  POP DI
  POP SI
  POP CX
+ POP BX
  JMP @Xit
 
  {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
  { Interruption 21h - Fonction 3Bh: Change Directory (changer répertoire)     }
  {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
 @3Bh:
- { Entrée: DS:DX pointe sur le chemin ASCIIZ }
- { Sortie: AX = code d'erreur (0 = succès) }
- { Carry Flag: 0 = succès, 1 = erreur }
-
- PUSH CX                    { Sauver registres }
+ PUSH BX
+ PUSH CX
  PUSH SI
  PUSH DI
-
- MOV SI,DX                  { SI pointe sur le chemin }
-
- { Appeler la fonction Pascal pour changer de répertoire }
- PUSH DS                    { Paramètre: segment chaîne }
- PUSH SI                    { Paramètre: offset chaîne }
+ PUSH DS
+ PUSH DS
+ PUSH DX
+ PUSH CS
+ POP DS
  CALL DOS3Bh_ChangeDirectory
- ADD SP,4                   { Nettoyer pile (2 paramètres) }
-
- { AX contient le résultat (0 = succès, autre = code erreur) }
- OR AX,AX                   { Tester le résultat }
- JZ @3BhSuccess             { Si 0, succès }
-
- { Erreur }
- STC                        { Set Carry Flag }
+ POP DS
+ OR AX,AX
+ JZ @3BhOk
+ STC
  JMP @3BhEnd
-
-@3BhSuccess:
- CLC                        { Clear Carry Flag }
-
+@3BhOk:
+ CLC
 @3BhEnd:
  POP DI
  POP SI
  POP CX
+ POP BX
  JMP @Xit
 
  {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
  { Interruption 21h - Fonction 3Ch: Create or Open File                        }
  {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
 @3Ch:
- PUSH CX                    { Sauvegarder les registres }
+ PUSH BX
+ PUSH CX
  PUSH SI
  PUSH DI
-
- { Paramètres: DS:DX = pointeur vers nom fichier ASCIIZ, CX = attributs }
- PUSH DX                    { Pointeur fichier (offset) }
- PUSH DS                    { Pointeur fichier (segment) }
-
- CALL DOS3Ch_CreateOpenFile  { Appeler fonction Pascal }
- ADD SP,4                   { Nettoyer pile (2 paramètres) }
-
- { AX contient le résultat : si succès = handle, si erreur = $FFFF }
- CMP AX,0FFFFh              { Vérifier si erreur }
- JE @3ChError               { Si erreur }
-
- { Succès - AX contient le handle de fichier }
- CLC                        { Clear Carry Flag }
+ PUSH DS
+ PUSH DS
+ PUSH DX
+ PUSH CS
+ POP DS
+ CALL DOS3Ch_CreateOpenFile
+ POP DS
+ CMP AX,0FFFFh
+ JNE @3ChOk
+ PUSH DS
+ PUSH CS
+ POP DS
+ CALL GetExtendedErrorCode
+ POP DS
+ STC
  JMP @3ChEnd
-
-@3ChError:
- { En cas d'erreur, mettre code d'erreur standard }
- MOV AX,2                   { File not found }
- STC                        { Set Carry Flag }
-
+@3ChOk:
+ CLC
 @3ChEnd:
  POP DI
  POP SI
  POP CX
+ POP BX
  JMP @Xit
 
  {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
  { Interruption 21h - Fonction 3Dh: Open File                                  }
  {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
 @3Dh:
- PUSH CX                    { Sauvegarder les registres }
+ PUSH BX
+ PUSH CX
  PUSH SI
  PUSH DI
-
- { Paramètres: DS:DX = pointeur vers nom fichier ASCIIZ, AL = mode d'accès }
- MOV AH,0                   { Étendre AL en AX pour mode d'accès }
- PUSH AX                    { Mode d'accès }
- PUSH DX                    { Pointeur fichier (offset) }
- PUSH DS                    { Pointeur fichier (segment) }
-
- CALL DOS3Dh_OpenFile       { Appeler fonction Pascal }
- ADD SP,6                   { Nettoyer pile (3 mots = 6 octets) }
-
- { AX contient le résultat : si succès = handle, si erreur = $FFFF }
- CMP AX,0FFFFh              { Vérifier si erreur }
- JE @3DhError               { Si erreur }
-
- { Succès - AX contient le handle de fichier }
- CLC                        { Clear Carry Flag }
+ PUSH DS
+ PUSH DS
+ PUSH DX
+ XOR AH,AH
+ PUSH AX
+ PUSH CS
+ POP DS
+ CALL DOS3Dh_OpenFile
+ POP DS
+ CMP AX,0FFFFh
+ JNE @3DhOk
+ PUSH DS
+ PUSH CS
+ POP DS
+ CALL GetExtendedErrorCode
+ POP DS
+ STC
  JMP @3DhEnd
-
-@3DhError:
- { En cas d'erreur, mettre code d'erreur standard }
- MOV AX,2                   { File not found }
- STC                        { Set Carry Flag }
-
+@3DhOk:
+ CLC
 @3DhEnd:
  POP DI
  POP SI
  POP CX
+ POP BX
  JMP @Xit
 
  {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
  { Interruption 21h - Fonction 3Eh: Close File                                 }
  {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
 @3Eh:
- PUSH CX                    { Sauvegarder les registres }
+ PUSH BX
+ PUSH CX
  PUSH SI
  PUSH DI
-
- { Paramètre: BX = handle de fichier }
- PUSH BX                    { Handle de fichier }
-
- CALL DOS3Eh_CloseFile      { Appeler fonction Pascal }
- ADD SP,2                   { Nettoyer pile (1 mot = 2 octets) }
-
- { AX contient le résultat : 0 = succès, autre = erreur }
- CMP AX,0                   { Vérifier si succès }
- JE @3EhSuccess             { Si succès }
-
- { Erreur }
- MOV AX,6                   { Invalid handle }
- STC                        { Set Carry Flag }
+ PUSH DS
+ PUSH BX
+ PUSH CS
+ POP DS
+ CALL DOS3Eh_CloseFile
+ POP DS
+ OR AX,AX
+ JZ @3EhOk
+ STC
  JMP @3EhEnd
-
-@3EhSuccess:
- { Succès }
- CLC                        { Clear Carry Flag }
-
+@3EhOk:
+ CLC
 @3EhEnd:
  POP DI
  POP SI
  POP CX
+ POP BX
  JMP @Xit
 
  {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
  { Interruption 21h - Fonction 3Fh: Read File                                  }
  {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
 @3Fh:
- PUSH CX                    { Sauvegarder les registres }
+ PUSH BX
+ PUSH CX
  PUSH SI
  PUSH DI
- PUSH AX                    { Sauvegarder AX aussi }
-
- { Paramètres: BX = handle, CX = nombre d'octets à lire, DS:DX = buffer }
- SUB SP,2                   { Réserver place pour BytesRead }
- MOV AX,SP                  { AX = pointeur vers BytesRead }
- PUSH AX                    { Pointeur vers BytesRead }
- PUSH CX                    { Nombre d'octets à lire }
- PUSH DX                    { Buffer (offset) }
- PUSH DS                    { Buffer (segment) }
- PUSH BX                    { Handle de fichier }
-
- CALL DOS3Fh_ReadFile       { Appeler fonction Pascal }
- ADD SP,10                  { Nettoyer pile (5 mots = 10 octets) }
-
- { Le résultat de DOS3Fh_ReadFile est dans AX (0=succès, autre=erreur) }
- CMP AX,0                   { Vérifier si erreur }
- JNE @3FhError              { Si erreur }
-
- { Succès - récupérer le nombre d'octets lus }
- POP AX                     { BytesRead de la pile }
- CLC                        { Clear Carry Flag }
+ PUSH DS
+ XOR AX,AX
+ PUSH AX
+ MOV SI,SP
+ PUSH BX
+ PUSH DS
+ PUSH DX
+ PUSH CX
+ PUSH SS
+ PUSH SI
+ PUSH CS
+ POP DS
+ CALL ReadInt21
+ POP BX
+ POP DS
+ OR AX,AX
+ JZ @3FhOk
+ STC
  JMP @3FhEnd
-
-@3FhError:
- ADD SP,2                   { Nettoyer BytesRead de la pile }
- MOV AX,6                   { Invalid handle par défaut }
- STC                        { Set Carry Flag }
-
+@3FhOk:
+ MOV AX,BX
+ CLC
 @3FhEnd:
- POP SI                     { Restaurer AX original (ignoré) }
  POP DI
  POP SI
  POP CX
+ POP BX
  JMP @Xit
 
  {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
  { Interruption 21h - Fonction 40h: Write File                                 }
  {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
 @40h:
- PUSH CX                    { Sauvegarder les registres }
+ PUSH BX
+ PUSH CX
  PUSH SI
  PUSH DI
- PUSH AX                    { Sauvegarder AX aussi }
-
- { Paramètres: BX = handle, CX = nombre d'octets à écrire, DS:DX = buffer }
- SUB SP,2                   { Réserver place pour BytesWritten }
- MOV AX,SP                  { AX = pointeur vers BytesWritten }
- PUSH AX                    { Pointeur vers BytesWritten }
- PUSH CX                    { Nombre d'octets à écrire }
- PUSH DX                    { Buffer (offset) }
- PUSH DS                    { Buffer (segment) }
- PUSH BX                    { Handle de fichier }
-
- CALL DOS40h_WriteFile      { Appeler fonction Pascal }
- ADD SP,10                  { Nettoyer pile (5 mots = 10 octets) }
-
- { Le résultat de DOS40h_WriteFile est dans AX (0=succès, autre=erreur) }
- CMP AX,0                   { Vérifier si erreur }
- JNE @40hError              { Si erreur }
-
- { Succès - récupérer le nombre d'octets écrits }
- POP AX                     { BytesWritten de la pile }
- CLC                        { Clear Carry Flag }
+ PUSH DS
+ XOR AX,AX
+ PUSH AX
+ MOV SI,SP
+ PUSH BX
+ PUSH DS
+ PUSH DX
+ PUSH CX
+ PUSH SS
+ PUSH SI
+ PUSH CS
+ POP DS
+ CALL WriteInt21
+ POP BX
+ POP DS
+ OR AX,AX
+ JZ @40hOk
+ STC
  JMP @40hEnd
-
-@40hError:
- ADD SP,2                   { Nettoyer BytesWritten de la pile }
- MOV AX,6                   { Invalid handle par défaut }
- STC                        { Set Carry Flag }
-
+@40hOk:
+ MOV AX,BX
+ CLC
 @40hEnd:
- POP SI                     { Restaurer AX original (ignoré) }
  POP DI
  POP SI
  POP CX
+ POP BX
  JMP @Xit
 
  {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
  { Interruption 21h - Fonction 41h: Delete File                                }
  {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
 @41h:
- PUSH CX                    { Sauvegarder les registres }
+ PUSH BX
+ PUSH CX
  PUSH SI
  PUSH DI
-
- { Paramètres: DS:DX = pointeur vers nom fichier ASCIIZ }
- PUSH DX                    { Pointeur fichier (offset) }
- PUSH DS                    { Pointeur fichier (segment) }
-
- CALL DOS41h_DeleteFile     { Appeler fonction Pascal }
- ADD SP,4                   { Nettoyer pile (2 mots = 4 octets) }
-
- { AX contient le résultat : 0 = succès, autre = erreur }
- CMP AX,0                   { Vérifier si succès }
- JE @41hSuccess             { Si succès }
-
- { Erreur }
- MOV AX,2                   { File not found par défaut }
- STC                        { Set Carry Flag }
+ PUSH DS
+ PUSH DS
+ PUSH DX
+ PUSH CS
+ POP DS
+ CALL DOS41h_DeleteFile
+ POP DS
+ OR AX,AX
+ JZ @41hOk
+ STC
  JMP @41hEnd
-
-@41hSuccess:
- { Succès }
- CLC                        { Clear Carry Flag }
-
+@41hOk:
+ CLC
 @41hEnd:
  POP DI
  POP SI
  POP CX
+ POP BX
  JMP @Xit
 
  {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
  { Interruption 21h - Fonction 42h: Seek File                                  }
  {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
 @42h:
- PUSH CX                    { Sauvegarder les registres }
+ PUSH BX
+ PUSH CX
  PUSH SI
  PUSH DI
-
- { Paramètres: BX = handle, CX:DX = offset (32-bit), AL = method }
- PUSH AX                    { Method (AL) }
- PUSH DX                    { Offset low }
- PUSH CX                    { Offset high }
- PUSH BX                    { Handle de fichier }
-
- CALL DOS42h_SeekFile       { Appeler fonction Pascal }
- ADD SP,8                   { Nettoyer pile (4 mots = 8 octets) }
-
- { AX:DX contient la nouvelle position (LongInt) }
- { Si erreur, AX = $FFFF et DX = $FFFF }
- CMP AX,0FFFFh              { Vérifier si erreur }
- JNE @42hSuccess            { Si pas erreur }
- CMP DX,0FFFFh              { Double vérification }
- JNE @42hSuccess            { Si pas erreur }
-
- { Erreur }
- MOV AX,6                   { Invalid handle par défaut }
- STC                        { Set Carry Flag }
+ PUSH DS
+ PUSH BX
+ PUSH CX
+ PUSH DX
+ XOR AH,AH
+ PUSH AX
+ PUSH CS
+ POP DS
+ CALL DOS42h_SeekFile
+ POP DS
+ CMP AX,0FFFFh
+ JNE @42hOk
+ CMP DX,0FFFFh
+ JNE @42hOk
+ PUSH DS
+ PUSH CS
+ POP DS
+ CALL GetExtendedErrorCode
+ POP DS
+ STC
  JMP @42hEnd
-
-@42hSuccess:
- { Succès - AX:DX contient la nouvelle position }
- CLC                        { Clear Carry Flag }
-
+@42hOk:
+ CLC
 @42hEnd:
  POP DI
  POP SI
  POP CX
+ POP BX
  JMP @Xit
 
  {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
@@ -3261,36 +3238,31 @@ Procedure Intr21h;Assembler;ASM
  { Interruption 21h - Fonction 44h: IOCTL (Input/Output Control)              }
  {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
 @44h:
- PUSH CX                    { Sauvegarder les registres }
- PUSH SI
- PUSH DI
-
- { Paramètres: BX = handle, AL = sous-fonction, CX = nombre d'octets, DS:DX = buffer }
- PUSH CX                    { Nombre d'octets }
- PUSH DX                    { Buffer (offset) }
- PUSH DS                    { Buffer (segment) }
- PUSH AX                    { Sous-fonction (AL) }
- PUSH BX                    { Handle }
-
- CALL DOS44h_IOCTL          { Appeler fonction Pascal }
- ADD SP,10                  { Nettoyer pile (5 mots = 10 octets) }
-
- { AX contient le résultat }
- CMP AX,0                   { Vérifier si succès }
- JE @44hSuccess             { Si succès }
-
- { Erreur }
- STC                        { Set Carry Flag }
- JMP @44hEnd
-
-@44hSuccess:
- { Succès }
- CLC                        { Clear Carry Flag }
-
-@44hEnd:
- POP DI
- POP SI
- POP CX
+ CMP AL,0
+ JNE @44hNot0
+ CMP BX,4
+ JA @44hFile
+ MOV DX,80D3h
+ CLC
+ JMP @Xit
+@44hFile:
+ XOR DX,DX
+ CLC
+ JMP @Xit
+@44hNot0:
+ CMP AL,6
+ JE @44hStatus
+ CMP AL,7
+ JE @44hStatus
+ CMP AL,1
+ JE @44hOk
+ MOV AX,1
+ STC
+ JMP @Xit
+@44hStatus:
+ MOV AL,0FFh
+@44hOk:
+ CLC
  JMP @Xit
 
  {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
@@ -3363,31 +3335,25 @@ Procedure Intr21h;Assembler;ASM
  { Interruption 21h - Fonction 47h: Get Current Directory                     }
  {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
 @47h:
- PUSH BX                    { Sauvegarder les registres }
+ PUSH BX
  PUSH CX
  PUSH SI
  PUSH DI
-
- { Paramètres: DL = drive (0=courant, 1=A:, 2=B:, etc.), DS:SI = buffer }
- PUSH SI                    { Buffer (offset) }
- PUSH DS                    { Buffer (segment) }
- PUSH DX                    { Drive number (DL) }
-
- CALL DOS47h_GetCurrentDirectory { Appeler fonction Pascal }
- ADD SP,6                   { Nettoyer pile (3 mots = 6 octets) }
-
- { AX contient le résultat (0 si succès, code d'erreur sinon) }
- CMP AX,0                   { Vérifier si succès }
- JE @47hSuccess             { Si succès }
-
- { Erreur }
- STC                        { Set Carry Flag }
+ PUSH DS
+ XOR DH,DH
+ PUSH DX
+ PUSH DS
+ PUSH SI
+ PUSH CS
+ POP DS
+ CALL DOS47h_GetCurrentDirectory
+ POP DS
+ OR AX,AX
+ JZ @47hOk
+ STC
  JMP @47hEnd
-
-@47hSuccess:
- { Succès }
- CLC                        { Clear Carry Flag }
-
+@47hOk:
+ CLC
 @47hEnd:
  POP DI
  POP SI
@@ -3399,29 +3365,28 @@ Procedure Intr21h;Assembler;ASM
  { Interruption 21h - Fonction 48h: Allocate Memory Block                     }
  {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
 @48h:
- PUSH CX                    { Sauvegarder les registres }
+ PUSH CX
  PUSH SI
  PUSH DI
-
- { Paramètres: BX = taille en paragraphes }
- PUSH BX                    { Taille requise }
-
- CALL DOS48h_AllocateMemory { Appeler fonction Pascal }
- ADD SP,2                   { Nettoyer pile (1 mot = 2 octets) }
-
- { AX contient le segment alloué ou 0 si erreur, BX contient la taille disponible }
- CMP AX,0                   { Vérifier si succès }
- JNE @48hSuccess            { Si succès }
-
- { Erreur - pas assez de mémoire }
- MOV AX,8                   { Code d'erreur "Insufficient memory" }
- STC                        { Set Carry Flag }
+ PUSH DS
+ PUSH BX
+ PUSH CS
+ POP DS
+ CALL AllocInt21
+ POP DS
+ OR AX,AX
+ JNZ @48hOk
+ PUSH DS
+ PUSH CS
+ POP DS
+ CALL LargestFreeBlock
+ POP DS
+ MOV BX,AX
+ MOV AX,8
+ STC
  JMP @48hEnd
-
-@48hSuccess:
- { Succès - AX contient le segment alloué }
- CLC                        { Clear Carry Flag }
-
+@48hOk:
+ CLC
 @48hEnd:
  POP DI
  POP SI
@@ -3432,65 +3397,55 @@ Procedure Intr21h;Assembler;ASM
  { Interruption 21h - Fonction 49h: Free Memory Block                         }
  {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
 @49h:
- PUSH CX                    { Sauvegarder les registres }
+ PUSH BX
+ PUSH CX
  PUSH SI
  PUSH DI
-
- { Paramètres: ES = segment du bloc à libérer }
- PUSH ES                    { Segment du bloc }
-
- CALL DOS49h_FreeMemory     { Appeler fonction Pascal }
- ADD SP,2                   { Nettoyer pile (1 mot = 2 octets) }
-
- { AX contient le résultat (0 si succès, code d'erreur sinon) }
- CMP AX,0                   { Vérifier si succès }
- JE @49hSuccess             { Si succès }
-
- { Erreur }
- STC                        { Set Carry Flag }
+ PUSH DS
+ PUSH ES
+ PUSH CS
+ POP DS
+ CALL DOS49h_FreeMemory
+ POP DS
+ OR AX,AX
+ JZ @49hOk
+ STC
  JMP @49hEnd
-
-@49hSuccess:
- { Succès }
- CLC                        { Clear Carry Flag }
-
+@49hOk:
+ CLC
 @49hEnd:
  POP DI
  POP SI
  POP CX
+ POP BX
  JMP @Xit
 
  {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
  { Interruption 21h - Fonction 4Ah: Modify Memory Block                       }
  {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
 @4Ah:
- PUSH CX                    { Sauvegarder les registres }
+ PUSH BX
+ PUSH CX
  PUSH SI
  PUSH DI
-
- { Paramètres: ES = segment du bloc, BX = nouvelle taille en paragraphes }
- PUSH BX                    { Nouvelle taille }
- PUSH ES                    { Segment du bloc }
-
- CALL DOS4Ah_ModifyMemory   { Appeler fonction Pascal }
- ADD SP,4                   { Nettoyer pile (2 mots = 4 octets) }
-
- { AX contient le résultat (0 si succès, code d'erreur sinon) }
- CMP AX,0                   { Vérifier si succès }
- JE @4AhSuccess             { Si succès }
-
- { Erreur }
- STC                        { Set Carry Flag }
+ PUSH DS
+ PUSH ES
+ PUSH BX
+ PUSH CS
+ POP DS
+ CALL DOS4Ah_ModifyMemory
+ POP DS
+ OR AX,AX
+ JZ @4AhOk
+ STC
  JMP @4AhEnd
-
-@4AhSuccess:
- { Succès }
- CLC                        { Clear Carry Flag }
-
+@4AhOk:
+ CLC
 @4AhEnd:
  POP DI
  POP SI
  POP CX
+ POP BX
  JMP @Xit
 
  {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
@@ -3579,73 +3534,55 @@ Procedure Intr21h;Assembler;ASM
  { Interruption 21h - Fonction 4Eh: Find First File                           }
  {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
 @4Eh:
- PUSH CX                    { Sauvegarder les registres }
+ PUSH BX
+ PUSH CX
  PUSH SI
  PUSH DI
- PUSH BX
-
- { DS:DX pointe vers le nom de fichier/chemin }
- MOV AX,DS
- PUSH AX                    { Segment du nom de fichier }
- PUSH DX                    { Offset du nom de fichier }
-
- { CL contient les attributs de recherche }
- MOV AL,CL
- PUSH AX                    { Attributs }
-
- { ES:BX pointe vers la DTA }
- PUSH ES                    { Segment DTA }
- PUSH BX                    { Offset DTA }
-
- CALL DOS4Eh_FindFirstFile  { Appeler fonction Pascal }
- { AX contient le code d'erreur }
-
- ADD SP,10                  { Nettoyer la pile (5 paramètres * 2) }
-
- OR AX,AX                   { Tester le résultat }
- JZ @4EhSuccess
- STC                        { Set Carry Flag si erreur }
+ PUSH DS
+ PUSH DS
+ PUSH DX
+ PUSH CX
+ PUSH CS
+ POP DS
+ CALL FindFirstInt21
+ POP DS
+ OR AX,AX
+ JZ @4EhOk
+ STC
  JMP @4EhEnd
-@4EhSuccess:
- CLC                        { Clear Carry Flag si succès }
+@4EhOk:
+ CLC
 @4EhEnd:
-
- POP BX
  POP DI
  POP SI
  POP CX
+ POP BX
  JMP @Xit
 
  {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
  { Interruption 21h - Fonction 4Fh: Find Next File                            }
  {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
 @4Fh:
- PUSH CX                    { Sauvegarder les registres }
+ PUSH BX
+ PUSH CX
  PUSH SI
  PUSH DI
- PUSH BX
-
- { ES:BX pointe vers la DTA }
- PUSH ES                    { Segment DTA }
- PUSH BX                    { Offset DTA }
-
- CALL DOS4Fh_FindNextFile   { Appeler fonction Pascal }
- { AX contient le code d'erreur }
-
- ADD SP,4                   { Nettoyer la pile (2 paramètres * 2) }
-
- OR AX,AX                   { Tester le résultat }
- JZ @4FhSuccess
- STC                        { Set Carry Flag si erreur }
+ PUSH DS
+ PUSH CS
+ POP DS
+ CALL FindNextInt21
+ POP DS
+ OR AX,AX
+ JZ @4FhOk
+ STC
  JMP @4FhEnd
-@4FhSuccess:
- CLC                        { Clear Carry Flag si succès }
+@4FhOk:
+ CLC
 @4FhEnd:
-
- POP BX
  POP DI
  POP SI
  POP CX
+ POP BX
  JMP @Xit
 
  {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
@@ -4077,6 +4014,16 @@ Procedure Intr21h;Assembler;ASM
 
 @Xit:
  DEC Data.DataMOS.InDos
+ { IRET restaure les FLAGS de l'appelant : recopier CF (resultat) dans les FLAGS empiles }
+ PUSH BP
+ MOV BP,SP
+ JC @XitCarry
+ AND WORD PTR [BP+6],0FFFEh
+ JMP @XitDone
+@XitCarry:
+ OR WORD PTR [BP+6],1
+@XitDone:
+ POP BP
 END;
 
 Procedure Intr25h;Assembler;ASM
@@ -8942,6 +8889,7 @@ Begin
  End;
  DOS3Eh_CloseFile(Handle);
  SetCurrentPSP(Block);
+ SetDTA(Block,$80);
  { sauver les vecteurs de terminaison dans le PSP }
  DOS4Bh_ExecProgram:=0;
  ExecEnter(Block,ImgSeg+Hdr.InitialCS,Hdr.InitialIP,ImgSeg+Hdr.InitialSS,Hdr.InitialSP);
@@ -8978,6 +8926,185 @@ Begin
   POP DS
  END;
  ExecFromInt21:=DOS4Bh_ExecProgram(Lo(Mode),Name,PB);
+End;
+
+{ ---------- Passerelles INT 21h -> fonctions Pascal ---------- }
+Procedure ConPutChar(C:Byte);Assembler;
+ASM
+ PUSH BP
+ PUSH DS
+ MOV AX,40h
+ MOV DS,AX
+ MOV DX,DS:[50h]          { curseur BIOS (zone de donnees 0040:0050) }
+ POP DS
+ MOV AH,02h
+ XOR BH,BH
+ INT 10h
+ MOV AL,C
+ MOV AH,0Eh
+ MOV BX,0007h
+ INT 10h
+ MOV AH,03h
+ XOR BH,BH
+ INT 10h
+ PUSH DS
+ MOV AX,40h
+ MOV DS,AX
+ MOV DS:[50h],DX
+ POP DS
+ POP BP
+END;
+
+Function ConGetKey:Word;Assembler;
+ASM
+ XOR AX,AX
+ INT 16h
+END;
+
+Procedure BufParts(Buf:Pointer;Var S,O:Word);Assembler;
+ASM
+ PUSH ES
+ PUSH DI
+ LES DI,Buf
+ MOV AX,ES
+ MOV BX,DI
+ LES DI,S
+ MOV ES:[DI],AX
+ LES DI,O
+ MOV ES:[DI],BX
+ POP DI
+ POP ES
+END;
+
+Function GetDTASeg:Word;Assembler;
+ASM
+ MOV AX,Data.DataMOS.DTASegment
+END;
+
+Function GetDTAOfs:Word;Assembler;
+ASM
+ MOV AX,Data.DataMOS.DTAOffset
+END;
+
+Procedure SetDTA(S,O:Word);Assembler;
+ASM
+ MOV AX,S
+ MOV Data.DataMOS.DTASegment,AX
+ MOV AX,O
+ MOV Data.DataMOS.DTAOffset,AX
+END;
+
+Function PendingLFSet:Boolean;Assembler;
+ASM
+ MOV AL,Data.DataMOS.PendingLF
+END;
+
+Procedure ClearPendingLF;Assembler;
+ASM
+ MOV Data.DataMOS.PendingLF,0
+END;
+
+Procedure SetPendingLF;Assembler;
+ASM
+ MOV Data.DataMOS.PendingLF,1
+END;
+
+{ Lecture : poignees 0..4 = console (ligne editee, terminee par CR LF) }
+Function ReadInt21(Handle:Word;Buf:Pointer;Count:Word;Var Got:Word):Word;
+Var
+ S,O,N,K: Word;
+ C: Byte;
+Begin
+ If Handle>=5 Then Begin
+  ReadInt21:=DOS3Fh_ReadFile(Handle,Buf,Count,Got);
+  Exit;
+ End;
+ BufParts(Buf,S,O);
+ N:=0;
+ If Count=1 Then Begin
+  { lecture caractere par caractere (RTL) : saisie avec echo, CR suivi d'un LF }
+  If PendingLFSet Then Begin
+   ClearPendingLF;
+   Mem[S:O]:=10;
+  End
+  Else Begin
+   K:=ConGetKey;
+   C:=Lo(K);
+   Mem[S:O]:=C;
+   If C=13 Then Begin ConPutChar(13); ConPutChar(10); SetPendingLF; End
+   Else If C=8 Then Begin ConPutChar(8); ConPutChar(32); ConPutChar(8); End
+   Else If C>=32 Then ConPutChar(C);
+  End;
+  Got:=1;
+  ReadInt21:=0;
+  Exit;
+ End;
+ If Count>=2 Then Begin
+  Repeat
+   K:=ConGetKey;
+   C:=Lo(K);
+   If C=13 Then Begin
+    Mem[S:O+N]:=13; Mem[S:O+N+1]:=10; Inc(N,2);
+    ConPutChar(13); ConPutChar(10);
+    Break;
+   End
+   Else If C=8 Then Begin
+    If N>0 Then Begin Dec(N); ConPutChar(8); ConPutChar(32); ConPutChar(8); End;
+   End
+   Else If (C>=32) And (N<Count-2) Then Begin
+    Mem[S:O+N]:=C; Inc(N); ConPutChar(C);
+   End;
+  Until False;
+ End;
+ Got:=N;
+ ReadInt21:=0;
+End;
+
+{ Ecriture : poignees 0..4 = console }
+Function WriteInt21(Handle:Word;Buf:Pointer;Count:Word;Var Got:Word):Word;
+Var
+ S,O,I: Word;
+Begin
+ If Handle>=5 Then Begin
+  WriteInt21:=DOS40h_WriteFile(Handle,Buf,Count,Got);
+  Exit;
+ End;
+ BufParts(Buf,S,O);
+ For I:=0 To Count-1 Do ConPutChar(Mem[S:O+I]);
+ Got:=Count;
+ WriteInt21:=0;
+End;
+
+Function AllocInt21(Size:Word):Word;
+Begin
+ AllocInt21:=DOS48h_AllocateMemory(Size);
+End;
+
+Function FindFirstInt21(NamePtr:Pointer;Attr:Word):Word;
+Var
+ Name: String;
+ P: PChar;
+ N: Word;
+ D: ^DTAStruct;
+Begin
+ Name:='';
+ P:=PChar(NamePtr);
+ N:=0;
+ While (P^<>#0) And (N<127) Do Begin
+  Name:=Name+P^;
+  Inc(P);
+  Inc(N);
+ End;
+ D:=Ptr(GetDTASeg,GetDTAOfs);
+ FindFirstInt21:=DOS4Eh_FindFirstFile(Name,Lo(Attr),D^);
+End;
+
+Function FindNextInt21:Word;
+Var
+ D: ^DTAStruct;
+Begin
+ D:=Ptr(GetDTASeg,GetDTAOfs);
+ FindNextInt21:=DOS4Fh_FindNextFile(D^);
 End;
 
 { Charge et exécute le processeur de commandes }
@@ -9414,6 +9541,7 @@ Begin
  Parent:=MemW[Cur:$16];
  SetLastReturnCode(ExitCode);
  SetCurrentPSP(Parent);
+ SetDTA(Parent,$80);
  FreeProcessMemory(Cur);
  ASM
   DEC Data.DataMOS.InDos
