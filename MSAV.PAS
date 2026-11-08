@@ -66,7 +66,7 @@ End;
 
 Function IsDOSProgram(Name:String):Boolean;
 Var
- D,N,E:String;
+ D:DirStr;N:NameStr;E:ExtStr;
 Begin
  FSplit(Name,D,N,E);
  E:=StrToUpper(E);
