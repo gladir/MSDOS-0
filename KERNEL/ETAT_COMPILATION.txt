@@ -78,6 +78,29 @@ interrupt, assembler sans cadre, ABI TP7 (pas de lien statique), @Proc/Ofs/Seg, 
 en avant, edition de liens intelligente, segment noyau avec recopie du runtime, donnees en ligne, appel du hook Crt,
 optimisations de taille (DOC/TPC_OPTIMISATIONS.txt), Write/WriteLn d'une chaine globale sans push/pop ds.
 
+Lancement des programmes de MSDOS-0 sous le noyau (emulateur DEVENV, sans argument)
+------------------------------------------------------------------------------------
+Les 60 programmes de MSDOS-0 se compilent avec TPC (code de plus de 64 Ko : mode multi-segments, unite Graph integree,
+objets, Single/Double...) et se lancent sans plantage du noyau ni erreur d'execution : une partie rend la main au prompt,
+les autres attendent une saisie (BASIC, GWBASIC, DEBUG, EDLIN, EDIT, DOSSHELL, MORE, SORT, CHOICE, MSD, EXPAND, RESTORE,
+FDISK, SCANDISK, MSAV, menus) ou affichent une longue aide (LINK).
+Bogues de programmes corriges : CHKDSK (numero de lecteur INT 25h decale), BACKUP (FileMode:=0 sur un fichier en lecture
+seule), SHARE et FASTOPEN (gestionnaires INT 21h qui ne se terminaient pas par IRET ; FASTOPEN ne laissait pas son code,
+ses donnees et sa pile residents), MSMOUSE (delai maximal de detection PS/2), MSAV (types DirStr/NameStr/ExtStr),
+FASTOPEN (22 entrees par lecteur au lieu de 24 : le segment de donnees de TPC contient ~5 Ko de donnees internes).
+UNDELETE ne trouve pas de disquette (lecture BIOS du lecteur A:, absent de l'emulateur).
+Noyau : INT 25h/26h reecrits (passent par les fonctions internes F2h/F3h de INT 21h), 31h (TSR), 42h sur les
+peripheriques (CON, AUX...) rend 0 comme MS-DOS, EXEC .EXE avec MaxAlloc.
+TPC : procedures interrupt a corps Pascal comme TP7, System.Nom masque, chaine/tableau de Char, objets (sans heritage
+ni virtuelles), transtypages de variables structurees, Single/Double, 'chaine'[i], SEG @Data, PByte/PWord, unite Graph,
+code multi-segments (voir DOC/TPC_OPTIMISATIONS.txt).
+
+Corrections de TPC (resume)
+---------------------------
+interrupt, assembler sans cadre, ABI TP7 (pas de lien statique), @Proc/Ofs/Seg, assembleur integre etendu, references
+en avant, edition de liens intelligente, segment noyau avec recopie du runtime, donnees en ligne, appel du hook Crt,
+optimisations de taille (DOC/TPC_OPTIMISATIONS.txt), Write/WriteLn d'une chaine globale sans push/pop ds.
+
 Lancement des programmes de MSDOS-0 sous le noyau (emulateur DEVENV, sans argument puis avec /?)
 -----------------------------------------------------------------------------------------------
 49 programmes sur 60 compilent avec TPC ; les 11 autres (FASTOPEN, FDISK, FORMAT, GWBASIC, INTERLNK, INTERSVR, LINK,
