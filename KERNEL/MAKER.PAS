@@ -16,10 +16,10 @@ Var
 
 BEGIN
  SourceKernel:=@BEGIN_KERNEL;
- {$I-}Assign(KernelFile,'MSDOS.SYS');
+ {$I-}Assign(KernelFile,'IO.SYS');
  Rewrite(KernelFile);{$I+}
  If IOResult<>0 Then Begin
-  Write('Impossible d''‚crire MSDOS.SYS');
+  Write('Impossible d''‚crire IO.SYS');
   Halt(1);
  End;
  BlockWrite(KernelFile,SourceKernel^,Ofs(END_KERNEL)+1,ByteWrited);
