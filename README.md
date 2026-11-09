@@ -194,7 +194,7 @@ Voici la liste des différents fichiers proposés dans MSDOS-0 :
 		</tr>
 	        <tr>
 			<td><b>MEM.PAS</b></td>
-			<td>Cette commande permet d'afficher les informations sur la mémoire. Cette commande est un clone de la commande MS-DOS ou PC-DOS.</td>
+			<td>Cette commande permet d'afficher les informations sur la mémoire (paramètres /CLASSIFY, /DEBUG, /FREE, /MODULE programme et /PAGE ; messages en français, anglais, allemand, italien et espagnol selon la variable LANGUAGE). Cette commande est un clone de la commande MS-DOS ou PC-DOS.</td>
 		</tr>
 		<tr>
 			<td><b>MIRROR.PAS</b></td>

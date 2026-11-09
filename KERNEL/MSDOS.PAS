@@ -10171,39 +10171,42 @@ ASM
  ADD AL,65
 END;
 
-{ Environnement : COMSPEC + PATH, puis nombre de chaines et nom du programme }
+{ Environnement : copie de celui du programme appelant (SET, PATH, PROMPT,
+  LANGUAGE...) ; a defaut COMSPEC + PATH ; puis nombre de chaines et nom du
+  programme }
 Function BuildEnvironment(Owner:Word;ProgName:String):Word;
 Var
- Seg,Ofs2,I: Word;
+ Seg,O,I,Par,Src: Word;
  Env: String;
 Begin
  BuildEnvironment:=0;
  Seg:=DOS48h_AllocateMemory(32);
  If Seg=0 Then Exit;
  SetBlockOwner(Seg,Owner);
- Env:='COMSPEC=C:\COMMAND.EXE';
- Env[9]:=BootLetter;
- If Mem[CfgSegGet:12]<>0 Then Begin
-  Env:='COMSPEC=';
-  For I:=1 To Mem[CfgSegGet:12] Do Env:=Env+Chr(Mem[CfgSegGet:12+I]);
+ Par:=GetCurrentPSP;
+ Src:=MemW[Par:$2C];
+ If (Par>=$60) And (Src>=$60) And (MemW[Src-1:1]=Par) Then Begin
+  O:=0;
+  While (O<400) And ((Mem[Src:O]<>0) Or (Mem[Src:O+1]<>0)) Do Inc(O);
+  Inc(O);
+  Move(Mem[Src:0],Mem[Seg:0],O);
+ End
+ Else Begin
+  Env:='COMSPEC=C:\COMMAND.EXE';
+  Env[9]:=BootLetter;
+  If Mem[CfgSegGet:12]<>0 Then Begin
+   Env:='COMSPEC=';
+   For I:=1 To Mem[CfgSegGet:12] Do Env:=Env+Chr(Mem[CfgSegGet:12+I]);
+  End;
+  Env:=Env+#0'PATH=C:\'#0;
+  Env[Length(Env)-3]:=BootLetter;
+  O:=Length(Env);
+  Move(Env[1],Mem[Seg:0],O);
  End;
- Ofs2:=0;
- For I:=1 To Length(Env) Do Begin
-  Mem[Seg:Ofs2]:=Ord(Env[I]); Inc(Ofs2);
- End;
- Mem[Seg:Ofs2]:=0; Inc(Ofs2);
- Env:='PATH=C:\';
- Env[6]:=BootLetter;
- For I:=1 To Length(Env) Do Begin
-  Mem[Seg:Ofs2]:=Ord(Env[I]); Inc(Ofs2);
- End;
- Mem[Seg:Ofs2]:=0; Inc(Ofs2);
- Mem[Seg:Ofs2]:=0; Inc(Ofs2);
- MemW[Seg:Ofs2]:=1; Inc(Ofs2,2);
- For I:=1 To Length(ProgName) Do Begin
-  Mem[Seg:Ofs2]:=Ord(ProgName[I]); Inc(Ofs2);
- End;
- Mem[Seg:Ofs2]:=0;
+ Mem[Seg:O]:=0;
+ MemW[Seg:O+1]:=1;
+ Move(ProgName[1],Mem[Seg:O+3],Length(ProgName));
+ Mem[Seg:O+3+Length(ProgName)]:=0;
  BuildEnvironment:=Seg;
 End;
 
