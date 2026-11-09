@@ -1788,6 +1788,13 @@ Begin
  If Not RdPart(0,Old)Then Exit;
  Move(BootCode,Buf,512);
  For J:=3 to 61 do Buf[J]:=Old[J];
+ { geometrie du BIOS (INT 13h) et secteurs caches : le secteur de boot s'en
+   sert pour convertir les adresses en CHS ; une valeur invalide laissee par
+   un autre outil de formatage empeche le demarrage }
+ If DiskGeometry(Unit8)Then Begin
+  Buf[24]:=Byte(Spt);Buf[25]:=0;Buf[26]:=Byte(Heads);Buf[27]:=0;
+ End;
+ PutLE32b(Buf,28,PartLBA);
  If Unit8>=$80 Then Buf[36]:=$80 Else Buf[36]:=0;
  Buf[38]:=$29;
  If(Old[39]or Old[40]or Old[41]or Old[42])=0 Then Begin
