@@ -154,7 +154,7 @@ Installation sur disque dur (INSTALL.PAS, IMAGE\INSTALL.IMG)
 ------------------------------------------------------------
 INSTALL.PAS : ecrans bleus (memoire video directe, INT 16h), francais/anglais ; copie les fichiers de INSTALL.INF (produit
 par MAKEDISK /INF, une demande de disquette par disquette), cree IO.SYS/MSDOS.SYS en tete de la racine, ecrit le secteur de
-boot MS-DOS (BOOTCODE.INC, partage avec SYS.PAS), le chargeur MBR et la partition active, CONFIG.SYS (SHELL=...\COMMAND.COM
+boot MS-DOS (meme table que SYS.PAS, copiee dans chaque fichier), le chargeur MBR et la partition active, CONFIG.SYS (SHELL=...\COMMAND.COM
 ...\ /P) et AUTOEXEC.BAT. Teste dans DEVENV (/KTBOOTIMG:INSTALL.IMG /KTHD:disque.img + script mount A:) puis demarrage du
 disque installe : invite C:\>, PATH et LANGUAGE de AUTOEXEC.BAT, commandes de C:\DOS.
 Correctifs decouverts pendant ce test :
