@@ -104,6 +104,7 @@ Var
  IsImageFile: Boolean;
  AutoFix, CheckOnly, DoSurfaceScan: Boolean;
  DriveNum: Byte;
+ DrvSpt, DrvHeads: Word;
  ErrorsFound: Integer;
  CheckStatus: Array[TCheckItem] of Boolean;
 
@@ -1199,6 +1200,57 @@ Begin
  Until False;
 End;
 
+{ Geometrie du lecteur (INT 13h fonction 08h) ; disquette 1,44 Mo par defaut }
+Procedure DriveGeometry;
+Var Regs: Registers;
+Begin
+ DrvSpt := 18;
+ DrvHeads := 2;
+ Regs.AH := $08;
+ Regs.DL := DriveNum;
+ Intr($13, Regs);
+ If ((Regs.Flags and 1) = 0) and ((Regs.CL and $3F) <> 0) Then Begin
+  DrvSpt := Regs.CL and $3F;
+  DrvHeads := Word(Regs.DH) + 1;
+ End;
+End;
+
+{ Lecture (Fn=02h) ou ecriture (Fn=03h) d'un secteur relatif a la partition
+  par le BIOS, en CHS d'apres la geometrie reelle du disque }
+Function BiosSector(Fn: Byte; SectorNum: LongInt): Boolean;
+Var
+ Regs: Registers;
+ Abs, Tk: LongInt;
+ Sec, Hd, Cyl: Word;
+ Tries: Integer;
+Begin
+ BiosSector := False;
+ If (DrvSpt = 0) or (DrvHeads = 0) Then Exit;
+ Abs := SectorNum + PartitionOffset;
+ Sec := Word(Abs mod DrvSpt) + 1;
+ Tk := Abs div DrvSpt;
+ Hd := Word(Tk mod DrvHeads);
+ Cyl := Word(Tk div DrvHeads);
+ For Tries := 1 to 3 do Begin
+  Regs.AH := Fn;
+  Regs.AL := 1;
+  Regs.CH := Byte(Cyl and $FF);
+  Regs.CL := Byte(Sec or ((Cyl shr 2) and $C0));
+  Regs.DH := Byte(Hd);
+  Regs.DL := DriveNum;
+  Regs.ES := Seg(SectorBuffer);
+  Regs.BX := Ofs(SectorBuffer);
+  Intr($13, Regs);
+  If (Regs.Flags and 1) = 0 Then Begin
+   BiosSector := True;
+   Exit;
+  End;
+  Regs.AH := 0;
+  Regs.DL := DriveNum;
+  Intr($13, Regs);
+ End;
+End;
+
 Function ReadSector(SectorNum: LongInt): Boolean;
 {$IFDEF Windows}
 Begin
@@ -1215,25 +1267,15 @@ Begin
  End;
 End;
 {$ELSE}
-Var Regs: Registers;
 Begin
  If IsImageFile Then Begin
    { Appliquer le d‚placement de partition si n‚cessaire }
   Seek(FileHandle, (SectorNum + PartitionOffset) * 512);
   BlockRead(FileHandle, SectorBuffer, 512);
   ReadSector := IOResult = 0;
- End Else Begin
-  Regs.AH := $02;
-  Regs.AL := 1;
-  Regs.CH := (SectorNum div (18 * 2)) and $FF;
-  Regs.CL := (SectorNum mod 18) + 1;
-  Regs.DH := (SectorNum div 18) mod 2;
-  Regs.DL := DriveNum;
-  Regs.ES := Seg(SectorBuffer);
-  Regs.BX := Ofs(SectorBuffer);
-  Intr($13, Regs);
-  ReadSector := (Regs.Flags and 1) = 0;
- End;
+ End
+  Else
+ ReadSector := BiosSector($02, SectorNum);
 End;
 {$ENDIF}
 
@@ -1251,25 +1293,15 @@ Begin
  End;
 End;
 {$ELSE}
-Var Regs: Registers;
 Begin
  If IsImageFile Then Begin
   { Appliquer le d‚placement de partition si n‚cessaire }
   Seek(FileHandle, (SectorNum + PartitionOffset) * 512);
   BlockWrite(FileHandle, SectorBuffer, 512);
   WriteSector := IOResult = 0;
- End Else Begin
-  Regs.AH := $03;
-  Regs.AL := 1;
-  Regs.CH := (SectorNum div (18 * 2)) and $FF;
-  Regs.CL := (SectorNum mod 18) + 1;
-  Regs.DH := (SectorNum div 18) mod 2;
-  Regs.DL := DriveNum;
-  Regs.ES := Seg(SectorBuffer);
-  Regs.BX := Ofs(SectorBuffer);
-  Intr($13, Regs);
-  WriteSector := (Regs.Flags and 1) = 0;
- End;
+ End
+  Else
+ WriteSector := BiosSector($03, SectorNum);
 End;
 {$ENDIF}
 
@@ -1471,6 +1503,35 @@ Begin
  DetectPartition := True;
 End;
 
+{ Disque dur reel : decalage de la partition FAT (partition active d'abord) }
+Procedure DetectDrivePartition;
+Var
+ i, Pass: Integer;
+ Found: Boolean;
+Begin
+ HasPartition := False;
+ PartitionOffset := 0;
+ If DriveNum < $80 Then Exit;
+ If Not ReadSector(0) Then Exit;
+ Move(SectorBuffer, MBR, SizeOf(TMBR));
+ If (MBR.Signature <> $AA55) or (SectorBuffer[0] = $EB) or
+    (SectorBuffer[0] = $E9) Then Exit;
+ Found := False;
+ For Pass := 0 to 1 do Begin
+  For i := 0 to 3 do Begin
+   With MBR.PartitionTable[i] do Begin
+    If (Not Found) and (TotalSectors > 0) and
+       ((Pass = 1) or (Status = $80)) and
+       (PartitionType in [$01, $04, $06, $0B, $0C, $0E, $0F]) Then Begin
+     PartitionOffset := RelativeSectors;
+     HasPartition := True;
+     Found := True;
+    End;
+   End;
+  End;
+ End;
+End;
+
 Function ReadBootSector:Boolean;Begin
  If ReadSector(0) Then Begin
   Move(SectorBuffer, BootSector, SizeOf(BootSector));
@@ -1530,12 +1591,43 @@ Function ReadBootSector:Boolean;Begin
  ReadBootSector := False;
 End;
 
+Var
+ CacheSec: LongInt;
+ CacheBuf: Array[0..511] of Byte;
+ FatReadErr: Boolean;
+
+{ Octet d'offset O dans la premiere copie de la FAT (secteur en cache) }
+Function FatByte(O: LongInt): Byte;
+Var
+ Sec: LongInt;
+Begin
+ Sec := O div 512;
+ If Sec <> CacheSec Then Begin
+  If (Sec >= BootSector.SectorsPerFAT) Then Begin
+   FatByte := 0;
+   Exit;
+  End;
+  If ReadSector(BootSector.ReservedSectors + Sec) Then Begin
+   Move(SectorBuffer, CacheBuf, 512);
+   CacheSec := Sec;
+  End
+   Else
+  Begin
+   FatReadErr := True;
+   FatByte := 0;
+   Exit;
+  End;
+ End;
+ FatByte := CacheBuf[O mod 512];
+End;
+
 Procedure ReadFAT;
 Var
  i, j, FATIndex: Integer;
  MaxFATEntries, MaxSectors: Integer;
- ByteOffset: Word;
  FATValue: Word;
+ FatOfs: LongInt;
+ B0, B1: Byte;
 Begin
  CheckStatus[ciFAT] := False;
   { D‚tecter le type de FAT }
@@ -1543,34 +1635,23 @@ Begin
   { Initialiser la FAT - d‚j… fait dans AllocateMemory }
  If FATType = ftFAT12 Then Begin
   MaxFATEntries := MaxClusters + 2;
-  MaxSectors := (MaxFATEntries * 3 div 2 + 511) div 512; { FAT12: 1.5 octets par entr‚e }
-  For i := 0 to Min(BootSector.SectorsPerFAT - 1, MaxSectors - 1) do Begin
-   If ReadSector(BootSector.ReservedSectors + i) Then Begin
-    { Lire les entr‚es FAT12 (1.5 octets par entr‚e) }
-    For j := 0 to 341 do Begin { 512 / 1.5 ~ 341 entr‚es par secteur }
-     FATIndex := i * 341 + j;
-     If FATIndex >= MaxFATEntries Then Break;
-     ByteOffset := (FATIndex * 3) div 2;
-     If ByteOffset + 1 < 512 Then Begin
-      If (FATIndex mod 2) = 0 Then Begin
-       { Entr‚e paire : bits 0-11 }
-       FATValue := SectorBuffer[ByteOffset] + ((SectorBuffer[ByteOffset + 1] and $0F) shl 8);
-      End Else Begin
-       { Entr‚e impaire : bits 4-15 }
-       FATValue := (SectorBuffer[ByteOffset] shr 4) + (SectorBuffer[ByteOffset + 1] shl 4);
-      End;
-       { Masquer … 12 bits }
-      SetFAT(FATIndex, FATValue and $0FFF);
-     End;
-    End;
-   End
-    Else
-   Begin
-    Exit;
-   End;
+  CacheSec := -1;
+  FatReadErr := False;
+  { 2 entrees de 12 bits pour 3 octets ; une entree peut chevaucher
+    deux secteurs de la FAT }
+  For FATIndex := 0 to MaxFATEntries - 1 do Begin
+   FatOfs := (LongInt(FATIndex) * 3) div 2;
+   B0 := FatByte(FatOfs);
+   B1 := FatByte(FatOfs + 1);
+   If FatReadErr Then Exit;
+   If (FATIndex and 1) = 0 Then
+    FATValue := Word(B0) + (Word(B1 and $0F) shl 8)
+   Else
+    FATValue := (Word(B0) shr 4) + (Word(B1) shl 4);
+   SetFAT(FATIndex, FATValue and $0FFF);
   End;
  End
-  Else
+ Else
  Begin { FAT16 }
   MaxFATEntries := MaxClusters + 2;
   MaxSectors := (MaxFATEntries * 2 + 511) div 512; { FAT16: 2 octets par entr‚e }
@@ -1597,8 +1678,7 @@ End;
 Procedure CheckFATConsistency;
 Var
  i, j, FATEntry, NextCluster: Integer;
- { Fragments FAT2 pour ‚viter la limite de 65520 octets }
- Fat2A, Fat2B, Fat2C: PFATFragment;
+ CmpBuf: Array[0..511] of Byte;
  MaxFATEntries, MaxSectors: Integer;
  FATMismatch: Boolean;
  EndOfChainMark, BadClusterMark: Word;
@@ -1606,22 +1686,6 @@ Var
  FATValue: Word;
 Begin
  CheckStatus[ciMedia] := False;
-  { Allouer la mÃ©moire pour les fragments FAT2 }
- GetMem(Fat2A, SizeOf(TFATFragment));
- GetMem(Fat2B, SizeOf(TFATFragment));
- GetMem(Fat2C, SizeOf(TFATFragment));
-  { V‚rifier les allocations }
- If (Fat2A = nil) or (Fat2B = nil) or (Fat2C = nil) Then Begin
-  { Lib‚rer ce qui a ‚t‚ allou‚ }
-  If Fat2A <> nil Then FreeMem(Fat2A, SizeOf(TFATFragment));
-  If Fat2B <> nil Then FreeMem(Fat2B, SizeOf(TFATFragment));
-  If Fat2C <> nil Then FreeMem(Fat2C, SizeOf(TFATFragment));
-  Exit;
- End;
-  { Initialiser … z‚ro }
- FillChar(Fat2A^, SizeOf(TFATFragment), 0);
- FillChar(Fat2B^, SizeOf(TFATFragment), 0);
- FillChar(Fat2C^, SizeOf(TFATFragment), 0);
   { D‚finir les marqueurs selon le type FAT }
  If FATType = ftFAT12 Then Begin
   EndOfChainMark := $FF8;
@@ -1655,60 +1719,21 @@ Begin
   End Else Begin
    MaxSectors := (MaxFATEntries * 2 + 511) div 512;
   End;
-   { Lire la deuxiŠme FAT avec le bon format }
-   { R‚initialiser les fragments FAT2 }
-  FillChar(Fat2A^, SizeOf(TFATFragment), 0);
-  FillChar(Fat2B^, SizeOf(TFATFragment), 0);
-  FillChar(Fat2C^, SizeOf(TFATFragment), 0);
-  If FATType = ftFAT12 Then Begin
-   { Lire FAT12 pour la deuxiŠme copie }
-   For i := 0 to Min(BootSector.SectorsPerFAT - 1, MaxSectors - 1) do Begin
-    If ReadSector(BootSector.ReservedSectors + BootSector.SectorsPerFAT + i) Then Begin
-     For j := 0 to 341 do Begin
-      If (i * 341 + j) >= MaxFATEntries Then Break;
-       { Lire les entr‚es FAT12 (1.5 octets par entr‚e) - mˆme logique que ReadFAT }
-      ByteOffset := ((i * 341 + j) * 3) div 2;
-      If ByteOffset + 1 < 512 Then Begin
-       If ((i * 341 + j) mod 2) = 0 Then Begin
-        { Entr‚e paire : bits 0-11 }
-        FATValue := SectorBuffer[ByteOffset] + ((SectorBuffer[ByteOffset + 1] and $0F) shl 8);
-       End Else Begin
-        { Entr‚e impaire : bits 4-15 }
-        FATValue := (SectorBuffer[ByteOffset] shr 4) + (SectorBuffer[ByteOffset + 1] shl 4);
-       End;
-       { Masquer … 12 bits et entreposer }
-       SetFAT2(i * 341 + j, FATValue and $0FFF, Fat2A, Fat2B, Fat2C);
-      End;
-     End;
-    End
-     Else
-    Begin
-     Inc(ErrorsFound);
-     Exit;
-    End;
+   { Comparer les deux copies de la FAT secteur par secteur (sans memoire) }
+  For i := 0 to Min(BootSector.SectorsPerFAT - 1, MaxSectors - 1) do Begin
+   If Not ReadSector(BootSector.ReservedSectors + i) Then Begin
+    Inc(ErrorsFound);
+    Exit;
    End;
-  End
-   Else
-  Begin
-   { Lire FAT16 pour la deuxiŠme copie }
-   For i := 0 to Min(BootSector.SectorsPerFAT - 1, MaxSectors - 1) do Begin
-    If ReadSector(BootSector.ReservedSectors + BootSector.SectorsPerFAT + i) Then Begin
-     For j := 0 to 255 do Begin
-      If (i * 256 + j) >= MaxFATEntries Then Break;
-      If (j * 2 + 1) < 512 Then Begin
-       SetFAT2(i * 256 + j, SectorBuffer[j * 2] + (SectorBuffer[j * 2 + 1] shl 8), Fat2A, Fat2B, Fat2C);
-      End;
-     End;
-    End Else Begin
-     Inc(ErrorsFound);
-     Exit;
-    End;
+   Move(SectorBuffer, CmpBuf, 512);
+   If Not ReadSector(BootSector.ReservedSectors +
+                     BootSector.SectorsPerFAT + i) Then Begin
+    Inc(ErrorsFound);
+    Exit;
    End;
-  End;
-   { Comparer les deux FATs }
-  For i := 0 to MaxFATEntries - 1 do Begin
-   If GetFAT(i) <> GetFAT2(i, Fat2A, Fat2B, Fat2C) Then Begin
-    FATMismatch := True;
+   For j := 0 to 511 do
+    If SectorBuffer[j] <> CmpBuf[j] Then FATMismatch := True;
+   If FATMismatch Then Begin
     Inc(ErrorsFound);
     Break;
    End;
@@ -1806,10 +1831,6 @@ Begin
    End;
   End;
  End;
-  { Lib‚rer la m‚moire allou‚e pour FAT2 }
- FreeMem(Fat2A, SizeOf(TFATFragment));
- FreeMem(Fat2B, SizeOf(TFATFragment));
- FreeMem(Fat2C, SizeOf(TFATFragment));
  CheckStatus[ciMedia] := True;
 End;
 
@@ -2002,11 +2023,13 @@ Begin
                         Else CheckDelay := 100;
   { Effectuer les v‚rifications une par une avec mise … jour en place }
  CheckStatus[ciMedia] := False;
+ { la FAT doit etre lue avant sa verification }
+ ReadFAT;
  CheckFATConsistency;
  ShowCheckList;
  Delay(CheckDelay);
  CheckStatus[ciFAT] := False;
- ReadFAT;
+ CheckStatus[ciFAT] := True;
  ShowCheckList;
  Delay(CheckDelay);
  CheckStatus[ciDirectory] := False;
@@ -2297,6 +2320,11 @@ BEGIN
    FreeMemory;
    Halt(1);
   End;
+ End;
+  { Disque reel : geometrie et partition }
+ If Not IsImageFile Then Begin
+  DriveGeometry;
+  DetectDrivePartition;
  End;
   { Lecture du secteur de boot }
  If Not ReadBootSector Then Begin
