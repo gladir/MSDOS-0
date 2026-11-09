@@ -151,12 +151,14 @@ Begin
 End;
 
 { SET VAR=valeur : reconstruit l'environnement du processeur de commandes
+  (le sien : le noyau en donne une copie a chaque programme lance ; on ne
+  remonte plus la chaine des PSP parents, dependante de l'etat de la memoire)
   (la variable existante est remplacee sur place, ses doublons eventuels
   sont supprimes, une valeur vide supprime la variable, sinon elle est
   ajoutee a la fin) }
 Procedure SetEnv(EnvVar,Value:String);
 Var
- Link,PrevLink,EnvirP:Word;
+ EnvirP:Word;
  Size,Scan,I,Q:Integer;
  S:String;
  Done:Boolean;
@@ -165,12 +167,7 @@ Begin
  If InOutRes>0 Then Exit;
  For I:=1 TO Length(EnvVar)do EnvVar[I]:=UpCase(EnvVar[I]);
  EnvVar:=EnvVar+'=';
- Link:=PrefixSeg;
- Repeat
-  PrevLink:=Link;
-  Link:=MemW[Link:$16];
- Until Link=PrevLink;
- EnvirP:=MemW[Link:$2C];
+ EnvirP:=MemW[PrefixSeg:$2C];  { environnement du processus lui-meme }
  Size:=MemW[EnvirP-1:$03]*16;
  If Size>1100Then Size:=1100;
  EnvLen:=0;
