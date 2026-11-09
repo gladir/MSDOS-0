@@ -23,6 +23,12 @@ MSDOS-0 : _faire revivre l'univers du DOS, du secteur d'amorçage jusqu'à la li
 
 ![image](https://github.com/user-attachments/assets/6391ac0e-afd7-48e0-afea-cd560ba4b231)
 
+<table>
+	<tr>
+		<td><img width="320" height="200" alt="image" src="https://github.com/user-attachments/assets/2266a697-d7eb-44e6-8942-5b2c35f95949" /></td>
+		<td></td>
+	</tr>
+</table>
 
 <h2>Images disque amorcables</h2>
 
