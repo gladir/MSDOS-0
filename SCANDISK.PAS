@@ -322,12 +322,13 @@ Begin
   { D‚terminer le type FAT selon le nombre de clusters }
  If Clusters < 4085 Then Begin
   DetectFATType := ftFAT12;
-  MaxClusters := 4095;
+  MaxClusters := Clusters;
  End
   Else
  Begin
   DetectFATType := ftFAT16;
-  MaxClusters := 65535;
+  If Clusters > 65524 Then Clusters := 65524;
+  MaxClusters := Clusters;
  End;
 End;
 
@@ -748,6 +749,84 @@ Begin
  ClrEol;
 End;
 
+Var
+ BlockState: Array[0..MapWidth * MapHeight - 1] of Byte;
+ MapDrawn: LongInt;
+
+{ Etat de chaque case de la carte : 0 libre, 1 partiellement utilise,
+  2 utilise, 3 defectueux, 255 sans objet (au-dela de la fin du disque) }
+Procedure ComputeBlockMap;
+Var
+ Blk: Integer;
+ SPB, S, E, Sec, FirstData, Cl: LongInt;
+ Used, Cnt, Step: LongInt;
+ Bad: Boolean;
+ BadMark: Word;
+Begin
+ SPB := (TotalSectors + (MapWidth * MapHeight - 1)) div (MapWidth * MapHeight);
+ If SPB < 1 Then SPB := 1;
+ FirstData := BootSector.ReservedSectors +
+              BootSector.NumberOfFATs * BootSector.SectorsPerFAT +
+              (BootSector.RootEntries * 32 + 511) div 512;
+ If FATType = ftFAT12 Then BadMark := $FF7 Else BadMark := $FFF7;
+ For Blk := 0 to MapWidth * MapHeight - 1 do Begin
+  S := Blk * SPB;
+  If S >= TotalSectors Then BlockState[Blk] := 255
+  Else Begin
+   E := S + SPB;
+   If E > TotalSectors Then E := TotalSectors;
+   Used := 0;
+   Cnt := 0;
+   Bad := False;
+   Sec := S;
+   While Sec < E do Begin
+    Step := 1;
+    Inc(Cnt);
+    If Sec < FirstData Then Inc(Used)
+    Else Begin
+     Cl := (Sec - FirstData) div BootSector.SectorsPerCluster + 2;
+     If Cl <= MaxClusters + 1 Then Begin
+      If GetFAT(Cl) = BadMark Then Bad := True
+      Else If GetFAT(Cl) <> 0 Then Inc(Used);
+     End;
+     Step := BootSector.SectorsPerCluster;
+    End;
+    Inc(Sec, Step);
+   End;
+   If Bad Then BlockState[Blk] := 3
+   Else If Used = 0 Then BlockState[Blk] := 0
+   Else If Used >= Cnt Then BlockState[Blk] := 2
+   Else BlockState[Blk] := 1;
+  End;
+ End;
+End;
+
+{ Dessine une case de la carte ; Lit = False : teinte eteinte (pas encore
+  balayee), True : couleur de la legende }
+Procedure DrawBlock(Blk: Integer; Lit: Boolean);
+Begin
+ If BlockState[Blk] = 255 Then Exit;
+ GotoXY(5 + 2 + (Blk mod MapWidth), 3 + 1 + (Blk div MapWidth));
+ TextBackground(LightGray);
+ Case BlockState[Blk] of
+  0:Begin
+   If Lit Then TextColor(Cyan) Else TextColor(DarkGray);
+   Write(#176);
+  End;
+  1:Begin
+   If Lit Then TextColor(Brown) Else TextColor(DarkGray);
+   Write(#177);
+  End;
+  2:Begin
+   If Lit Then TextColor(Yellow) Else TextColor(DarkGray);
+   Write(#254);
+  End;
+ Else
+  TextColor(Red);
+  Write('B');
+ End;
+End;
+
 Procedure ShowSurfaceScanScreen;
 Var
  SectorsPerBlock: LongInt;
@@ -790,40 +869,14 @@ Begin
   _Japanese:Write('Hyoumen Sukyan');
   Else Write('Balayage Surface');
  End;
-  { Calculer les secteurs par bloc selon la taille totale }
+ { Calculer les secteurs par bloc selon la taille totale }
  SectorsPerBlock := (TotalSectors + (MapWidth * MapHeight - 1)) div (MapWidth * MapHeight);
  If SectorsPerBlock < 1 Then SectorsPerBlock := 1;
-  { Dessiner IMMDIATEMENT la carte COMPLETE du disque selon l'utilisation r‚elle }
- For Y := 0 to MapHeight - 1 do Begin
-  For X := 0 to MapWidth - 1 do Begin
-   BlockNum := Y * MapWidth + X;
-   CurrentSector := BlockNum * SectorsPerBlock;
-   If CurrentSector < TotalSectors Then Begin
-    GotoXY(DialogX1 + 2 + X, DialogY1 + 1 + Y);
-     { D‚terminer le TYPE de secteur (systŠme/donn‚es/libre) }
-    If CurrentSector < (BootSector.ReservedSectors + BootSector.NumberOfFATs * BootSector.SectorsPerFAT) Then Begin
-     { Zone systŠme - toujours utilis‚e }
-     TextColor(Yellow);
-     Write(#10); { Bloc plein jaune = secteur utilis‚ }
-    End
-     Else
-    Begin
-     { Zone de donn‚es - v‚rifier si utilis‚ via FAT }
-     If Random(10) < 3 Then Begin
-      { Secteur utilis‚ par des fichiers }
-      TextColor(Yellow);
-      Write(#10); { Bloc plein jaune = secteur utilis‚ }
-     End
-      Else
-     Begin
-      { Secteur libre }
-      TextColor(Cyan);
-      Write(#176); { Bloc plein cyan = secteur libre }
-     End;
-    End;
-   End;
-  End;
- End;
+  { Carte REELLE d'utilisation du disque (d'apres la FAT), grisee : elle
+    s'allume au fur et a mesure du balayage }
+ ComputeBlockMap;
+ MapDrawn := 0;
+ For BlockNum := 0 to MapWidth * MapHeight - 1 do DrawBlock(BlockNum, False);
  TextColor(Black);
  TextBackground(LightGray);
  { Informations du fichier/lecteur - position relative }
@@ -942,11 +995,8 @@ End;
 Procedure UpdateSurfaceProgress(SectorsChecked: LongInt; BadFound: LongInt);
 Var
  Percentage: Integer;
- X, Y, BlockNum, i: Integer;
- SectorsPerBlock, CurrentSector: LongInt;
- BlockColor: Byte;
- BlockChar: Char;
- IsScanned: Boolean;
+ i: Integer;
+ SectorsPerBlock, Lit: LongInt;
  DialogX1, DialogY1: Byte;
 Begin
  { Positions de la boÃ®te de dialogue }
@@ -968,60 +1018,12 @@ Begin
   _English:Write(BadFound, ' found bad     ');
   Else Write(BadFound, ' d‚fectueux     ');
  End;
- { Mettre … jour SEULEMENT les attributs visuels des blocs d‚j… scann‚s }
- For Y := 0 to MapHeight - 1 do Begin
-  For X := 0 to MapWidth - 1 do Begin
-   BlockNum := Y * MapWidth + X;
-   CurrentSector := BlockNum * SectorsPerBlock;
-   If CurrentSector < TotalSectors Then Begin
-    { V‚rifier si ce bloc a ‚t‚ scann‚ }
-    IsScanned := CurrentSector < SectorsChecked;
-    GotoXY(DialogX1 + 2 + X, DialogY1 + 1 + Y);
-    { D‚terminer le type de secteur (mˆme logique qu'avant) }
-    If CurrentSector < (BootSector.ReservedSectors + BootSector.NumberOfFATs * BootSector.SectorsPerFAT) Then Begin
-     { Zone systŠme }
-     If IsScanned Then Begin
-      { Balayage - couleur brillante }
-      TextColor(Yellow);
-     End Else Begin
-      { Pas encore scann‚ - couleur att‚nu‚e }
-      TextColor(Cyan);
-     End;
-     Write(#254); { TOUJOURS LE MEME CARACTERE }
-    End
-     Else
-    Begin
-     { Zone de donn‚es }
-     If Random(10) < 3 Then Begin
-      { Secteur utilis‚ }
-      If IsScanned Then Begin
-       { Scann‚ - couleur brillante }
-       TextColor(Yellow);
-      End
-       Else
-      Begin
-       { Pas encore scann‚ - couleur att‚nu‚e }
-       TextColor(Cyan);
-      End;
-      Write(#254); { TOUJOURS LE MEME CARACTERE }
-     End
-      Else
-     Begin
-       { Secteur libre }
-      If IsScanned Then Begin
-       { Scann‚ - couleur brillante }
-       TextColor(Yellow);
-      End
-       Else
-      Begin
-       { Pas encore scann‚ - couleur att‚nu‚e }
-       TextColor(DarkGray);
-      End;
-      Write(#254); { TOUJOURS LE MEME CARACTERE }
-     End;
-    End;
-   End;
-  End;
+ { Allumer les blocs dont le balayage a commence }
+ Lit := (SectorsChecked + SectorsPerBlock - 1) div SectorsPerBlock;
+ If Lit > MapWidth * MapHeight Then Lit := MapWidth * MapHeight;
+ While MapDrawn < Lit do Begin
+  DrawBlock(MapDrawn, True);
+  Inc(MapDrawn);
  End;
  TextColor(Black);
  TextBackground(LightGray);
@@ -1626,7 +1628,7 @@ Var
  i, j, FATIndex: Integer;
  MaxFATEntries, MaxSectors: Integer;
  FATValue: Word;
- FatOfs: LongInt;
+ FatOfs, Idx, MaxEnt, MaxSec16: LongInt;
  B0, B1: Byte;
 Begin
  CheckStatus[ciFAT] := False;
@@ -1653,17 +1655,17 @@ Begin
  End
  Else
  Begin { FAT16 }
-  MaxFATEntries := MaxClusters + 2;
-  MaxSectors := (MaxFATEntries * 2 + 511) div 512; { FAT16: 2 octets par entr‚e }
-  For i := 0 to Min(BootSector.SectorsPerFAT - 1, MaxSectors - 1) do Begin
+  { MaxClusters + 2 peut depasser 32767 : calculs en LongInt }
+  MaxEnt := LongInt(MaxClusters) + 2;
+  MaxSec16 := (MaxEnt * 2 + 511) div 512;
+  For i := 0 to Min(BootSector.SectorsPerFAT - 1, MaxSec16 - 1) do Begin
    If ReadSector(BootSector.ReservedSectors + i) Then Begin
-    { Lire les entr‚es FAT16 (2 octets par entr‚e) }
-    For j := 0 to 255 do Begin { 512 / 2 = 256 entr‚es par secteur }
-     FATIndex := i * 256 + j;
-     If FATIndex >= MaxFATEntries Then Break;
-     If (j * 2 + 1) < 512 Then Begin
-      SetFAT(FATIndex, SectorBuffer[j * 2] + (SectorBuffer[j * 2 + 1] shl 8));
-     End;
+    { Lire les entrees FAT16 (2 octets par entree) }
+    For j := 0 to 255 do Begin
+     Idx := LongInt(i) * 256 + j;
+     If Idx >= MaxEnt Then Break;
+     SetFAT(Word(Idx), Word(SectorBuffer[j * 2]) +
+            (Word(SectorBuffer[j * 2 + 1]) shl 8));
     End;
    End
     Else
@@ -1677,9 +1679,9 @@ End;
 
 Procedure CheckFATConsistency;
 Var
- i, j, FATEntry, NextCluster: Integer;
+ i, j, FATEntry, NextCluster: LongInt;
  CmpBuf: Array[0..511] of Byte;
- MaxFATEntries, MaxSectors: Integer;
+ MaxFATEntries, MaxSectors: LongInt;
  FATMismatch: Boolean;
  EndOfChainMark, BadClusterMark: Word;
  ByteOffset: Word;
@@ -1809,7 +1811,8 @@ Begin
   If (GetFAT(i) <> 0) and (GetFAT(i) < EndOfChainMark) Then Begin
    NextCluster := GetFAT(i);
    j := 0;
-   While (NextCluster < EndOfChainMark) and (NextCluster <> 0) and (j < 1000) do Begin
+   While (NextCluster < EndOfChainMark) and (NextCluster <> 0) and
+         (j < 65530) do Begin
     If NextCluster > MaxClusters + 1 Then Begin
      Inc(ErrorsFound);
      Case(Language)of
@@ -1821,7 +1824,7 @@ Begin
     NextCluster := GetFAT(NextCluster);
     Inc(j);
    End;
-   If j >= 1000 Then Begin
+   If j >= 65530 Then Begin
     Inc(ErrorsFound);
     Case(Language)of
      _English:ShowDialog('FAT Error', 'Infinite loop detected in cluster chain starting at cluster ' + IntToStr(i), False);
@@ -1869,7 +1872,7 @@ End;
 
 Procedure CheckFileAllocation;
 Var
- i, NextCluster: Integer;
+ i, NextCluster: LongInt;
  Chain: Array[0..1023] of Word;
  ChainLength: Integer;
  EndOfChainMark: Word;
@@ -1915,7 +1918,7 @@ End;
 
 Procedure CheckLostClusters;
 Var
- i: Integer;
+ i: LongInt;
 Begin
  CheckStatus[ciFreeSpace] := False;
  For i := 2 to MaxClusters + 1 do Begin
@@ -1931,10 +1934,14 @@ Procedure SurfaceScan;
 Var
  i: LongInt;
  BadSectorFound: Boolean;
- SectorsExamined: LongInt;
+ SectorsExamined, SectorsPerBlockScan: LongInt;
+ BlockNo: Integer;
  DialogX1, DialogY1: Byte;
 Begin
  If Not DoSurfaceScan Then Exit;
+ SectorsPerBlockScan := (TotalSectors + (MapWidth * MapHeight - 1)) div
+                        (MapWidth * MapHeight);
+ If SectorsPerBlockScan < 1 Then SectorsPerBlockScan := 1;
   { Positions de la boŒte de dialogue }
  DialogX1 := 5;
  DialogY1 := 3;
@@ -1951,6 +1958,11 @@ Begin
   BadSectorFound := Not ReadSector(i);
   If BadSectorFound Then Begin
    Inc(BadSectors);
+   BlockNo := i div SectorsPerBlockScan;
+   If BlockNo < MapWidth * MapHeight Then Begin
+    BlockState[BlockNo] := 3;
+    DrawBlock(BlockNo, True);
+   End;
    If AutoFix Then Begin
      { Marquer le cluster correspondant comme d‚fectueux }
     If i >= (BootSector.ReservedSectors + BootSector.NumberOfFATs * BootSector.SectorsPerFAT) Then Begin
