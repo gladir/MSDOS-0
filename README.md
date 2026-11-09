@@ -37,6 +37,7 @@ Pour l'installation, il faut utiliser l'image INSTALL.IMG :
 	</tr>
 	<tr>
 		<td><img width="320" height="240" alt="image" src="https://github.com/user-attachments/assets/e5460c88-4027-4a08-a480-41e22de3553f" /></td>
+		<td><img width="320" height="240" alt="image" src="https://github.com/user-attachments/assets/c72cc0df-73ac-49b7-97a8-5bfeb7a1f923" /></td>
 	</tr>
 </table>
 
