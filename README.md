@@ -28,6 +28,17 @@ MSDOS-0 : _faire revivre l'univers du DOS, du secteur d'amorçage jusqu'à la li
 
 Le dossier [IMAGE](IMAGE/LISEZMOI.TXT) contient `DOS144A.IMG` (disquette 1,44 Mo amorcable : noyau + commandes), `DOS144B.IMG` (suite des commandes), `DOSCD.ISO` (CD-ROM amorcable) et `INSTALL.IMG` / `INSTALL2.IMG` (disquettes d'installation de MSDOS-0 sur disque dur, voir `INSTALL.PAS`). Le programme `TOOLS\MAKEDISK.PAS` permet de créer des images de disquette (réparties sur plusieurs disquettes si nécessaire), de disque dur ou de CD-ROM à l'aide de `FORMAT`, `SYS`, `DISKPC` et `UNDISKPC`.
 
+Pour l'installation, il faut utiliser l'image INSTALL.IMG : 
+
+<table>
+	<tr>
+		<td><img width="320" height="240" alt="image" src="https://github.com/user-attachments/assets/3bf8600c-e6e9-40d7-ad18-09474393675b" /></td>
+		<td><img width="320" height="240" alt="image" src="https://github.com/user-attachments/assets/43906b50-dac8-43ae-8173-551d64ea219e" /></td>
+	</tr>
+</table>
+
+
+
 <h2>Liste des fichiers</h2>
 
 Voici la liste des différents fichiers proposés dans MSDOS-0 :
