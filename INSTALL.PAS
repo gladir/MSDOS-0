@@ -96,7 +96,7 @@ Const
  kUp=$4800;
  kDown=$5000;
  { codes pays : indice, nom francais, nom anglais, code de pays, langue }
- CountryCount=6;
+ CountryCount=8;
  LangCount=5;
 
 Type
@@ -113,7 +113,7 @@ Var
  EntryCount,DiskTotal:Integer;
  VidSeg:Word;
  Mono:Boolean;
- Lang:Integer;          { 0 = francais, 1 = anglais (langue de l'ecran) }
+ Lang:Integer;          { 0 = francais, 1 = anglais, 2 = allemand (ecran) }
  SysLang:Integer;       { langue du systeme installe (LangCodes) }
  CountryIdx:Integer;
  InstDir:String;
@@ -136,11 +136,26 @@ Var
 
 Const
  LangCodes:Array[1..LangCount]of String[2]=('FR','EN','GR','IT','SP');
- CountryCodes:Array[1..CountryCount]of Word=(33,2,32,1,44,49);
+ CountryCodes:Array[1..CountryCount]of Word=(33,2,32,1,44,49,43,41);
 
-Function T(Const Fr,En:String):String;
+Function T(Const Fr,En,De:String):String;
 Begin
- If Lang=0 Then T:=Fr Else T:=En;
+ Case Lang of
+  0:T:=Fr;
+  1:T:=En;
+ Else
+  T:=De;
+ End;
+End;
+
+Function LangOf(L:Integer):Integer;
+Begin
+ Case L of
+  1:LangOf:=0;
+  3:LangOf:=2;
+ Else
+  LangOf:=1;
+ End;
 End;
 
 Function UpStr(S:String):String;
@@ -174,13 +189,17 @@ End;
 Function CountryName(I:Integer):String;
 Begin
  Case I of
-  1:CountryName:=T('France','France');
-  2:CountryName:=T('Canada (Franáais)','Canada (French)');
-  3:CountryName:=T('Belgique','Belgium');
-  4:CountryName:=T('êtats-Unis','United States');
-  5:CountryName:=T('Royaume-Uni','United Kingdom');
+  1:CountryName:=T('France','France','Frankreich');
+  2:CountryName:=T('Canada (Franáais)','Canada (French)',
+           'Kanada (Franzîsisch)');
+  3:CountryName:=T('Belgique','Belgium','Belgien');
+  4:CountryName:=T('êtats-Unis','United States','Vereinigte Staaten');
+  5:CountryName:=T('Royaume-Uni','United Kingdom','Vereinigtes Kînigreich');
+  6:CountryName:=T('Allemagne','Germany','Deutschland');
+  7:CountryName:=T('Autriche','Austria','ôsterreich');
  Else
-  CountryName:=T('Allemagne','Germany');
+  CountryName:=T('Suisse (Allemand)','Switzerland (German)',
+                 'Schweiz (Deutsch)');
  End;
 End;
 
@@ -295,7 +314,7 @@ Procedure Title;
 Var
  S:String;
 Begin
- S:=T('Installation de MSDOS-0','MSDOS-0 Setup');
+ S:=T('Installation de MSDOS-0','MSDOS-0 Setup','MSDOS-0-Setup');
  PutStr(2,2,S,aTitle);
  Fill(2,3,Length(S)+3,3,#205,aTitle);
 End;
@@ -309,7 +328,8 @@ End;
 Function KeysEnterF1F3:String;
 Begin
  KeysEnterF1F3:=T(' ENTREE=Continuer  F1=Aide  F3=Quitter  F5=Noir/blanc',
-                  ' ENTER=Continue  F1=Help  F3=Exit  F5=Black/white');
+                  ' ENTER=Continue  F1=Help  F3=Exit  F5=Black/white',
+          ' EINGABE=Weiter F1=Hilfe F3=Beenden F5=Schwarzwei·');
 End;
 
 Procedure CursorOff;
@@ -386,17 +406,24 @@ Begin
  Clear;
  Title;
  DlgBox(8,6,72,18);
- PutStr(10,6,T(' Installation non terminÇe ',' Setup is not complete '),aDlg);
+ PutStr(10,6,T(' Installation non terminÇe ',' Setup is not complete ',
+          ' Setup nicht abgeschlossen '),aDlg);
  Y:=PutWrap(11,8,58,T('L''installation de MSDOS-0 n''est pas terminÇe. '+
   'Si vous quittez maintenant, vous devrez relancer Install pour '+
   'installer MSDOS-0.',
   'MSDOS-0 Setup is not complete. If you exit now, you will need to run '+
-  'Setup again to install MSDOS-0.'),aDlg);
+  'Setup again to install MSDOS-0.',
+          'Das Setup von MSDOS-0 ist nicht abgeschlossen. Wenn Sie jetzt '+
+          'beenden, mÅssen Sie Setup erneut ausfÅhren, um MSDOS-0 zu '+
+          'installieren.'),aDlg);
  Y:=PutBullet(12,Y+1,57,T('Pour reprendre l''installation, appuyez sur ENTREE.',
-  'To continue Setup, press ENTER.'),aDlg);
+  'To continue Setup, press ENTER.',
+          'DrÅcken Sie die EINGABETASTE, um das Setup fortzusetzen.'),aDlg);
  Y:=PutBullet(12,Y+1,57,T('Pour quitter Install, appuyez sur F3.',
-  'To exit Setup, press F3.'),aDlg);
- StatusBar(T(' ENTREE=Continuer  F3=Quitter',' ENTER=Continue  F3=Exit'));
+  'To exit Setup, press F3.',
+          'DrÅcken Sie F3, um das Setup zu beenden.'),aDlg);
+ StatusBar(T(' ENTREE=Continuer  F3=Quitter',' ENTER=Continue  F3=Exit',
+          ' EINGABE=Weiter F3=Beenden'));
  Repeat
   K:=GetKey;
  Until(K=kEnter)or(K=kF3);
@@ -407,12 +434,14 @@ Procedure QuitInstall;
 Begin
  RestoreScreen;
  WriteLn(T('Pour installer MSDOS-0, tapez INSTALL Ö l''invite de commande.',
-           'To install MSDOS-0, type INSTALL at the command prompt.'));
+           'To install MSDOS-0, type INSTALL at the command prompt.',
+          'Geben Sie zur Installation von MSDOS-0 an der '+
+          'Eingabeaufforderung INSTALL ein.'));
  Halt(1);
 End;
 
 { Boite d'erreur : l'installation s'arrete }
-Procedure Fatal(Const Fr,En:String);
+Procedure Fatal(Const Fr,En,De:String);
 Var
  Y:Integer;
  K:Word;
@@ -420,11 +449,12 @@ Begin
  Clear;
  Title;
  DlgBox(8,6,72,16);
- PutStr(10,6,T(' Erreur ',' Error '),aDlg);
- Y:=PutWrap(11,8,58,T(Fr,En),aDlg);
+ PutStr(10,6,T(' Erreur ',' Error ',' Fehler '),aDlg);
+ Y:=PutWrap(11,8,58,T(Fr,En,De),aDlg);
  PutStr(11,Y+2,T('Appuyez sur ENTREE pour quitter Install.',
-                 'Press ENTER to exit Setup.'),aDlg);
- StatusBar(T(' ENTREE=Quitter',' ENTER=Exit'));
+                 'Press ENTER to exit Setup.',
+          'DrÅcken Sie die EINGABETASTE, um das Setup zu beenden.'),aDlg);
+ StatusBar(T(' ENTREE=Quitter',' ENTER=Exit',' EINGABE=Beenden'));
  Repeat
   K:=GetKey;
  Until K=kEnter;
@@ -439,7 +469,7 @@ Var
 Begin
  Clear;
  Title;
- PutStr(4,5,T('Aide d''Install','Setup Help'),aTitle);
+ PutStr(4,5,T('Aide d''Install','Setup Help','Setup-Hilfe'),aTitle);
  Y:=7;
  Case N of
   1:Y:=PutWrap(4,Y,72,T('Install copie les fichiers de MSDOS-0 sur votre '+
@@ -449,7 +479,11 @@ Begin
     'Setup copies the MSDOS-0 files to your hard disk and makes it '+
     'bootable. If the hard disk is not partitioned or formatted, Setup '+
     'offers to do it. Back up your important files with BACKUP before '+
-    'you start.'),aNorm);
+    'you start.',
+           'Setup kopiert die MSDOS-0-Dateien auf Ihre Festplatte und '+
+           'macht sie startfÑhig. Ist die Festplatte nicht partitioniert '+
+           'oder formatiert, bietet Setup dies an. Sichern Sie wichtige '+
+           'Dateien vor dem Start mit BACKUP.'),aNorm);
   2:Y:=PutWrap(4,Y,72,T('Utilisez les touches HAUT et BAS pour choisir un '+
     'paramätre puis appuyez sur ENTREE pour le modifier. La langue choisie '+
     'est aussi celle des messages des commandes MSDOS-0 installÇes '+
@@ -457,7 +491,12 @@ Begin
     'Use the UP and DOWN keys to select a setting, then press ENTER to '+
     'change it. The selected language is also the language of the messages '+
     'of the installed MSDOS-0 commands (LANGUAGE variable in '+
-    'AUTOEXEC.BAT).'),aNorm);
+    'AUTOEXEC.BAT).',
+           'WÑhlen Sie mit den Tasten NACH-OBEN und NACH-UNTEN eine '+
+           'Einstellung aus und drÅcken Sie die EINGABETASTE, um sie zu '+
+           'Ñndern. Die gewÑhlte Sprache gilt auch fÅr die Meldungen der '+
+           'installierten MSDOS-0-Befehle (Variable LANGUAGE in '+
+           'AUTOEXEC.BAT).'),aNorm);
   5:Y:=PutWrap(4,Y,72,T('Le disque dur doit avoir une partition MS-DOS '+
     'formatÇe. Si ce n''est pas le cas, Install crÇe une partition occupant '+
     'tout le disque (les autres partitions sont supprimÇes) et/ou formate '+
@@ -465,22 +504,35 @@ Begin
     'The hard disk needs a formatted MS-DOS partition. If it has none, '+
     'Setup creates a partition using the whole disk (other partitions are '+
     'deleted) and/or formats the partition: all the affected data is '+
-    'lost.'),aNorm);
+    'lost.',
+           'Die Festplatte benîtigt eine formatierte MS-DOS-Partition. '+
+           'Ist keine vorhanden, legt Setup eine Partition Åber die '+
+           'gesamte Festplatte an (andere Partitionen werden gelîscht) '+
+           'und/oder formatiert die Partition: Alle betroffenen Daten '+
+           'gehen verloren.'),aNorm);
   3:Y:=PutWrap(4,Y,72,T('Tapez le chemin du rÇpertoire oó placer les '+
     'fichiers de MSDOS-0 (par exemple C:\DOS) puis appuyez sur ENTREE. '+
     'Les fichiers systäme IO.SYS, MSDOS.SYS et COMMAND.COM sont toujours '+
     'copiÇs Ö la racine du disque.',
     'Type the path of the directory for the MSDOS-0 files (for example '+
     'C:\DOS), then press ENTER. The system files IO.SYS, MSDOS.SYS and '+
-    'COMMAND.COM are always copied to the root of the disk.'),aNorm);
+    'COMMAND.COM are always copied to the root of the disk.',
+           'Geben Sie den Pfad des Verzeichnisses fÅr die '+
+           'MSDOS-0-Dateien ein (z. B. C:\DOS) und drÅcken Sie die '+
+           'EINGABETASTE. Die Systemdateien IO.SYS, MSDOS.SYS und '+
+           'COMMAND.COM werden immer in das Stammverzeichnis des '+
+           'Laufwerks kopiert.'),aNorm);
  Else
   Y:=PutWrap(4,Y,72,T('Install copie les fichiers. Quand une autre '+
     'disquette est nÇcessaire, insÇrez-la dans le lecteur indiquÇ puis '+
     'appuyez sur ENTREE.',
     'Setup is copying files. When another disk is needed, insert it in '+
-    'the drive shown and press ENTER.'),aNorm);
+    'the drive shown and press ENTER.',
+           'Setup kopiert die Dateien. Wird eine weitere Diskette '+
+           'benîtigt, legen Sie sie in das angezeigte Laufwerk ein und '+
+           'drÅcken Sie die EINGABETASTE.'),aNorm);
  End;
- StatusBar(T(' ENTREE=Retour',' ENTER=Return'));
+ StatusBar(T(' ENTREE=Retour',' ENTER=Return',' EINGABE=ZurÅck'));
  Repeat
   K:=GetKey;
  Until(K=kEnter)or(K=kEsc);
@@ -572,7 +624,9 @@ Begin
  If Err<>0 Then
   Fatal('Le fichier INSTALL.INF est introuvable sur la disquette '+
         'd''installation.',
-        'INSTALL.INF was not found on the setup disk.');
+        'INSTALL.INF was not found on the setup disk.',
+           'Die Datei INSTALL.INF wurde auf der Setup-Diskette nicht '+
+           'gefunden.');
  While Not Eof(F)do Begin
   ReadLn(F,L);
   While(Length(L)>0)and(L[Length(L)]in[#13,#10,' '])do Dec(L[0]);
@@ -594,7 +648,8 @@ Begin
  Close(F);
  If EntryCount=0 Then
   Fatal('INSTALL.INF ne contient aucun fichier Ö installer.',
-        'INSTALL.INF does not list any file to install.');
+        'INSTALL.INF does not list any file to install.',
+           'INSTALL.INF enthÑlt keine zu installierende Datei.');
 End;
 
 { ---------------------------------------------------------------------- }
@@ -609,30 +664,44 @@ Begin
  Repeat
   Clear;
   Title;
-  PutStr(8,6,T('Bienvenue Ö Install.','Welcome to Setup.'),aNorm);
+  PutStr(8,6,T('Bienvenue Ö Install.','Welcome to Setup.',
+           'Willkommen beim Setup.'),aNorm);
   PutStr(8,8,T('Le programme d''installation installe MSDOS-0.',
-               'The Setup program installs MSDOS-0.'),aNorm);
+               'The Setup program installs MSDOS-0.',
+           'Das Setup-Programm installiert MSDOS-0.'),aNorm);
   Y:=PutBullet(10,10,66,T('Pour installer MSDOS-0 maintenant, appuyez sur '+
-    'ENTREE.','To install MSDOS-0 now, press ENTER.'),aNorm);
+    'ENTREE.','To install MSDOS-0 now, press ENTER.',
+           'DrÅcken Sie die EINGABETASTE, um MSDOS-0 jetzt zu '+
+           'installieren.'),aNorm);
   Y:=PutBullet(10,Y+1,66,T('Pour plus d''informations Ö propos de '+
     'l''installation, appuyez sur F1 ou consultez la documentation de '+
     'MSDOS-0.','For more information about Setup, press F1 or see the '+
-    'MSDOS-0 documentation.'),aNorm);
+    'MSDOS-0 documentation.',
+           'Weitere Informationen zum Setup erhalten Sie mit F1 oder in '+
+           'der MSDOS-0-Dokumentation.'),aNorm);
   Y:=PutBullet(10,Y+1,66,T('Pour quitter Install sans installer MSDOS-0, '+
-    'appuyez sur F3.','To exit Setup without installing MSDOS-0, press F3.'),
+    'appuyez sur F3.','To exit Setup without installing MSDOS-0, press F3.',
+           'DrÅcken Sie F3, um das Setup zu beenden, ohne MSDOS-0 zu '+
+           'installieren.'),
     aNorm);
-  PutStr(8,Y+1,T('Remarque :','Note:'),aNorm);
+  PutStr(8,Y+1,T('Remarque :','Note:','Hinweis:'),aNorm);
   Y:=PutWrap(20,Y+1,58,T('Si vous n''avez pas rÇalisÇ de sauvegarde de '+
     'vos fichiers rÇcemment, vous devriez le faire avant l''installation '+
     'de MSDOS-0.','If you have not backed up your files recently, you '+
-    'should do so before installing MSDOS-0.'),aNorm);
+    'should do so before installing MSDOS-0.',
+           'Wenn Sie Ihre Dateien in letzter Zeit nicht gesichert haben, '+
+           'sollten Sie dies vor der Installation von MSDOS-0 tun.'),aNorm);
   Y:=PutWrap(20,Y,58,T('Pour sauvegarder vos fichiers, appuyez sur F3 pour '+
     'quitter Install maintenant puis rÇalisez une sauvegarde avec un '+
     'programme de sauvegarde (BACKUP).','To back up your files, press F3 to '+
-    'exit Setup now, then back them up with a backup program (BACKUP).'),
+    'exit Setup now, then back them up with a backup program (BACKUP).',
+           'DrÅcken Sie zum Sichern Ihrer Dateien F3, um das Setup jetzt '+
+           'zu beenden, und sichern Sie sie dann mit einem '+
+           'Sicherungsprogramm (BACKUP).'),
     aNorm);
   PutStr(8,Y+1,T('Pour continuer le programme d''installation, appuyez sur '+
-    'ENTREE.','To continue Setup, press ENTER.'),aNorm);
+    'ENTREE.','To continue Setup, press ENTER.',
+           'DrÅcken Sie die EINGABETASTE, um das Setup fortzusetzen.'),aNorm);
   StatusBar(KeysEnterF1F3);
   K:=GetKey;
   If K=kEnter Then Exit;
@@ -658,9 +727,11 @@ Var
 Begin
  S:=DateTimeStr;
  DlgBox(14,8,66,13);
- PutStr(16,8,T(' Date et heure ',' Date and time '),aDlg);
+ PutStr(16,8,T(' Date et heure ',' Date and time ',
+          ' Datum und Uhrzeit '),aDlg);
  PutStr(17,10,T('Tapez la date et l''heure (AAAA-MM-JJ HH:MM) :',
-                'Type the date and time (YYYY-MM-DD HH:MM):'),aDlg);
+                'Type the date and time (YYYY-MM-DD HH:MM):',
+          'Geben Sie Datum und Uhrzeit ein (JJJJ-MM-TT HH:MM):'),aDlg);
  K:=EditLine(17,11,20,S);
  If K<>kEnter Then Exit;
  Val(Copy(S,1,4),Y,C1);Val(Copy(S,6,2),M,C2);Val(Copy(S,9,2),D,C3);
@@ -677,16 +748,16 @@ Var
  I,R:Integer;
 Begin
  For I:=1 to CountryCount do ListItems[I]:=CountryName(I);
- R:=PickList(T('Pays','Country'),CountryCount,CountryIdx);
+ R:=PickList(T('Pays','Country','Land'),CountryCount,CountryIdx);
  If R>0 Then Begin
   CountryIdx:=R;
   Case R of
    4,5:SysLang:=2;
-   6:SysLang:=3;
+   6,7,8:SysLang:=3;
   Else
    SysLang:=1;
   End;
-  If SysLang=1 Then Lang:=0 Else Lang:=1;
+  Lang:=LangOf(SysLang);
  End;
 End;
 
@@ -695,10 +766,14 @@ Var
  I,R:Integer;
 Begin
  For I:=1 to LangCount do ListItems[I]:=LangName(I);
- R:=PickList(T('Langue','Language'),LangCount,SysLang);
+ R:=PickList(T('Langue','Language','Sprache'),LangCount,SysLang);
  If R>0 Then Begin
   SysLang:=R;
-  If R=1 Then Lang:=0 Else Lang:=1;
+  Lang:=LangOf(R);
+  { pays par defaut de la langue choisie }
+  If (R=3)and(CountryIdx<6)Then CountryIdx:=6
+  Else If (R=1)and(CountryIdx>3)Then CountryIdx:=1
+  Else If (R=2)and(CountryIdx<>4)and(CountryIdx<>5)Then CountryIdx:=4;
  End;
 End;
 
@@ -713,30 +788,36 @@ Begin
   Clear;
   Title;
   PutStr(8,6,T('Install utilisera les paramätres systäme suivants :',
-               'Setup will use the following system settings:'),aNorm);
+               'Setup will use the following system settings:',
+           'Setup verwendet die folgenden Systemeinstellungen:'),aNorm);
   Box(7,8,66,13,False,aNorm);
   For Y:=1 to 4 do Begin
    If Sel=Y Then Attr:=aHi Else Attr:=aNorm;
    Fill(8,8+Y,65,8+Y,' ',Attr);
    Case Y of
-    1:Begin PutStr(10,9,T('Date/Heure :','Date/Time :'),Attr);
+    1:Begin PutStr(10,9,T('Date/Heure :','Date/Time :','Datum/Zeit :'),Attr);
        PutStr(31,9,DateTimeStr,Attr);End;
-    2:Begin PutStr(10,10,T('Pays :','Country :'),Attr);
+    2:Begin PutStr(10,10,T('Pays :','Country :','Land :'),Attr);
        PutStr(31,10,CountryName(CountryIdx),Attr);End;
-    3:Begin PutStr(10,11,T('Langue :','Language :'),Attr);
+    3:Begin PutStr(10,11,T('Langue :','Language :','Sprache :'),Attr);
        PutStr(31,11,LangName(SysLang),Attr);End;
    Else
     PutStr(10,12,T('Les paramätres sont corrects.',
-      'The settings are correct.'),Attr);
+      'The settings are correct.','Die Einstellungen sind korrekt.'),Attr);
    End;
   End;
   Y:=PutWrap(8,15,66,T('Si tous les paramätres sont corrects, appuyez sur '+
-    'ENTREE.','If all settings are correct, press ENTER.'),aNorm);
+    'ENTREE.','If all settings are correct, press ENTER.',
+           'Sind alle Einstellungen korrekt, drÅcken Sie die '+
+           'EINGABETASTE.'),aNorm);
   Y:=PutWrap(8,Y+1,66,T('Pour modifier un paramätre, appuyez sur les '+
     'touches de direction HAUT ou BAS pour le sÇlectionner. Appuyez '+
     'ensuite sur ENTREE pour visualiser les options.',
     'To change a setting, press the UP or DOWN arrow key to select it. '+
-    'Then press ENTER to see the options.'),aNorm);
+    'Then press ENTER to see the options.',
+           'Zum éndern einer Einstellung wÑhlen Sie diese mit der Taste '+
+           'NACH-OBEN oder NACH-UNTEN aus. DrÅcken Sie dann die '+
+           'EINGABETASTE, um die Optionen anzuzeigen.'),aNorm);
   StatusBar(KeysEnterF1F3);
   K:=GetKey;
   If K=kUp Then Begin If Sel>1 Then Dec(Sel);End
@@ -778,16 +859,23 @@ Begin
   Title;
   Y:=PutWrap(10,6,60,T('Install placera vos fichiers MSDOS-0 dans le '+
     'rÇpertoire suivant :','Setup will place your MSDOS-0 files in the '+
-    'following directory:'),aNorm);
+    'following directory:',
+           'Setup legt Ihre MSDOS-0-Dateien im folgenden Verzeichnis ab:'),
+           aNorm);
   Fill(10,9,70,9,' ',aHi);
   PutStr(10,9,S,aHi);
   Y:=PutWrap(10,11,60,T('Pour placer les fichiers MSDOS-0 dans ce '+
     'rÇpertoire, appuyez sur ENTREE.','To place the MSDOS-0 files in this '+
-    'directory, press ENTER.'),aNorm);
+    'directory, press ENTER.',
+           'DrÅcken Sie die EINGABETASTE, um die MSDOS-0-Dateien in '+
+           'diesem Verzeichnis abzulegen.'),aNorm);
   Y:=PutWrap(10,Y+1,60,T('Pour placer les fichiers MSDOS-0 dans un '+
     'rÇpertoire diffÇrent, tapez son chemin et appuyez sur ENTREE.',
     'To place the MSDOS-0 files in a different directory, type its path '+
-    'and press ENTER.'),aNorm);
+    'and press ENTER.',
+           'Um die MSDOS-0-Dateien in einem anderen Verzeichnis '+
+           'abzulegen, geben Sie dessen Pfad ein und drÅcken Sie die '+
+           'EINGABETASTE.'),aNorm);
   StatusBar(KeysEnterF1F3);
   K:=EditLine(10,9,60,S);
   If K=kEnter Then Begin
@@ -813,7 +901,8 @@ Begin
  If TotalBytes>0 Then Pct:=DoneBytes*100 div TotalBytes Else Pct:=100;
  If Pct>100 Then Pct:=100;
  N:=Pct*GaugeW div 100;
- PutStr(5,16,NumStr(Pct)+T('% effectuÇ','% complete')+'       ',aNorm);
+ PutStr(5,16,NumStr(Pct)+T('% effectuÇ','% complete',
+          '% abgeschlossen')+'       ',aNorm);
  Fill(6,18,5+GaugeW,18,' ',aNorm);
  If N>0 Then Fill(6,18,5+N,18,' ',aGauge);
  Fill(3,20,78,20,' ',aNorm);
@@ -827,16 +916,24 @@ Begin
  Clear;
  Title;
  Y:=PutWrap(8,6,66,T('MSDOS-0 est un clone de MS-DOS Çcrit entiärement en '+
-   'Pascal.','MSDOS-0 is an MS-DOS clone written entirely in Pascal.'),aNorm);
+   'Pascal.','MSDOS-0 is an MS-DOS clone written entirely in Pascal.',
+          'MSDOS-0 ist ein vollstÑndig in Pascal geschriebener '+
+          'MS-DOS-Klon.'),aNorm);
  Y:=PutWrap(8,Y+1,66,T('Tous les programmes installÇs sont fournis avec '+
    'leur code source : vous pouvez les compiler avec Turbo Pascal ou Free '+
    'Pascal.','All the installed programs come with their source code: you '+
-   'can compile them with Turbo Pascal or Free Pascal.'),aNorm);
+   'can compile them with Turbo Pascal or Free Pascal.',
+          'Alle installierten Programme werden mit Quellcode geliefert: '+
+          'Sie kînnen sie mit Turbo Pascal oder Free Pascal kompilieren.'),
+          aNorm);
  Y:=PutWrap(8,Y+1,66,T('Tapez DIR '+InstDir+' Ö l''invite pour voir les '+
    'commandes installÇes.','Type DIR '+InstDir+' at the prompt to see the '+
-   'installed commands.'),aNorm);
+   'installed commands.',
+          'Geben Sie an der Eingabeaufforderung DIR '+InstDir+
+          ' ein, um die installierten Befehle anzuzeigen.'),aNorm);
  Box(4,17,5+GaugeW+1,19,False,aNorm);
- StatusBar(T(' ENTREE=Continuer  F3=Quitter',' ENTER=Continue  F3=Exit'));
+ StatusBar(T(' ENTREE=Continuer  F3=Quitter',' ENTER=Continue  F3=Exit',
+          ' EINGABE=Weiter F3=Beenden'));
  DrawGauge;
 End;
 
@@ -856,11 +953,14 @@ Begin
  Repeat
   DlgBox(14,8,66,14);
   PutStr(18,10,T('InsÇrez la disquette dans le lecteur '+SrcDrive+':',
-                 'Insert the disk in drive '+SrcDrive+':'),aDlg);
-  PutStr(18,11,T('Disquette ','Disk ')+NumStr(N),aDlg);
+                 'Insert the disk in drive '+SrcDrive+':',
+           'Legen Sie die Diskette in Laufwerk '+SrcDrive+': ein'),aDlg);
+  PutStr(18,11,T('Disquette ','Disk ','Diskette ')+NumStr(N),aDlg);
   If Retry Then PutStr(18,12,T('Ce n''est pas la bonne disquette.',
-                               'This is not the correct disk.'),aDlg)
-  Else PutStr(18,12,T('Appuyez ensuite sur ENTREE.','Then press ENTER.'),aDlg);
+                               'This is not the correct disk.',
+           'Dies ist nicht die richtige Diskette.'),aDlg)
+  Else PutStr(18,12,T('Appuyez ensuite sur ENTREE.','Then press ENTER.',
+           'DrÅcken Sie dann die EINGABETASTE.'),aDlg);
   K:=GetKey;
   If K=kF3 Then Begin
    If ConfirmExit Then QuitInstall;
@@ -964,7 +1064,11 @@ Begin
         'avec FORMAT '+InstDir[1]+': /S, et relancez Install.',
         'Setup cannot find drive '+InstDir[1]+': or it is not formatted. '+
         'Partition the hard disk with FDISK, format it with FORMAT '+
-        InstDir[1]+': /S, then run Setup again.');
+        InstDir[1]+': /S, then run Setup again.',
+           'Setup findet Laufwerk '+InstDir[1]+
+           ': nicht oder es ist nicht formatiert. Partitionieren Sie die '+
+           'Festplatte mit FDISK, formatieren Sie sie mit FORMAT '+
+           InstDir[1]+': /S und starten Sie Setup erneut.');
  Need:=0;
  For I:=1 to EntryCount do Need:=Need+ClusterRound(Entries[I].Size);
  If Free<Need Then
@@ -973,7 +1077,10 @@ Begin
         ' Ko disponibles.',
         'Not enough disk space on '+InstDir[1]+': '+
         NumStr((Need+1023)div 1024)+' KB required, '+NumStr(Free div 1024)+
-        ' KB available.');
+        ' KB available.',
+           'Nicht genÅgend Speicherplatz auf '+InstDir[1]+': '+
+           NumStr((Need+1023)div 1024)+' KB erforderlich, '+
+           NumStr(Free div 1024)+' KB verfÅgbar.');
 End;
 
 Procedure CopyFiles;
@@ -985,7 +1092,7 @@ Var
 Begin
  Drv:=InstDir[1]+':\';
  DoneBytes:=0;CurFile:='';
- CopyNote:=T('Copie de','Copying');
+ CopyNote:=T('Copie de','Copying','Kopieren von');
  DrawCopyScreen;
  { le repertoire est cree apres les fichiers systeme : IO.SYS et MSDOS.SYS
    doivent rester les deux premieres entrees de la racine }
@@ -1013,7 +1120,10 @@ Begin
    Fatal('La copie de '+Entries[I].Name+' vers '+Dst+' a ÇchouÇ (disque '+
          'plein ou protÇgÇ en Çcriture). Code '+LastStage+NumStr(LastErr)+'.',
          'Copying '+Entries[I].Name+' to '+Dst+' failed (disk full or '+
-         'write-protected). Code '+LastStage+NumStr(LastErr)+'.');
+         'write-protected). Code '+LastStage+NumStr(LastErr)+'.',
+            'Das Kopieren von '+Entries[I].Name+' nach '+Dst+
+            ' ist fehlgeschlagen (DatentrÑger voll oder '+
+            'schreibgeschÅtzt). Code '+LastStage+NumStr(LastErr)+'.');
  End;
  CurFile:='';
  DoneBytes:=TotalBytes;
@@ -1340,7 +1450,7 @@ End;
 
 Function MoStr(Sectors:LongInt):String;
 Begin
- MoStr:=NumStr(Sectors div 2048)+T(' Mo',' MB');
+ MoStr:=NumStr(Sectors div 2048)+T(' Mo',' MB',' MB');
 End;
 
 { Table de partition : une seule partition active occupant tout le disque ;
@@ -1402,7 +1512,8 @@ Begin
  Clear;
  Title;
  PutStr(8,6,T('Formatage du disque dur '+InstDir[1]+': en cours...',
-              'Formatting hard disk '+InstDir[1]+': ...'),aNorm);
+              'Formatting hard disk '+InstDir[1]+': ...',
+          'Festplatte '+InstDir[1]+': wird formatiert...'),aNorm);
  Box(4,17,5+GaugeW+1,19,False,aNorm);
  StatusBar('');
 End;
@@ -1413,7 +1524,8 @@ Var
 Begin
  If Total>0 Then Pct:=Done*100 div Total Else Pct:=100;
  N:=Pct*GaugeW div 100;
- PutStr(5,16,NumStr(Pct)+T('% effectuÇ','% complete')+'       ',aNorm);
+ PutStr(5,16,NumStr(Pct)+T('% effectuÇ','% complete',
+          '% abgeschlossen')+'       ',aNorm);
  Fill(6,18,5+GaugeW,18,' ',aNorm);
  If N>0 Then Fill(6,18,5+N,18,' ',aGauge);
 End;
@@ -1501,45 +1613,61 @@ Begin
  If St=dsReady Then Exit;
  If St=dsNoDisk Then
   Fatal('Install n''a dÇtectÇ aucun disque dur.',
-        'Setup did not detect any hard disk.');
+        'Setup did not detect any hard disk.',
+           'Setup hat keine Festplatte erkannt.');
  Sz:=WholeDiskSize;
  Repeat
   Clear;
   Title;
-  PutStr(8,6,T('Disque dur','Hard disk'),aTitle);
+  PutStr(8,6,T('Disque dur','Hard disk','Festplatte'),aTitle);
   Case St of
    dsNoPart:Begin
     Y:=PutWrap(8,8,66,T('Le disque dur n''est pas partitionnÇ.',
-      'The hard disk is not partitioned.'),aNorm);
+      'The hard disk is not partitioned.',
+             'Die Festplatte ist nicht partitioniert.'),aNorm);
     Y:=PutWrap(8,Y+1,66,T('Install va crÇer une partition MSDOS-0 de '+
       MoStr(Sz)+' occupant tout le disque dur, puis la formater.',
       'Setup will create a '+MoStr(Sz)+' MSDOS-0 partition using the whole '+
-      'hard disk, then format it.'),aNorm);
+      'hard disk, then format it.',
+             'Setup legt eine MSDOS-0-Partition von '+MoStr(Sz)+
+             ' Åber die gesamte Festplatte an und formatiert sie '+
+             'anschlie·end.'),aNorm);
    End;
    dsOther:Begin
     Y:=PutWrap(8,8,66,T('Le disque dur ne contient aucune partition MS-DOS.',
-      'The hard disk has no MS-DOS partition.'),aNorm);
+      'The hard disk has no MS-DOS partition.',
+             'Die Festplatte enthÑlt keine MS-DOS-Partition.'),aNorm);
     Y:=PutWrap(8,Y+1,66,T('ATTENTION : pour continuer, Install doit SUPPRIMER '+
       'toutes les partitions du disque dur, crÇer une partition MSDOS-0 de '+
       MoStr(Sz)+' et la formater. Toutes les donnÇes du disque dur seront '+
       'perdues.','WARNING: to continue, Setup must DELETE all the partitions '+
       'of the hard disk, create a '+MoStr(Sz)+' MSDOS-0 partition and format '+
-      'it. All the data on the hard disk will be lost.'),aNorm);
+      'it. All the data on the hard disk will be lost.',
+             'ACHTUNG: Um fortzufahren, muss Setup alle Partitionen der '+
+             'Festplatte LôSCHEN, eine MSDOS-0-Partition von '+MoStr(Sz)+
+             ' anlegen und formatieren. Alle Daten der Festplatte gehen '+
+             'verloren.'),aNorm);
    End;
   Else Begin
     Y:=PutWrap(8,8,66,T('Le disque dur n''est pas formatÇ.',
-      'The hard disk is not formatted.'),aNorm);
+      'The hard disk is not formatted.',
+             'Die Festplatte ist nicht formatiert.'),aNorm);
     Y:=PutWrap(8,Y+1,66,T('Install va formater la partition '+InstDir[1]+
       ': ('+MoStr(PartSectors)+'). Toutes les donnÇes de cette partition '+
       'seront perdues.','Setup will format partition '+InstDir[1]+': ('+
-      MoStr(PartSectors)+'). All the data on this partition will be lost.'),
+      MoStr(PartSectors)+'). All the data on this partition will be lost.',
+             'Setup formatiert Partition '+InstDir[1]+': ('+
+             MoStr(PartSectors)+
+             '). Alle Daten dieser Partition gehen verloren.'),
       aNorm);
    End;
   End;
   Y:=PutBullet(10,Y+2,64,T('Pour continuer, appuyez sur ENTREE.',
-    'To continue, press ENTER.'),aNorm);
+    'To continue, press ENTER.',
+           'DrÅcken Sie zum Fortfahren die EINGABETASTE.'),aNorm);
   Y:=PutBullet(10,Y+1,64,T('Pour quitter Install, appuyez sur F3.',
-    'To exit Setup, press F3.'),aNorm);
+    'To exit Setup, press F3.',
+           'DrÅcken Sie F3, um das Setup zu beenden.'),aNorm);
   StatusBar(KeysEnterF1F3);
   K:=GetKey;
   If K=kEnter Then Break;
@@ -1548,13 +1676,16 @@ Begin
  If St<>dsNoFormat Then
   If Not CreatePartition Then
    Fatal('Impossible de crÇer la partition du disque dur.',
-         'Cannot create the hard disk partition.');
+         'Cannot create the hard disk partition.',
+            'Die Partition der Festplatte kann nicht angelegt werden.');
  If Not FormatPartition Then
   Fatal('Le formatage du disque dur a ÇchouÇ.',
-        'Formatting the hard disk failed.');
+        'Formatting the hard disk failed.',
+           'Die Festplatte konnte nicht formatiert werden.');
  If DiskState<>dsReady Then
   Fatal('Le disque dur n''est pas utilisable apräs le formatage.',
-        'The hard disk is not usable after formatting.');
+        'The hard disk is not usable after formatting.',
+           'Die Festplatte ist nach dem Formatieren nicht verwendbar.');
 End;
 
 { ---------------------------------------------------------------------- }
@@ -1727,7 +1858,8 @@ Begin
  Drv:=UpCase(InstDir[1]);
  If Not PrepareUnit(Drv)Then Exit;
  If Not LoadBpb Then Exit;
- PutStr(5,20,T('PrÇparation du disque...','Preparing the disk...')+
+ PutStr(5,20,T('PrÇparation du disque...','Preparing the disk...',
+          'DatentrÑger wird vorbereitet...')+
         '                    ',aNorm);
  DeleteOld(Drv+':\IO.SYS');
  DeleteOld(Drv+':\MSDOS.SYS');
@@ -1744,7 +1876,9 @@ Begin
   Fatal('Le rÇpertoire racine est plein : impossible de placer IO.SYS et '+
         'MSDOS.SYS en tàte du disque.',
         'The root directory is full: cannot place IO.SYS and MSDOS.SYS at '+
-        'the start of the disk.');
+        'the start of the disk.',
+           'Das Stammverzeichnis ist voll: IO.SYS und MSDOS.SYS kînnen '+
+           'nicht an den Anfang des DatentrÑgers gelegt werden.');
  MapCount:=0;
  From:=Word(Need+2);
  For C:=2 to Word(Need+1) do Begin
@@ -1752,15 +1886,20 @@ Begin
   If Nx<>0 Then Begin
    If(Nx=$FFF7)or((Not Fat16)and(Nx=$FF7))Then
     Fatal('Une grappe dÇfectueuse se trouve au dÇbut du disque.',
-          'A bad cluster is located at the start of the disk.');
+          'A bad cluster is located at the start of the disk.',
+             'Am Anfang des DatentrÑgers befindet sich ein fehlerhafter '+
+             'Cluster.');
    F:=FindFree(From);
    If(F=0)or(MapCount>=MaxMap)Then
     Fatal('Espace disque insuffisant pour dÇplacer les fichiers existants.',
-          'Not enough disk space to move the existing files.');
+          'Not enough disk space to move the existing files.',
+             'Nicht genÅgend Speicherplatz zum Verschieben der '+
+             'vorhandenen Dateien.');
    From:=F+1;
    If(Not CopyCluster(C,F))or(Not FatPut(F,Nx))Then
     Fatal('Erreur de lecture ou d''Çcriture du disque.',
-          'Disk read or write error.');
+          'Disk read or write error.',
+             'Fehler beim Lesen oder Schreiben des DatentrÑgers.');
    Inc(MapCount);MapOld[MapCount]:=C;MapNew[MapCount]:=F;
   End;
  End;
@@ -1834,28 +1973,40 @@ Var
 Begin
  Drv:=UpCase(InstDir[1]);
  CurFile:='';
- CopyNote:=T('PrÇparation du disque...','Preparing the disk...');
+ CopyNote:=T('PrÇparation du disque...','Preparing the disk...',
+          'DatentrÑger wird vorbereitet...');
  PutStr(5,20,CopyNote+'                    ',aNorm);
  If Not PrepareUnit(Drv)Then Begin
   Fatal('Le lecteur '+Drv+': ne peut pas àtre rendu amoráable (seuls les '+
         'lecteurs A:, B: et la premiäre partition du disque dur C: sont '+
         'pris en charge). Les fichiers ont ÇtÇ copiÇs.',
         'Drive '+Drv+': cannot be made bootable (only A:, B: and the first '+
-        'partition of hard disk C: are supported). The files were copied.');
+        'partition of hard disk C: are supported). The files were copied.',
+           'Laufwerk '+Drv+
+           ': kann nicht startfÑhig gemacht werden (nur A:, B: und die '+
+           'erste Partition der Festplatte C: werden unterstÅtzt). Die '+
+           'Dateien wurden kopiert.');
  End;
  If Not SystemLayoutOk Then
   Fatal('IO.SYS et MSDOS.SYS ne sont pas au dÇbut du disque '+Drv+': '+
         'Formatez le disque avec FORMAT '+Drv+': /S puis relancez Install.',
         'IO.SYS and MSDOS.SYS are not at the start of drive '+Drv+': '+
-        'Format the disk with FORMAT '+Drv+': /S, then run Setup again.');
+        'Format the disk with FORMAT '+Drv+': /S, then run Setup again.',
+           'IO.SYS und MSDOS.SYS liegen nicht am Anfang von Laufwerk '+Drv+
+           ': Formatieren Sie den DatentrÑger mit FORMAT '+Drv+
+           ': /S und starten Sie Setup erneut.');
  If Not WriteBootSector Then
   Fatal('Impossible d''Çcrire le secteur de dÇmarrage du disque '+Drv+':',
-        'Cannot write the boot sector of drive '+Drv+':');
+        'Cannot write the boot sector of drive '+Drv+':',
+           'Der Startsektor von Laufwerk '+Drv+
+           ': kann nicht geschrieben werden.');
  If Not WriteMbr Then
   Fatal('Impossible d''Çcrire le chargeur MBR du disque dur. Le disque '+
         'est-il partitionnÇ avec FDISK ?',
         'Cannot write the hard disk MBR. Is the disk partitioned with '+
-        'FDISK?');
+        'FDISK?',
+           'Der MBR der Festplatte kann nicht geschrieben werden. Ist '+
+           'die Festplatte mit FDISK partitioniert?');
 End;
 
 { ---------------------------------------------------------------------- }
@@ -1894,7 +2045,8 @@ Begin
  Err:=IOResult;
  If Err<>0 Then
   Fatal('Impossible de crÇer CONFIG.SYS sur '+Drv,
-        'Cannot create CONFIG.SYS on '+Drv);
+        'Cannot create CONFIG.SYS on '+Drv,
+           'CONFIG.SYS kann auf '+Drv+' nicht erstellt werden');
  WriteLn(F,'FILES=30');
  WriteLn(F,'BUFFERS=20');
  WriteLn(F,'LASTDRIVE=E');
@@ -1906,7 +2058,8 @@ Begin
  Err:=IOResult;
  If Err<>0 Then
   Fatal('Impossible de crÇer AUTOEXEC.BAT sur '+Drv,
-        'Cannot create AUTOEXEC.BAT on '+Drv);
+        'Cannot create AUTOEXEC.BAT on '+Drv,
+           'AUTOEXEC.BAT kann auf '+Drv+' nicht erstellt werden');
  WriteLn(F,'@ECHO OFF');
  WriteLn(F,'SET LANGUAGE=',LangCodes[SysLang]);
  WriteLn(F,'PATH ',InstDir);
@@ -1929,17 +2082,24 @@ Begin
   Title;
   DlgBox(8,6,72,17);
   PutStr(26,6,T(' Installation de MSDOS-0 terminÇe. ',
-                ' MSDOS-0 Setup is complete. '),aDlg);
+                ' MSDOS-0 Setup is complete. ',
+           ' Setup von MSDOS-0 abgeschlossen '),aDlg);
   Y:=PutWrap(11,8,58,T('MSDOS-0 est maintenant installÇ sur votre '+
-    'ordinateur.','MSDOS-0 is now installed on your computer.'),aDlg);
+    'ordinateur.','MSDOS-0 is now installed on your computer.',
+           'MSDOS-0 ist jetzt auf Ihrem Computer installiert.'),aDlg);
   Y:=PutBullet(12,Y+1,57,T('Pour redÇmarrer votre ordinateur avec MSDOS-0, '+
     'retirez la disquette du lecteur A: puis appuyez sur ENTREE.',
     'To restart your computer with MSDOS-0, remove the disk from drive A: '+
-    'and press ENTER.'),aDlg);
+    'and press ENTER.',
+           'Um den Computer mit MSDOS-0 neu zu starten, entfernen Sie '+
+           'die Diskette aus Laufwerk A: und drÅcken Sie die '+
+           'EINGABETASTE.'),aDlg);
   Y:=PutBullet(12,Y+1,57,T('Pour voir les commandes installÇes, tapez DIR '+
     InstDir+' Ö l''invite.','To see the installed commands, type DIR '+
-    InstDir+' at the prompt.'),aDlg);
-  StatusBar(T(' ENTREE=Continuer',' ENTER=Continue'));
+    InstDir+' at the prompt.',
+           'Geben Sie an der Eingabeaufforderung DIR '+InstDir+
+           ' ein, um die installierten Befehle anzuzeigen.'),aDlg);
+  StatusBar(T(' ENTREE=Continuer',' ENTER=Continue',' EINGABE=Weiter'));
   K:=GetKey;
   If K=kF5 Then Begin Mono:=Not Mono;SetTheme;End;
  Until K=kEnter;
@@ -1948,7 +2108,8 @@ Begin
  MemW[$40:$72]:=$1234;
  Intr($19,R);
  WriteLn(T('RedÇmarrez l''ordinateur pour utiliser MSDOS-0.',
-           'Restart your computer to use MSDOS-0.'));
+           'Restart your computer to use MSDOS-0.',
+          'Starten Sie den Computer neu, um MSDOS-0 zu verwenden.'));
 End;
 
 Var
@@ -1960,6 +2121,10 @@ BEGIN
  Lang:=0;SysLang:=1;CountryIdx:=1;
  If UpStr(Copy(GetEnv('LANGUAGE'),1,2))='EN' Then Begin
   Lang:=1;SysLang:=2;CountryIdx:=4;
+ End
+ Else If (UpStr(Copy(GetEnv('LANGUAGE'),1,2))='GR')or
+         (UpStr(Copy(GetEnv('LANGUAGE'),1,2))='DE') Then Begin
+  Lang:=2;SysLang:=3;CountryIdx:=6;
  End;
  FSplit(FExpand(ParamStr(0)),D,N,E);
  SrcDir:=D;

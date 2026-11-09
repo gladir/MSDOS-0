@@ -62,8 +62,9 @@ INSTALL : installer MSDOS-0 sur un disque dur
 ---------------------------------------------
 INSTALL.PAS (racine du depot) est le programme d'installation, dans le style
 de l'Install de MS-DOS 6.22 : ecrans bleus, ENTREE=Continuer, F1=Aide,
-F3=Quitter, F5=Noir/blanc ; francais ou anglais (variable LANGUAGE, ou choix de
-la langue dans l'ecran des parametres).
+F3=Quitter, F5=Noir/blanc ; francais, anglais ou allemand (Deutsch ; variable LANGUAGE=FR/EN/GR, ou
+choix de la langue dans l'ecran des parametres : fleches HAUT/BAS puis ENTREE,
+choisir Deutsch donne aussi le pays Deutschland).
 
   1. Bienvenue ;
   2. parametres systeme : date/heure, pays, langue (touches HAUT/BAS, ENTREE
