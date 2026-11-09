@@ -134,66 +134,79 @@ Begin
  GetDiskLabel:=''
 End;
 
+Var
+ EnvBuf:Array[0..1100]of Byte;
+ EnvLen:Integer;
+
+Procedure EnvPut(Const T:String);
+Var
+ I:Integer;
+Begin
+ For I:=1 to Length(T)do Begin
+  EnvBuf[EnvLen]:=Ord(T[I]);
+  Inc(EnvLen);
+ End;
+ EnvBuf[EnvLen]:=0;
+ Inc(EnvLen);
+End;
+
+{ SET VAR=valeur : reconstruit l'environnement du processeur de commandes
+  (la variable existante est remplacee sur place, ses doublons eventuels
+  sont supprimes, une valeur vide supprime la variable, sinon elle est
+  ajoutee a la fin) }
 Procedure SetEnv(EnvVar,Value:String);
 Var
- Link,
- PrevLink,
- EnvirP:Word;
- Size,Scan,Where,Dif:Integer;
- NewVar,OldVar,Test:String;
-
- Function CheckSpace(Wanted:Integer):Boolean;Begin
-  If Wanted+Scan>Size Then InOutRes:=8;
-  CheckSpace := inoutres = 0;
- End;
-
+ Link,PrevLink,EnvirP:Word;
+ Size,Scan,I,Q:Integer;
+ S:String;
+ Done:Boolean;
 Begin
  {$IFNDEF FPC}
-  If InOutRes>0 Then Exit;
-  For Scan:=1 TO Length(EnvVar)do EnvVar[Scan]:=UpCase(EnvVar[Scan]);
-  EnvVar:=EnvVar+'=';
-  NewVar:=EnvVar+Value+#0;
-  link:=PrefixSeg;
-  Repeat
-   PrevLink:=Link;
-   Link:=MemW[link:$16];
-  Until Link=prevlink;
-  EnvirP:=MemW[Link:$2C];
-  Size:=MemW[Envirp-1:$03]*16;
-  Scan:=0;
-  Where:=-1;
-  While mem[EnvirP:Scan]<>0 do Begin
-   Move(mem[EnvirP:Scan],Test[1],255);
-   Test[0]:=#255;
-   Test[0]:=Chr(pos(#0,Test));
-   If Pos(EnvVar,Test)=1 Then Begin
-    Where:=Scan;
-    OldVar:=Test;
-   End;
-   Scan:=Scan+Length(Test);
+ If InOutRes>0 Then Exit;
+ For I:=1 TO Length(EnvVar)do EnvVar[I]:=UpCase(EnvVar[I]);
+ EnvVar:=EnvVar+'=';
+ Link:=PrefixSeg;
+ Repeat
+  PrevLink:=Link;
+  Link:=MemW[Link:$16];
+ Until Link=PrevLink;
+ EnvirP:=MemW[Link:$2C];
+ Size:=MemW[EnvirP-1:$03]*16;
+ If Size>1100Then Size:=1100;
+ EnvLen:=0;
+ Done:=False;
+ Scan:=0;
+ While(Scan<Size-4)and(Mem[EnvirP:Scan]<>0)do Begin
+  S:='';
+  While(Mem[EnvirP:Scan]<>0)and(Length(S)<255)and(Scan<Size-4)do Begin
+   S:=S+Chr(Mem[EnvirP:Scan]);
+   Inc(Scan);
   End;
-  If Value=''Then Begin
-   { SET VAR= supprime la variable }
-   If Where<>-1 Then Move(mem[EnvirP:Where+Length(OldVar)],mem[EnvirP:Where],
-     Size-Where-Length(OldVar));
-   Exit;
-  End;
-  If Where=-1 Then Begin
-   Where:=Scan;
-   NewVar:=NewVar+#0#0#0;
-   If Not CheckSpace(Length(NewVar)) Then Exit;
+  Inc(Scan);
+  If StrToUpper(Copy(S,1,Length(EnvVar)))=EnvVar Then Begin
+   If(Not Done)and(Value<>'')Then EnvPut(EnvVar+Value);
+   Done:=True;
   End
    Else
-  Begin
-   Dif:=Length(NewVar)-Length(OldVar);
-   If Dif>0 Then Begin
-    If Not CheckSpace(Dif)Then Exit;
-    Move(mem[EnvirP:Where], mem[EnvirP:Where+Dif],Scan-Where+3);
-   End
-    Else
-   If Dif<0 Then Move(mem[EnvirP:Where-Dif],Mem[EnvirP:Where],Size-Where+Dif);
+  EnvPut(S);
+ End;
+ If(Not Done)and(Value<>'')Then EnvPut(EnvVar+Value);
+ { fin de liste, puis le nombre de chaines et le chemin du programme }
+ EnvBuf[EnvLen]:=0;
+ Inc(EnvLen);
+ If(Scan<Size-4)and(MemW[EnvirP:Scan+1]=1)Then Begin
+  Q:=Scan+3;
+  While(Mem[EnvirP:Q]<>0)and(Q-Scan<130)do Inc(Q);
+  For I:=Scan+1 to Q do Begin
+   If EnvLen<1100Then EnvBuf[EnvLen]:=Mem[EnvirP:I];
+   Inc(EnvLen);
   End;
-  Move(NewVar[1],Mem[EnvirP:Where],Length(NewVar));
+ End;
+ If EnvLen+2>Size Then Begin
+  InOutRes:=8;
+  Exit;
+ End;
+ For I:=0 to EnvLen-1 do Mem[EnvirP:I]:=EnvBuf[I];
  {$ENDIF}
 End;
 
