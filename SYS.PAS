@@ -1042,6 +1042,17 @@ Const
   $20,$20,$20,$53,$59,$53,$00,$00,$00,$00,$00,$00,$00,$00,$55,$AA
  );
 
+Const
+ { Chargeur MBR minimal : se recopie en 0000:0600, cherche l'entree active
+   de la table de partition, charge son secteur de boot en 0000:7C00 et y
+   saute (DL = 80h). Sinon INT 18h. }
+ MbrCode:Array[0..$4C]of Byte=(
+  $FA,$33,$C0,$8E,$D0,$BC,$00,$7C,$8E,$D8,$8E,$C0,$FB,$FC,$BE,$00,
+  $7C,$BF,$00,$06,$B9,$00,$01,$F3,$A5,$EA,$1E,$06,$00,$00,$BE,$BE,
+  $07,$B1,$04,$80,$3C,$80,$74,$09,$83,$C6,$10,$E2,$F6,$CD,$18,$EB,
+  $FE,$8B,$14,$8B,$4C,$02,$BB,$00,$7C,$B8,$01,$02,$CD,$13,$72,$EE,
+  $81,$3E,$FE,$7D,$55,$AA,$75,$E5,$EA,$00,$7C,$00,$00);
+
 Function WriteBootSector:Boolean;
 Var
  Old,Buf:TSector;
@@ -1428,16 +1439,6 @@ Begin
  Else ParseDosFamily:=False;
 End;
 
-Const
- { Chargeur MBR minimal : se recopie en 0000:0600, cherche l'entree active
-   de la table de partition, charge son secteur de boot en 0000:7C00 et y
-   saute (DL = 80h). Sinon INT 18h. }
- MbrCode:Array[0..$4C]of Byte=(
-  $FA,$33,$C0,$8E,$D0,$BC,$00,$7C,$8E,$D8,$8E,$C0,$FB,$FC,$BE,$00,
-  $7C,$BF,$00,$06,$B9,$00,$01,$F3,$A5,$EA,$1E,$06,$00,$00,$BE,$BE,
-  $07,$B1,$04,$80,$3C,$80,$74,$09,$83,$C6,$10,$E2,$F6,$CD,$18,$EB,
-  $FE,$8B,$14,$8B,$4C,$02,$BB,$00,$7C,$B8,$01,$02,$CD,$13,$72,$EE,
-  $81,$3E,$FE,$7D,$55,$AA,$75,$E5,$EA,$00,$7C,$00,$00);
 
 { Marque la partition PartNum (1..4) comme active dans la table de partition
   du MBR, et desactive les trois autres. Necessite un MBR valide (signature

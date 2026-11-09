@@ -31,6 +31,8 @@ Var
  PendingGoto:String;
  BatFrames:Array[1..4]of Array[0..9]of String[60];
  Option:(optNone,optCommand);
+ HasC,PermShell:Boolean;
+ Err:Integer;
  Echo:Boolean;
  CommandFound,Terminated:Boolean;
  CmdStr:String;
@@ -1532,8 +1534,15 @@ Begin
  Until CurrParam='';
 End;
 
-Procedure PathCommand;Begin
- WriteLn(GetEnv('PATH'));
+Procedure PathCommand;
+Var
+ P:String;
+Begin
+ P:=ParamList;
+ If Copy(P,1,1)='='Then P:=TrimL(Copy(P,2,255));
+ If P=''Then WriteLn(GetEnv('PATH'))
+ Else If P=';'Then SetEnv('PATH','')
+ Else SetEnv('PATH',P);
 End;
 
 Procedure PauseCommand;
@@ -1587,8 +1596,15 @@ Begin
  End;
 End;
 
-Procedure PromptCommand;Begin
- WriteLn('Cette commande n''est pas mise en oeuvre');
+{ PROMPT texte : definit l'invite (variable PROMPT, voir ShowPrompt) ;
+  sans parametre, retablit l'invite par defaut }
+Procedure PromptCommand;
+Var
+ P:String;
+Begin
+ P:=ParamList;
+ If Copy(P,1,1)='='Then P:=TrimL(Copy(P,2,255));
+ SetEnv('PROMPT',P);
 End;
 
 Procedure RmDirCommand;Var
@@ -2574,6 +2590,11 @@ BEGIN
  End;
  Echo:=True;Pipe:=False;PipeToCommand:=False;
  InCmd:=0;
+ HasC:=False;PermShell:=False;
+ For I:=1 to ParamCount do Begin
+  If StrToUpper(ParamStr(I))='/C'Then HasC:=True;
+  If StrToUpper(ParamStr(I))='/P'Then PermShell:=True;
+ End;
  If(ParamStr(1)='/?')or(ParamStr(1)='--help')or(ParamStr(1)='-h')Then Begin
   Case Language of
    _Germany:Begin
@@ -2595,7 +2616,7 @@ BEGIN
   End;
  End
   Else
- If ParamCount>1Then Begin
+ If HasC Then Begin
   Option:=optNone;
   For I:=1 to ParamCount do Begin
    If(Option=optCommand)Then Begin
@@ -2606,7 +2627,10 @@ BEGIN
     Else
    If StrToUpper(ParamStr(I))='/C'Then Option:=optCommand
     Else
-   Begin
+   If(Copy(ParamStr(I),1,1)<>'/')or(StrToUpper(Copy(ParamStr(I),1,2))='/E')or
+     (StrToUpper(ParamStr(I))='/P')Then
+    { chemin de COMSPEC, /E:taille, /P : sans effet avec /C }
+   Else Begin
     WriteLn('Parametre non reconnu : ',ParamStr(I));
    End;
   End;
@@ -2615,6 +2639,16 @@ BEGIN
  Begin
   Terminated:=False;
   HomeMessage;
+  { /P : interpreteur permanent, execute AUTOEXEC.BAT (SHELL=COMMAND.COM
+    C:\ /P dans CONFIG.SYS) }
+  If PermShell Then Begin
+   {$I-}ChDir('\');{$I+}
+   Err:=IoResult;
+   If FSearch('AUTOEXEC.BAT','.')<>''Then Begin
+    CmdStr:='AUTOEXEC.BAT';
+    RunCommand;
+   End;
+  End;
   Repeat
    ShowPrompt;
    ReadLn(CmdStr);
