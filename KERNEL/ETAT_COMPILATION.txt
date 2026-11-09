@@ -149,3 +149,20 @@ IMAGE\DOSCD.ISO (ISO 9660 + El Torito, ecrit par MAKEDISK /ISO) ; DOS144A.IMG = 
 DEVENV (/KERNELTEST,... /KTBOOTIMG:IMAGE\DOS144A.IMG) jusqu'a l'invite A:\>, VER et DIR fonctionnent. Image disque dur
 (MAKEDISK /HD:64) : MBR -> VBR -> IO.SYS -> invite C:\>.
 Limite : SYS ne traite que des FAT <= 64 Ko ; MAKEDISK choisit donc des unites d'allocation assez grandes (/HD 1..1000 Mo).
+
+Installation sur disque dur (INSTALL.PAS, IMAGE\INSTALL.IMG)
+------------------------------------------------------------
+INSTALL.PAS : ecrans bleus (memoire video directe, INT 16h), francais/anglais ; copie les fichiers de INSTALL.INF (produit
+par MAKEDISK /INF, une demande de disquette par disquette), cree IO.SYS/MSDOS.SYS en tete de la racine, ecrit le secteur de
+boot MS-DOS (BOOTCODE.INC, partage avec SYS.PAS), le chargeur MBR et la partition active, CONFIG.SYS (SHELL=...\COMMAND.COM
+...\ /P) et AUTOEXEC.BAT. Teste dans DEVENV (/KTBOOTIMG:INSTALL.IMG /KTHD:disque.img + script mount A:) puis demarrage du
+disque installe : invite C:\>, PATH et LANGUAGE de AUTOEXEC.BAT, commandes de C:\DOS.
+Correctifs decouverts pendant ce test :
+ - noyau : GetNextCluster (lecture des fichiers) ne gerait pas une entree FAT12 a cheval sur deux secteurs : un .EXE de
+   plusieurs dizaines de Ko etait lu avec des grappes d'une autre zone (reutilise FxGet) ;
+ - noyau : un sous-repertoire plein (16 entrees par grappe) refusait de nouveaux fichiers (acces refuse) : FxGrowDir ajoute
+   une grappe a la chaine (FxCreate et FxMkDir) ;
+ - COMMAND : /P (execute AUTOEXEC.BAT, parametres de SHELL= acceptes), PATH dir;dir et PROMPT texte sont maintenant
+   implementes ; MAKEDISK : disquettes numerotees (/NUMBER), /BOOT, /INF, /NOINST et fichier de parametres @fichier.
+Reste : le noyau ne gere qu'une disquette a la fois (INSTALL redemande la disquette 2 puis continue) ; seul FAT12/FAT16 ;
+le disque cible doit deja etre partitionne (FDISK) et formate (FORMAT).

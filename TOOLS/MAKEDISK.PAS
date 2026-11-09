@@ -32,6 +32,7 @@ Uses DOS;
 Const
  MaxAdd=16;
  MaxFiles=200;
+ MaxArgs=48;
  MaxDisks=26;
  IsoSec=2048;
 
@@ -40,7 +41,9 @@ Type
   Path:String[100];
   Name:String[12];
   Size:LongInt;
-  Disk:Integer;  { >=0 disquette, -1 noyau, -2 image, -3 a placer, -4 ignore }
+  Disk:Integer;  { >=0 disquette, -1 noyau, -2 image, -3 a placer, -4 ignore,
+                   -5 force sur la disquette 0 }
+  Inst:Boolean;  { fichier a installer (liste INSTALL.INF) }
   LBA:LongInt;
  End;
  TBuf=Array[0..65519]of Byte;
@@ -60,6 +63,12 @@ Var
  Sec:TSec;
  DirBuf:PBuf;
  Yr,Mo,Dy,Dw,Hr,Mi,Sc,Hs:Word;
+ BootList,NoInstList:Array[1..MaxAdd]of String;
+ BootCount,NoInstCount:Integer;
+ InfName,InfTmp:String;
+ Numbered,ScanInst:Boolean;
+ ArgList:Array[1..MaxArgs]of String[120];
+ ArgCount:Integer;
 
 Function UpStr(S:String):String;
 Var
@@ -144,6 +153,37 @@ Begin
  RunTool:=(DosError=0)and(DosExitCode=0);
 End;
 
+{ Parametres : la ligne de commande DOS est limitee a 127 caracteres ; un
+  parametre @fichier lit les parametres dans un fichier texte (un par ligne,
+  lignes vides et lignes commencant par ; ignorees) }
+Procedure LoadArgs;
+Var
+ I:Integer;
+ T:Text;
+ L:String;
+Begin
+ ArgCount:=0;
+ For I:=1 to ParamCount do
+  If Copy(ParamStr(I),1,1)='@' Then Begin
+   Assign(T,Copy(ParamStr(I),2,255));
+   {$I-}Reset(T);{$I+}
+   If IOResult<>0 Then Begin
+    WriteLn('Fichier de parametres introuvable : ',ParamStr(I));Halt(1);
+   End;
+   While Not Eof(T)do Begin
+    ReadLn(T,L);
+    While(L<>'')and(L[Length(L)]in[#13,#10,' '])do Dec(L[0]);
+    If(L<>'')and(L[1]<>';')and(ArgCount<MaxArgs)Then Begin
+     Inc(ArgCount);ArgList[ArgCount]:=L;
+    End;
+   End;
+   Close(T);
+  End
+  Else If ArgCount<MaxArgs Then Begin
+   Inc(ArgCount);ArgList[ArgCount]:=ParamStr(I);
+  End;
+End;
+
 Procedure Help;Begin
  WriteLn('MAKEDISK : Cette commande permet de creer des images disque ',
          'amorcables de MSDOS-0.');
@@ -155,6 +195,8 @@ Procedure Help;Begin
  WriteLn('                   [/ADD:fichier] [/TOOLS:dossier] ',
          '[/EXTRACT:dossier]');
  WriteLn('                   [/ISO:fichier.iso] [/LABEL:nom] [/NOBUILD] [/V]');
+ WriteLn('                   [/BOOT:fichier] [/INF:nom] [/NOINST:nom] ',
+         '[/NUMBER]');
  WriteLn;
  WriteLn(' image.img        Fichier d''image a creer (ecrase s''il existe).');
  WriteLn(' /FLOPPY[:taille] Disquette : 160, 180, 320, 360, 720, 1200, 1440 ',
@@ -188,10 +230,26 @@ Procedure Help;Begin
  WriteLn('                  d''image de boot (disquette 1200, 1440 ou 2880 ',
          'Ko).');
  WriteLn(' /LABEL:nom       Nom de volume du CD-ROM (defaut : MSDOS0).');
+ WriteLn(' /BOOT:fichier    Impose un fichier (ou masque) sur la premiere ',
+         'disquette');
+ WriteLn('                  (repetable, 16 maximum), meme s''il est dans ',
+         '/CMDS.');
+ WriteLn(' /INF:nom         Cree la liste des fichiers a installer (kernel ',
+         'et /CMDS)');
+ WriteLn('                  sur la premiere disquette (INSTALL.INF, lue par ',
+         'INSTALL).');
+ WriteLn(' /NOINST:nom      Ce fichier n''est pas dans la liste /INF ',
+         '(repetable).');
+ WriteLn(' /NUMBER          Disquettes suivantes : INSTALL2.IMG, ',
+         'INSTALL3.IMG...');
  WriteLn(' /EXTRACT:dossier Extrait ensuite le contenu des disquettes ',
          '(UNDISKPC).');
  WriteLn(' /NOBUILD         Ne cree pas d''image ; seulement /EXTRACT.');
  WriteLn(' /V               Affiche chaque commande lancee.');
+ WriteLn;
+ WriteLn(' @fichier        Lit les parametres dans un fichier texte (la ',
+         'ligne de');
+ WriteLn('                  commande DOS est limitee a 127 caracteres).');
  WriteLn;
  WriteLn('Exemples :');
  WriteLn('  MAKEDISK DOS144A.IMG /KERNEL:KERNEL /CMDS:BIN16');
@@ -210,9 +268,10 @@ Begin
  ImgName:='';KernelDir:='.';CmdDir:='';ToolDir:='';ExtractDir:='';
  Masks:='*.EXE,*.COM,*.BAT,*.SYS';FSName:='';IsoName:='';VolLabel:='MSDOS0';
  AddCount:=0;FloppySize:=1440;HardMB:=32;
+ BootCount:=0;NoInstCount:=0;InfName:='';Numbered:=False;InfTmp:='';
  IsHard:=False;NoBuild:=False;Verbose:=False;
- For I:=1 to ParamCount do Begin
-  S:=ParamStr(I);
+ For I:=1 to ArgCount do Begin
+  S:=ArgList[I];
   U:=UpStr(S);
   If(U='/FLOPPY')Then IsHard:=False
   Else If Copy(U,1,8)='/FLOPPY:' Then Begin
@@ -240,6 +299,22 @@ Begin
    Inc(AddCount);
    AddList[AddCount]:=Copy(S,6,255);
   End
+  Else If Copy(U,1,6)='/BOOT:' Then Begin
+   If BootCount>=MaxAdd Then Begin
+    WriteLn('Trop de parametres /BOOT: (maximum ',MaxAdd,').');Exit;
+   End;
+   Inc(BootCount);
+   BootList[BootCount]:=Copy(S,7,255);
+  End
+  Else If Copy(U,1,8)='/NOINST:' Then Begin
+   If NoInstCount>=MaxAdd Then Begin
+    WriteLn('Trop de parametres /NOINST: (maximum ',MaxAdd,').');Exit;
+   End;
+   Inc(NoInstCount);
+   NoInstList[NoInstCount]:=UpStr(Copy(S,9,255));
+  End
+  Else If Copy(U,1,5)='/INF:' Then InfName:=UpStr(Copy(S,6,255))
+  Else If U='/NUMBER' Then Numbered:=True
   Else If Copy(U,1,7)='/TOOLS:' Then ToolDir:=Copy(S,8,255)
   Else If Copy(U,1,9)='/EXTRACT:' Then ExtractDir:=Copy(S,10,255)
   Else If Copy(U,1,5)='/ISO:' Then IsoName:=Copy(S,6,255)
@@ -338,8 +413,16 @@ Begin
 End;
 
 Procedure AddFile(Const Path,Nm:String;Size:LongInt;Disk:Integer);
+Var
+ I:Integer;
 Begin
- If NameKnown(Nm)Then Exit;
+ If NameKnown(Nm)Then Begin
+  { un fichier deja liste peut etre force sur la disquette 0 }
+  If Disk=-5 Then
+   For I:=1 to FileCount do
+    If(Files[I].Name=Nm)and(Files[I].Disk=-3)Then Files[I].Disk:=-5;
+  Exit;
+ End;
  If FileCount>=MaxFiles+8 Then Begin
   WriteLn('Trop de fichiers (maximum ',MaxFiles,') : ',Nm,' ignore.');
   Exit;
@@ -350,6 +433,7 @@ Begin
  Files[FileCount].Size:=Size;
  Files[FileCount].Disk:=Disk;
  Files[FileCount].LBA:=0;
+ Files[FileCount].Inst:=ScanInst;
 End;
 
 { Ajoute les fichiers correspondant au masque (Disk = etat initial) ;
@@ -386,6 +470,7 @@ Var
  M,List:String;
 Begin
  FileCount:=0;
+ ScanInst:=True;
  For I:=1 to 3 do
   Cnt:=ScanMask(WithSlash(KernelDir)+KFiles[I],-1);
  If CmdDir<>'' Then Begin
@@ -397,9 +482,23 @@ Begin
    If M<>'' Then Cnt:=ScanMask(WithSlash(CmdDir)+M,-3);
   End;
  End;
+ ScanInst:=False;
  For I:=1 to AddCount do
   If ScanMask(AddList[I],-3)=0 Then
    WriteLn('Avertissement : aucun fichier pour ',AddList[I]);
+ { fichiers imposes sur la disquette 0 (disquette d'installation) }
+ For I:=1 to BootCount do
+  If ScanMask(BootList[I],-5)=0 Then
+   WriteLn('Avertissement : aucun fichier pour ',BootList[I]);
+ For I:=1 to NoInstCount do
+  For P:=1 to FileCount do
+   If Files[P].Name=NoInstList[I]Then Files[P].Inst:=False;
+ If InfName<>'' Then Begin
+  Cnt:=0;
+  For I:=1 to FileCount do
+   If Files[I].Inst Then Inc(Cnt);
+  AddFile('',InfName,LongInt(Cnt)*32+160,-5);
+ End;
 End;
 
 { Nombre maximal de disquettes pour le nom demande (la lettre finale est
@@ -412,6 +511,7 @@ Var
  C:Char;
 Begin
  DiskLimit:=MaxDisks;
+ If Numbered Then Exit;
  FSplit(FullImg,D,Nm,E);
  C:=#0;
  If Nm<>'' Then C:=UpCase(Nm[Length(Nm)]);
@@ -429,6 +529,10 @@ Var
 Begin
  If N=0 Then Begin DiskName:=FullImg;Exit;End;
  FSplit(FullImg,D,Nm,E);
+ If Numbered Then Begin
+  DiskName:=D+Nm+NumStr(N+1)+E;
+  Exit;
+ End;
  C:=#0;
  If Nm<>'' Then C:=UpCase(Nm[Length(Nm)]);
  If(C>='A')and(C<='Z')Then Nm[Length(Nm)]:=Chr(Ord(C)+N)
@@ -449,7 +553,7 @@ Begin
  DiskCount:=1;
  If IsHard Then Begin
   For I:=1 to FileCount do
-   If Files[I].Disk=-3 Then Files[I].Disk:=0;
+   If(Files[I].Disk=-3)or(Files[I].Disk=-5)Then Files[I].Disk:=0;
   Exit;
  End;
  If Not FloppyGeom(FloppySize,Total,Spc,Root,Spf)Then Halt(1);
@@ -457,7 +561,7 @@ Begin
  DataCl:=(Total-1-2*Spf-(Root*32+511)div 512)div Spc;
  FreeCl[0]:=DataCl;FreeEnt[0]:=Root;
  For I:=1 to FileCount do
-  If Files[I].Disk=-1 Then Begin
+  If(Files[I].Disk=-1)or(Files[I].Disk=-5)Then Begin
    FreeCl[0]:=FreeCl[0]-(Files[I].Size+CB-1)div CB;
    FreeEnt[0]:=FreeEnt[0]-1;
   End;
@@ -485,6 +589,53 @@ Begin
      Inc(DiskCount);
     End;
    End;
+  End;
+ For I:=1 to FileCount do
+  If Files[I].Disk=-5 Then Files[I].Disk:=0;
+End;
+
+{ Liste INSTALL.INF des fichiers a installer (lue par INSTALL.PAS) :
+  disquette (1..n), destination (\ = racine, DOS = repertoire d'installation),
+  nom, taille. Ecrite dans un fichier temporaire copie sur la disquette 0. }
+Procedure WriteInf;
+Var
+ T:Text;
+ I,K,Cnt:Integer;
+ Err:Integer;
+ D:Integer;
+ Dest:String;
+ SR:SearchRec;
+Begin
+ If InfName='' Then Exit;
+ InfTmp:=GetEnv('TEMP');
+ If InfTmp='' Then InfTmp:='.';
+ InfTmp:=WithSlash(InfTmp)+InfName;
+ Assign(T,InfTmp);
+ {$I-}Rewrite(T);{$I+}
+ Err:=IOResult;
+ If Err<>0 Then Begin
+  WriteLn('Creation impossible : ',InfTmp);Halt(1);
+ End;
+ WriteLn(T,'; ',InfName,' - liste des fichiers a installer (MAKEDISK)');
+ WriteLn(T,'; disquette,destination,nom,taille');
+ { classe par disquette : une seule demande de disquette par disquette }
+ For K:=0 to DiskCount-1 do
+  For I:=1 to FileCount do
+   If Files[I].Inst Then Begin
+    If Files[I].Disk=-1 Then Begin D:=0;Dest:='\';End
+    Else Begin D:=Files[I].Disk;Dest:='DOS';End;
+    If D=K Then
+     WriteLn(T,D+1,',',Dest,',',Files[I].Name,',',Files[I].Size);
+   End;
+ Close(T);
+ For I:=1 to FileCount do
+  If Files[I].Name=InfName Then Begin
+   Files[I].Path:=InfTmp;
+   FindFirst(InfTmp,AnyFile,SR);
+   If DosError=0 Then Files[I].Size:=SR.Size;
+   {$IFDEF FPC}
+   FindClose(SR);
+   {$ENDIF}
   End;
 End;
 
@@ -849,8 +1000,9 @@ Var
  Err,N:Integer;
  F:File;
 BEGIN
- If(ParamCount=0)or(ParamStr(1)='/?')or(ParamStr(1)='-h')or
-   (ParamStr(1)='--help')Then Begin
+ LoadArgs;
+ If(ArgCount=0)or(ArgList[1]='/?')or(ArgList[1]='-h')or
+   (ArgList[1]='--help')Then Begin
   Help;
   Halt;
  End;
@@ -863,6 +1015,7 @@ BEGIN
  If Not NoBuild Then Begin
   BuildList;
   Pack;
+  WriteInf;
   For N:=0 to DiskCount-1 do Begin
    If Not StepFormat(N)Then Halt(1);
    If N=0 Then
@@ -886,6 +1039,11 @@ BEGIN
    WriteLn('== Creation du CD-ROM ',IsoName);
    If Not BuildISO Then Halt(1);
    WriteLn('CD-ROM cree : ',IsoName);
+  End;
+  If InfTmp<>'' Then Begin
+   Assign(F,InfTmp);
+   {$I-}Erase(F);{$I+}
+   Err:=IOResult;
   End;
  End;
  If ExtractDir<>'' Then Begin

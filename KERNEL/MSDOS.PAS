@@ -504,7 +504,6 @@ End;
 
 { Déclarations Forward }
 Procedure Intr1Ah;{$IFNDEF FPC}Interrupt;{$ENDIF}Forward;
-Procedure Intr20h;{$IFNDEF FPC}Interrupt;{$ENDIF}Forward;
 Procedure Intr21h;{$IFNDEF FPC}Interrupt;{$ENDIF}Forward;
 Procedure Intr20hEntry;{$IFNDEF FPC}Interrupt;{$ENDIF}Forward;
 Procedure Intr21hCore;{$IFNDEF FPC}Interrupt;{$ENDIF}Forward;
@@ -521,8 +520,6 @@ Function DOS4Eh_FindFirstFile(Path:String;Attr:Byte;var DTA:DTAStruct):Word;
 Function DOS4Fh_FindNextFile(var DTA:DTAStruct):Word;Forward;
 
 { Fonctions d'accès aux données du kernel }
-Procedure GetFindState(Var State:FindFileState);Near;Forward;
-Procedure SetFindState(Var State:FindFileState);Near;Forward;
 
 { Fonctions FAT pour Find File }
 Function GetRootDirectorySector:Word;Near;Forward;
@@ -869,7 +866,6 @@ Procedure SetStandardError(ErrorCode:Word);Near;Forward;
 { Fonctions d'accès aux données dans Code Segment }
 Function GetCurrentDrive: Byte;Near;Forward;
 Procedure SetCurrentDrive(Drive: Byte);Near;Forward;
-Function GetCurrentDirDrive(Index: Byte): Byte;Near;Forward;
 Function GetCurrentDirCluster(Index: Byte): Word;Near;Forward;
 Function GetCurrentDirPath(Index: Byte): String;Near;Forward;
 Procedure SetCurrentDirDrive(Index, Drive: Byte);Near;Forward;
@@ -1467,94 +1463,6 @@ Procedure Intr1Ah;Assembler;ASM
 @TimeHigh: DW 0    { Partie haute du compteur de ticks }
 @TimeLow:  DW 0    { Partie basse du compteur de ticks }
 END;
-
-Procedure Intr20h;
-Begin
- { INT 20h - Program Terminate }
- { Cette interruption termine le programme courant et retourne au DOS }
-
- ASM
-  PUSH AX
-  PUSH BX
-  PUSH CX
-  PUSH DX
-  PUSH SI
-  PUSH DI
-  PUSH DS
-  PUSH ES
-
-  { Fermer tous les fichiers ouverts par le PSP courant }
-  { Parcourir la FileTable et marquer les fichiers comme fermés }
-  MOV CX,20                    { 20 entrées dans FileTable }
-  MOV SI,0                     { Index = 0 }
-@CloseLoop:
-  MOV AX,SI
-  MOV DX,17                    { Taille d'une entrée FileTable }
-  MUL DX
-  ADD AX,FTBase                  { Offset de FileTable }
-  MOV BX,AX
-  MOV BYTE PTR [Data + BX],0   { Marquer InUse = False }
-  INC SI
-  LOOP @CloseLoop
-
-  { Obtenir le PSP parent depuis le PSP courant }
-  MOV DS,Data.DataMOS.CurrentPSP
-  MOV AX,WORD PTR DS:[16h]     { Offset 16h = Parent PSP }
-  MOV Data.DataMOS.CurrentPSP,AX
-
-  { Restaurer les vecteurs d'interruption sauvegardés }
-  { INT 22h - Program Terminate Address }
-  MOV AX,WORD PTR DS:[0Ah]     { Offset }
-  MOV DX,WORD PTR DS:[0Ch]     { Segment }
-  PUSH DX                      { _DS: Segment }
-  PUSH AX                      { _DX: Offset }
-  MOV AL,22h
-  PUSH AX                      { _AL: Numéro d'interruption }
-  CALL SetIntVec
-
-  { INT 23h - Ctrl-Break Exit Address }
-  MOV AX,WORD PTR DS:[0Eh]     { Offset }
-  MOV DX,WORD PTR DS:[10h]     { Segment }
-  PUSH DX                      { _DS: Segment }
-  PUSH AX                      { _DX: Offset }
-  MOV AL,23h
-  PUSH AX                      { _AL: Numéro d'interruption }
-  CALL SetIntVec
-
-  { INT 24h - Critical Error Handler }
-  MOV AX,WORD PTR DS:[12h]     { Offset }
-  MOV DX,WORD PTR DS:[14h]     { Segment }
-  PUSH DX                      { _DS: Segment }
-  PUSH AX                      { _DX: Offset }
-  MOV AL,24h
-  PUSH AX                      { _AL: Numéro d'interruption }
-  CALL SetIntVec
-
-  { Mettre le code de retour à 0 (terminaison normale) }
-  MOV Data.DataMOS.LastReturnCode,0
-
-  { Obtenir l'adresse de terminaison }
-  MOV DS,Data.DataMOS.CurrentPSP
-  MOV SI,WORD PTR DS:[0Ah]     { Program Terminate Address (Offset) }
-  MOV DI,WORD PTR DS:[0Ch]     { Program Terminate Address (Segment) }
-
-  { Restaurer les registres }
-  POP ES
-  POP DS
-  POP DI
-  POP SI
-  POP DX
-  POP CX
-  POP BX
-  POP AX
-
-  { Effectuer un saut FAR vers l'adresse de terminaison }
-  PUSH DI      { Segment }
-  PUSH SI      { Offset }
-  XOR AX,AX    { Code de retour = 0 }
-  RETF         { Retour FAR - saute vers l'adresse de terminaison }
- END;
-End;
 
 Procedure Intr21hCore;Assembler;ASM
  STI
@@ -4855,19 +4763,6 @@ ASM
  MOV BYTE PTR [Data + 2],AL  { Stocker CurrentDrive dans DataMOS.CurrDisk }
 END;
 
-Function GetCurrentDirDrive(Index: Byte): Byte;Assembler;
-ASM
- MOV AL,Index
- CMP AL,NDrv
- JB @Ok
- XOR AL,AL
-@Ok:
- MOV AH,CDSize
- MUL AH
- MOV BX,AX
- MOV AL,BYTE PTR [Data + BX + CDBase]    { Drive dans CurrentDir }
-END;
-
 Function GetCurrentDirCluster(Index: Byte): Word;Assembler;
 ASM
  MOV AL,Index
@@ -6394,6 +6289,28 @@ Begin
  End;
 End;
 
+{ Repertoire (hors racine) plein : ajoute un cluster vide a sa chaine ;
+  S = premier secteur du nouveau cluster }
+Function FxGrowDir(Var V:TFxVol;Dir:Word;Var S:LongInt):Boolean;
+Var
+ C,Nx,K:Word;
+ B:TFxSec;
+Begin
+ FxGrowDir:=False;
+ If Dir<2 Then Exit;
+ C:=Dir;
+ Repeat
+  Nx:=FxGet(V,C);
+  If (Nx>=2) And (Nx<>$FFFF) Then C:=Nx;
+ Until (Nx<2) Or (Nx=$FFFF);
+ Nx:=FxAlloc(V,C);
+ If Nx=0 Then Exit;
+ FillChar(B,512,0);
+ S:=V.FirstData+LongInt(Nx-2)*V.SPC;
+ For K:=0 To V.SPC-1 Do WriteSector(V.Drive,S+K,@B);
+ FxGrowDir:=True;
+End;
+
 { Ecrit une entree de repertoire dans le tampon a la position P }
 { Date et heure DOS courantes (horloge BIOS INT 1Ah/02h-04h) ;
   1980-01-01 00:00 si l'horloge est absente }
@@ -6560,7 +6477,10 @@ Begin
   P:=Idx*32;
   FxPutEnt(Buf,P,Nm,Attr Or $20,0,0);
  End Else Begin
-  If FI<0 Then Begin SetStandardError(5); Exit End;
+  If FI<0 Then Begin
+   If Not FxGrowDir(V,Dir,FS) Then Begin SetStandardError(5); Exit End;
+   FI:=0;
+  End;
   Sec:=FS;
   Idx:=FI;
   If Not ReadSector(V.Drive,Sec,@Buf) Then Begin SetStandardError(5); Exit End;
@@ -6820,7 +6740,10 @@ Begin
  If FxBadName(Nm) Then Begin SetStandardError(3); Exit End;
  FxMkDir:=5;
  If FxScan(V,Dir,Nm,Sec,Idx,FS,FI,E) Then Begin SetStandardError(5); Exit End;
- If FI<0 Then Begin SetStandardError(5); Exit End;
+ If FI<0 Then Begin
+  If Not FxGrowDir(V,Dir,FS) Then Begin SetStandardError(5); Exit End;
+  FI:=0;
+ End;
  C:=FxAlloc(V,0);
  If C=0 Then Begin SetStandardError(5); Exit End;
  { cluster du nouveau repertoire : "." et ".." puis entrees vides }
@@ -8641,46 +8564,13 @@ End;
 Function GetNextCluster(Drive:Byte;BootSec:BootSectorRec;
   CurrentCluster:Word):Word;
 Var
- FATSector: Word;
- FATOffset: Word;
- Buffer: Array[0..511] of Byte;
- NextCluster: Word;
+ V:TFxVol;
 Begin
- GetNextCluster:=$FFFF; { Fin de chaîne par défaut }
-
- If BootSec.SectorsPerFAT = 0 Then Exit; { FAT32 non supportée }
-
- If CurrentCluster < 2 Then Exit; { Cluster invalide }
-
- { Pour FAT12 }
- If BootSec.SectorsPerFAT <= 12 Then Begin
-  FATOffset:=(CurrentCluster * 3) div 2;
-  FATSector:=BootSec.ReservedSectors + (FATOffset div BootSec.BytesPerSector);
-  FATOffset:=FATOffset mod BootSec.BytesPerSector;
-
-  If Not ReadSector(Drive, FATSector, @Buffer) Then Exit;
-
-  If (CurrentCluster mod 2) = 0 Then
-   NextCluster:=(Buffer[FATOffset] or ((Buffer[FATOffset + 1] and $0F) shl 8))
-  Else
-   NextCluster:=((Buffer[FATOffset] shr 4) or (Buffer[FATOffset + 1] shl 4));
-
-  If NextCluster >= $FF8 Then NextCluster:=$FFFF; { Fin de chaîne }
- End
- Else Begin
-  { Pour FAT16 }
-  FATOffset:=CurrentCluster * 2;
-  FATSector:=BootSec.ReservedSectors + (FATOffset div BootSec.BytesPerSector);
-  FATOffset:=FATOffset mod BootSec.BytesPerSector;
-
-  If Not ReadSector(Drive, FATSector, @Buffer) Then Exit;
-
-  NextCluster:=Buffer[FATOffset] or (Buffer[FATOffset + 1] shl 8);
-
-  If NextCluster >= $FFF8 Then NextCluster:=$FFFF; { Fin de chaîne }
- End;
-
- GetNextCluster:=NextCluster;
+ { FxGet gere FAT12 (entrees a cheval sur deux secteurs) et FAT16 }
+ GetNextCluster:=$FFFF;
+ If CurrentCluster < 2 Then Exit;
+ If Not FxVol(Drive,V) Then Exit;
+ GetNextCluster:=FxGet(V,CurrentCluster);
 End;
 
 { Lire les données d'un fichier }
@@ -11361,55 +11251,7 @@ End;
 { Fonctions d'accès aux données du kernel dans le Code Segment }
 
 { Obtient l'état de recherche de fichiers depuis le Code Segment }
-Procedure GetFindState(Var State:FindFileState);
-Begin
- { Les données sont stockées dans le Code Segment dans la structure Data }
- ASM
-  PUSH DS
-  PUSH SI
-
-  { Pointer vers la structure Data.DataMOS.FindState }
-  MOV SI,OFFSET Data.DataMOS
-  ADD SI,OFFSET DataMOS.FindState  { Offset vers FindState }
-
-  { Copier FindState depuis le Code Segment vers la variable paramètre }
-  LES DI,State
-  MOV CX,TYPE FindFileState
-  CLD
-  REP MOVSB
-
-  POP SI
-  POP DS
- END;
-End;
-
 { Sauvegarde l'état de recherche de fichiers dans le Code Segment }
-Procedure SetFindState(Var State:FindFileState);
-Begin
- { Sauvegarder dans le Code Segment dans la structure Data }
- ASM
-  PUSH DS
-  PUSH ES
-  PUSH DI
-
-  { Pointer vers la structure Data.DataMOS.FindState }
-  PUSH CS
-  POP ES
-  MOV DI,OFFSET Data.DataMOS
-  ADD DI,OFFSET DataMOS.FindState  { Offset vers FindState }
-
-  { Copier State vers le Code Segment }
-  LDS SI,State
-  MOV CX,TYPE FindFileState
-  CLD
-  REP MOVSB
-
-  POP DI
-  POP ES
-  POP DS
- END;
-End;
-
 { Fonctions 4Ch et 4Dh - Terminaison et code de retour }
 
 { Fonction 4Ch - Terminate Program }
@@ -12215,25 +12057,6 @@ Begin
 End;
 
 { Extrait les composants d'une date/heure DOS }
-Procedure UnpackDOSDateTime(DOSDateTime:LongInt;Var Year,Month,Day,Hour,Minute,
-  Second:Word);
-Var
- DOSDate, DOSTime: Word;
-Begin
- DOSDate := Hi(DOSDateTime);  { High word = date }
- DOSTime := Lo(DOSDateTime);  { Low word = time }
-
- { Extraire les composants de la date }
- Year := ((DOSDate SHR 9) AND $7F) + 1980;
- Month := (DOSDate SHR 5) AND $0F;
- Day := DOSDate AND $1F;
-
- { Extraire les composants de l'heure }
- Hour := (DOSTime SHR 11) AND $1F;
- Minute := (DOSTime SHR 5) AND $3F;
- Second := (DOSTime AND $1F) SHL 1;
-End;
-
 { Obtient l'offset d'une entrée de répertoire par son handle }
 Function GetDirectoryOffsetByHandle(Handle:Word;Var Drive:Byte;
   Var EntryOffset:Word):Boolean;
@@ -12948,45 +12771,6 @@ Begin
 End;
 
 { Fonction auxiliaire pour le handler assembleur }
-Function GetExtendedErrorComponent(ComponentIndex:Byte):Byte;Assembler;
-ASM
- PUSH DS
- PUSH SI
-
- { Pointer vers la structure Data.DataMOS }
- MOV AX,CS
- MOV DS,AX
- MOV SI,OFFSET Data.DataMOS
-
- { Sélectionner le composant selon l'index }
- MOV AL,ComponentIndex
- CMP AL,1
- JE @GetClass
- CMP AL,2
- JE @GetAction
- CMP AL,3
- JE @GetLocus
-
- { Par défaut, retourner 0 }
- MOV AL,0
- JMP @Done
-
-@GetClass:
- MOV AL,[SI].DataMOS.ErrorClass
- JMP @Done
-
-@GetAction:
- MOV AL,[SI].DataMOS.SuggestedAction
- JMP @Done
-
-@GetLocus:
- MOV AL,[SI].DataMOS.ErrorLocus
-
-@Done:
- POP SI
- POP DS
-END;
-
 { Fonction principale 59h - Get Extended Error Information }
 Function DOS59h_GetExtendedError:LongInt;
 Var
