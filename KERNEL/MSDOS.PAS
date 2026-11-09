@@ -1469,7 +1469,7 @@ Procedure Intr21hCore;Assembler;ASM
  INC Data.DataMOS.InDos
 @CallFunc:
  { saut vers la fonction AH en conservant BX (parametre des fonctions) }
- CMP AH,6Fh { fonctions au-dela de 6Fh : sans effet }
+ CMP AH,70h { fonctions au-dela de 70h : sans effet }
  JA @Xit
  PUSH BX
  MOV BL,AH
@@ -1594,6 +1594,7 @@ Procedure Intr21hCore;Assembler;ASM
  DW @Xit { Fonction 6Dh - a d�velopper }
  DW @F2h { Fonction 6Eh - interne : lecture absolue (INT 25h) }
  DW @F3h { Fonction 6Fh - interne : ecriture absolue (INT 26h) }
+ DW @70h { Fonction 70h - interne : relire la table de partition (INSTALL) }
 
  {- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
    -}
@@ -4458,6 +4459,15 @@ Procedure Intr21hCore;Assembler;ASM
  JMP @Xit
 
 @68h:
+ CLC
+ JMP @Xit
+
+@70h:
+ PUSH DS
+ PUSH CS
+ POP DS
+ CALL InitPartition
+ POP DS
  CLC
  JMP @Xit
 

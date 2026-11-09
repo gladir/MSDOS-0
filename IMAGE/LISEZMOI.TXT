@@ -70,20 +70,28 @@ la langue dans l'ecran des parametres).
      pour modifier) ; la langue choisie est ecrite dans AUTOEXEC.BAT
      (SET LANGUAGE=...) et regle la langue des commandes installees ;
   3. repertoire d'installation (defaut C:\DOS) ;
-  4. copie des fichiers listes dans INSTALL.INF, avec demande des disquettes
+  4. disque dur : si le disque n'est pas partitionne (ou n'a aucune partition
+     MS-DOS), Install cree une partition occupant tout le disque (jusqu'a
+     2 Go ; les autres partitions sont alors supprimees, apres confirmation)
+     puis la formate (FAT12/FAT16) ; si la partition existe mais n'est pas
+     formatee, Install la formate apres confirmation ;
+  5. IO.SYS et MSDOS.SYS en tete du disque : si des fichiers occupent les deux
+     premieres entrees de la racine ou les premieres grappes, Install les
+     DEPLACE (grappes de donnees, FAT, premieres grappes dans les repertoires,
+     entrees . et ..) ; aucun fichier n'est perdu ;
+  6. copie des fichiers listes dans INSTALL.INF, avec demande des disquettes
      suivantes ("Inserez la disquette dans le lecteur A: / Disquette 2") ;
-  5. disque amorcable : IO.SYS, MSDOS.SYS, COMMAND.COM a la racine (IO.SYS et
-     MSDOS.SYS sont les deux premieres entrees, contigus), secteur de boot
-     MS-DOS, chargeur MBR et partition active ;
-  6. CONFIG.SYS (FILES, BUFFERS, LASTDRIVE, COUNTRY, SHELL=...\COMMAND.COM
+  7. disque amorcable : secteur de boot MS-DOS, chargeur MBR et partition
+     active ;
+  8. CONFIG.SYS (FILES, BUFFERS, LASTDRIVE, COUNTRY, SHELL=...\COMMAND.COM
      ...\ /P) et AUTOEXEC.BAT (SET LANGUAGE, PATH, PROMPT) ; les anciens
      fichiers deviennent CONFIG.OLD et AUTOEXEC.OLD ;
-  7. fin : retirer la disquette puis ENTREE pour redemarrer sur le disque dur.
+  9. fin : retirer la disquette puis ENTREE pour redemarrer sur le disque dur.
 
-Utilisation : demarrer sur INSTALL.IMG (disquette A:). Le disque dur doit
-deja etre partitionne (FDISK) et formate (FORMAT C:) ; les outils sont sur la
-disquette. Seuls A:, B: et la premiere partition du disque C: peuvent etre
-rendus amorcables.
+Utilisation : demarrer sur INSTALL.IMG (disquette A:). Seuls A:, B: et la
+premiere partition du disque dur C: peuvent etre rendus amorcables.
+Le noyau relit la table de partition apres sa creation (fonction interne
+INT 21h AH=70h) : pas de redemarrage necessaire avant la copie.
 
 Fabrication : MAKEIMG.BAT, ou
   MAKEDISK @fichier  avec  INSTALL.IMG /NUMBER /KERNEL:SYSTEM /CMDS:CMDS

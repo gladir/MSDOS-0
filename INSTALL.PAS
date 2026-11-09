@@ -13,13 +13,21 @@ Program INSTALL;
   Deroulement :
     1. bienvenue, 2. parametres systeme (date, pays, langue),
     3. repertoire d'installation (defaut C:\DOS),
-    4. copie des fichiers decrits par INSTALL.INF (demande des disquettes
-       suivantes), 5. disque amorcable : secteur de boot MS-DOS, chargeur MBR
-       et partition active, fichiers systeme au debut du disque,
-    6. CONFIG.SYS et AUTOEXEC.BAT (les anciens deviennent *.OLD),
-    7. fin et redemarrage.
+    4. disque dur : s'il n'est pas partitionne (ou sans partition MS-DOS),
+       creation d'une partition occupant tout le disque (MBR + table) ; si la
+       partition n'est pas formatee, formatage FAT12/FAT16,
+    5. IO.SYS et MSDOS.SYS en tete du disque : les entrees de la racine et les
+       premieres grappes sont liberees en deplacant les fichiers existants
+       (donnees, FAT, repertoires),
+    6. copie des fichiers decrits par INSTALL.INF (demande des disquettes
+       suivantes), 7. disque amorcable : secteur de boot MS-DOS, chargeur MBR
+       et partition active,
+    8. CONFIG.SYS et AUTOEXEC.BAT (les anciens deviennent *.OLD),
+    9. fin et redemarrage.
 
-  Le disque cible doit deja etre partitionne (FDISK) et formate (FORMAT).
+  Les acces disque (partition, formatage, deplacement, boot) passent par le
+  BIOS (INT 13h) ; le noyau est prevenu d'un changement de table de partition
+  par la fonction interne INT 21h AH=70h.
   INSTALL.INF (un fichier par ligne : disquette,destination,nom,taille ;
   destination \ = racine, sinon le repertoire d'installation) est produit
   par TOOLS\MAKEDISK.PAS (option /INF). }
@@ -390,13 +398,13 @@ Begin
  Y:=7;
  Case N of
   1:Y:=PutWrap(4,Y,72,T('Install copie les fichiers de MSDOS-0 sur votre '+
-    'disque dur et le rend amor‡able. Avant de commencer, le disque dur '+
-    'doit avoir ‚t‚ partitionn‚ avec FDISK et format‚ avec FORMAT. Faites '+
-    'une copie de sauvegarde de vos fichiers importants avec BACKUP.',
+    'disque dur et le rend amor‡able. Si le disque dur n''est pas '+
+    'partitionn‚ ou format‚, Install le propose. Faites une copie de '+
+    'sauvegarde de vos fichiers importants avec BACKUP avant de commencer.',
     'Setup copies the MSDOS-0 files to your hard disk and makes it '+
-    'bootable. Before you start, the hard disk must have been partitioned '+
-    'with FDISK and formatted with FORMAT. Back up your important files '+
-    'with BACKUP.'),aNorm);
+    'bootable. If the hard disk is not partitioned or formatted, Setup '+
+    'offers to do it. Back up your important files with BACKUP before '+
+    'you start.'),aNorm);
   2:Y:=PutWrap(4,Y,72,T('Utilisez les touches HAUT et BAS pour choisir un '+
     'paramŠtre puis appuyez sur ENTREE pour le modifier. La langue choisie '+
     'est aussi celle des messages des commandes MSDOS-0 install‚es '+
@@ -405,6 +413,14 @@ Begin
     'change it. The selected language is also the language of the messages '+
     'of the installed MSDOS-0 commands (LANGUAGE variable in '+
     'AUTOEXEC.BAT).'),aNorm);
+  5:Y:=PutWrap(4,Y,72,T('Le disque dur doit avoir une partition MS-DOS '+
+    'format‚e. Si ce n''est pas le cas, Install cr‚e une partition occupant '+
+    'tout le disque (les autres partitions sont supprim‚es) et/ou formate '+
+    'la partition : toutes les donn‚es concern‚es sont perdues.',
+    'The hard disk needs a formatted MS-DOS partition. If it has none, '+
+    'Setup creates a partition using the whole disk (other partitions are '+
+    'deleted) and/or formats the partition: all the affected data is '+
+    'lost.'),aNorm);
   3:Y:=PutWrap(4,Y,72,T('Tapez le chemin du r‚pertoire o— placer les '+
     'fichiers de MSDOS-0 (par exemple C:\DOS) puis appuyez sur ENTREE. '+
     'Les fichiers systŠme IO.SYS, MSDOS.SYS et COMMAND.COM sont toujours '+
@@ -887,6 +903,8 @@ Begin
  ClusterRound:=((Size+4095)div 4096)*4096;
 End;
 
+Procedure PrepareSystemArea;Forward;
+
 Procedure CheckTarget;
 Var
  Drv:Integer;
@@ -927,6 +945,7 @@ Begin
  { le repertoire est cree apres les fichiers systeme : IO.SYS et MSDOS.SYS
    doivent rester les deux premieres entrees de la racine }
  DirMade:=False;
+ PrepareSystemArea;
  For I:=1 to EntryCount do Begin
   If Entries[I].Disk<>CurDisk Then Begin
    AskDisk(Entries[I].Disk,False);
@@ -1006,10 +1025,89 @@ Begin
        LongInt(B[O+3])*16777216;
 End;
 
+Const
+ dsNoDisk=0;
+ dsNoPart=1;
+ dsOther=2;
+ dsNoFormat=3;
+ dsReady=4;
+ MaxMap=200;
+ MaxStack=48;
+
+Var
+ Cyls:Word;
+ HdTotal:LongInt;
+ PartSectors:LongInt;
+ FatBuf:TSec;
+ FatCached:LongInt;
+ BpbRes,BpbSpf,BpbSpc,BpbNf,BpbRoot:Word;
+ BpbTot,DataStart,BpbClusters:LongInt;
+ Fat16:Boolean;
+ MapOld,MapNew:Array[1..MaxMap]of Word;
+ MapCount:Integer;
+ DStack:Array[1..MaxStack]of Word;
+ DSp:Integer;
+
+Function WrPart(LBA:LongInt;Var Buf:TSec):Boolean;
+Begin
+ WrPart:=WrAbs(PartLBA+LBA,Buf);
+End;
+
+Function DiskGeometry(U:Byte):Boolean;
+Var
+ R:Registers;
+Begin
+ DiskGeometry:=False;
+ R.AH:=8;R.DL:=U;Intr($13,R);
+ If(R.Flags and FCarry)<>0 Then Begin
+  If U>=$80 Then Exit;
+  Spt:=18;Heads:=2;Cyls:=80;
+ End
+ Else Begin
+  Spt:=R.CL and $3F;
+  Heads:=Word(R.DH)+1;
+  Cyls:=(Word(R.CL and $C0)shl 2)+R.CH+1;
+ End;
+ HdTotal:=LongInt(Cyls)*Heads*Spt;
+ DiskGeometry:=(Spt<>0)and(Heads<>0);
+End;
+
+{ Le noyau relit la table de partition du disque dur (fonction interne 70h) }
+Procedure KernelRefresh;
+Var
+ R:Registers;
+Begin
+ R.AH:=$70;
+ Intr($21,R);
+End;
+
+{ BPB de la partition courante ; False si ce n'est pas un volume FAT12/FAT16 }
+Function LoadBpb:Boolean;
+Var
+ B:TSec;
+Begin
+ LoadBpb:=False;
+ FatCached:=-1;
+ If Not RdPart(0,B)Then Exit;
+ If(B[510]<>$55)or(B[511]<>$AA)Then Exit;
+ If(B[11]<>0)or(B[12]<>2)Then Exit;
+ BpbSpc:=B[13];BpbRes:=B[14]+B[15]*256;BpbNf:=B[16];
+ BpbRoot:=B[17]+B[18]*256;BpbSpf:=B[22]+B[23]*256;
+ BpbTot:=B[19]+B[20]*256;
+ If BpbTot=0 Then BpbTot:=LE32(B,32);
+ If(BpbSpc=0)or(BpbNf=0)or(BpbNf>2)or(BpbRes=0)or(BpbSpf=0)or
+   (BpbRoot=0)or(B[21]<$F0)Then Exit;
+ DataStart:=LongInt(BpbRes)+LongInt(BpbNf)*BpbSpf+
+  (LongInt(BpbRoot)*32+511)div 512;
+ If BpbTot<=DataStart Then Exit;
+ BpbClusters:=(BpbTot-DataStart)div BpbSpc;
+ Fat16:=BpbClusters>=4085;
+ LoadBpb:=True;
+End;
+
 { Unite BIOS et debut de partition du lecteur cible ; False si non gere }
 Function PrepareUnit(Drv:Char):Boolean;
 Var
- R:Registers;
  M:TSec;
  I,O:Integer;
 Begin
@@ -1023,15 +1121,7 @@ Begin
  Else
   Exit;
  End;
- R.AH:=8;R.DL:=Unit8;Intr($13,R);
- If(R.Flags and FCarry)<>0 Then Begin
-  If Unit8>=$80 Then Exit;
-  Spt:=18;Heads:=2;
- End
- Else Begin
-  Spt:=R.CL and $3F;
-  Heads:=Word(R.DH)+1;
- End;
+ If Not DiskGeometry(Unit8)Then Exit;
  If Unit8=$80 Then Begin
   If Not RdAbs(0,M)Then Exit;
   If(M[510]<>$55)or(M[511]<>$AA)Then Exit;
@@ -1044,11 +1134,31 @@ Begin
  PrepareUnit:=True;
 End;
 
+{ Etat du disque dur : pas de disque, pas de partition, partitions autres que
+  MS-DOS, partition non formatee, pret }
+Function DiskState:Integer;
 Var
- FatBuf:TSec;
- FatCached:LongInt;
- BpbRes,BpbSpf,BpbSpc:Word;
- Fat16:Boolean;
+ M:TSec;
+ I,O,Used:Integer;
+Begin
+ Unit8:=$80;PartLBA:=0;PartSectors:=0;
+ If Not DiskGeometry($80)Then Begin DiskState:=dsNoDisk;Exit;End;
+ If Not RdAbs(0,M)Then Begin DiskState:=dsNoDisk;Exit;End;
+ Used:=0;
+ If(M[510]=$55)and(M[511]=$AA)Then
+  For I:=0 to 3 do Begin
+   O:=$1BE+I*16;
+   If M[O+4]<>0 Then Inc(Used);
+   If(M[O+4]in[1,4,6,$0E])and(PartLBA=0)Then Begin
+    PartLBA:=LE32(M,O+8);
+    PartSectors:=LE32(M,O+12);
+   End;
+  End;
+ If Used=0 Then DiskState:=dsNoPart
+ Else If PartLBA=0 Then DiskState:=dsOther
+ Else If LoadBpb Then DiskState:=dsReady
+ Else DiskState:=dsNoFormat;
+End;
 
 Function FatEntry(C:Word):Word;
 Var
@@ -1076,6 +1186,44 @@ Begin
  FatEntry:=V;
 End;
 
+{ Ecrit une entree de la FAT dans toutes les copies }
+Function FatPut(C,V:Word):Boolean;
+Var
+ B1,B2:TSec;
+ O:LongInt;
+ Sc,Of2:Word;
+ K:Integer;
+ Two:Boolean;
+Begin
+ FatPut:=False;
+ If Fat16 Then O:=LongInt(C)*2 Else O:=LongInt(C)*3 div 2;
+ Sc:=Word(O div 512);Of2:=Word(O mod 512);
+ Two:=(Not Fat16)and(Of2=511);
+ For K:=0 to BpbNf-1 do Begin
+  If Not RdPart(LongInt(BpbRes)+LongInt(K)*BpbSpf+Sc,B1)Then Exit;
+  If Two Then
+   If Not RdPart(LongInt(BpbRes)+LongInt(K)*BpbSpf+Sc+1,B2)Then Exit;
+  If Fat16 Then Begin
+   B1[Of2]:=Byte(V and $FF);B1[Of2+1]:=Byte(V shr 8);
+  End
+  Else If C and 1=0 Then Begin
+   B1[Of2]:=Byte(V and $FF);
+   If Two Then B2[0]:=(B2[0]and $F0)or Byte((V shr 8)and $0F)
+   Else B1[Of2+1]:=(B1[Of2+1]and $F0)or Byte((V shr 8)and $0F);
+  End
+  Else Begin
+   B1[Of2]:=(B1[Of2]and $0F)or Byte((V and $0F)shl 4);
+   If Two Then B2[0]:=Byte((V shr 4)and $FF)
+   Else B1[Of2+1]:=Byte((V shr 4)and $FF);
+  End;
+  If Not WrPart(LongInt(BpbRes)+LongInt(K)*BpbSpf+Sc,B1)Then Exit;
+  If Two Then
+   If Not WrPart(LongInt(BpbRes)+LongInt(K)*BpbSpf+Sc+1,B2)Then Exit;
+ End;
+ FatCached:=-1;
+ FatPut:=True;
+End;
+
 { IO.SYS puis MSDOS.SYS doivent etre les deux premieres entrees de la racine,
   contigus : c'est ce que cherche le secteur de boot MS-DOS }
 Function SystemLayoutOk:Boolean;
@@ -1083,26 +1231,14 @@ Const
  NmIo:String[11]='IO      SYS';
  NmDos:String[11]='MSDOS   SYS';
 Var
- B,Root:TSec;
- Nf,RootEnt,Spf:Word;
- TotSec,DataStart:LongInt;
+ Root:TSec;
  C0,C1,N,K:Word;
  S0:LongInt;
  Last:Word;
 Begin
  SystemLayoutOk:=False;
- If Not RdPart(0,B)Then Exit;
- BpbSpc:=B[13];BpbRes:=B[14]+B[15]*256;Nf:=B[16];
- RootEnt:=B[17]+B[18]*256;Spf:=B[22]+B[23]*256;
- TotSec:=B[19]+B[20]*256;
- If TotSec=0 Then TotSec:=LE32(B,32);
- If(BpbSpc=0)or(Nf=0)Then Exit;
- BpbSpf:=Spf;
- DataStart:=LongInt(BpbRes)+LongInt(Nf)*Spf+
-  (LongInt(RootEnt)*32+511)div 512;
- Fat16:=(TotSec-DataStart)div BpbSpc>=4085;
- FatCached:=-1;
- If Not RdPart(BpbRes+Nf*Spf,Root)Then Exit;
+ If Not LoadBpb Then Exit;
+ If Not RdPart(LongInt(BpbRes)+LongInt(BpbNf)*BpbSpf,Root)Then Exit;
  For K:=0 to 10 do Begin
   If Root[K]<>Ord(NmIo[K+1])Then Exit;
   If Root[32+K]<>Ord(NmDos[K+1])Then Exit;
@@ -1119,6 +1255,482 @@ Begin
  If Fat16 Then Begin If Last<$FFF8 Then Exit;End
  Else If Last<$FF8 Then Exit;
  SystemLayoutOk:=True;
+End;
+
+{ ---------------------------------------------------------------------- }
+{ Partitionnement et formatage                                            }
+{ ---------------------------------------------------------------------- }
+
+Procedure PutLE32b(Var B:TSec;O:Integer;V:LongInt);
+Begin
+ B[O]:=Byte(V and $FF);B[O+1]:=Byte((V shr 8)and $FF);
+ B[O+2]:=Byte((V shr 16)and $FF);B[O+3]:=Byte((V shr 24)and $FF);
+End;
+
+{ Adresse CHS d'un secteur LBA dans une entree de partition (3 octets) }
+Procedure PutChs(Var B:TSec;O:Integer;LBA:LongInt);
+Var
+ S,H,C,Tk:LongInt;
+Begin
+ S:=(LBA mod Spt)+1;
+ Tk:=LBA div Spt;
+ H:=Tk mod Heads;
+ C:=Tk div Heads;
+ If C>1023 Then Begin C:=1023;H:=Heads-1;S:=Spt;End;
+ B[O]:=Byte(H);
+ B[O+1]:=Byte(S or((C shr 2)and $C0));
+ B[O+2]:=Byte(C and $FF);
+End;
+
+{ Taille (en secteurs) de la partition unique occupant tout le disque,
+  limitee a 2 Go (FAT16) }
+Function WholeDiskSize:LongInt;
+Var
+ S:LongInt;
+Begin
+ S:=HdTotal-Spt;
+ If S>4190000 Then S:=4190000;
+ WholeDiskSize:=S;
+End;
+
+Function MoStr(Sectors:LongInt):String;
+Begin
+ MoStr:=NumStr(Sectors div 2048)+T(' Mo',' MB');
+End;
+
+{ Table de partition : une seule partition active occupant tout le disque ;
+  les autres partitions sont supprimees }
+Function CreatePartition:Boolean;
+Var
+ M:TSec;
+ Size:LongInt;
+Begin
+ CreatePartition:=False;
+ If Not DiskGeometry($80)Then Exit;
+ Size:=WholeDiskSize;
+ If Size<2000 Then Exit;
+ FillChar(M,512,0);
+ Move(MbrCode,M,SizeOf(MbrCode));
+ M[$1BE]:=$80;
+ PutChs(M,$1BF,Spt);
+ If Size<4200 Then M[$1C2]:=1
+ Else If Size<65536 Then M[$1C2]:=4
+ Else M[$1C2]:=6;
+ PutChs(M,$1C3,Spt+Size-1);
+ PutLE32b(M,$1C6,Spt);
+ PutLE32b(M,$1CA,Size);
+ M[510]:=$55;M[511]:=$AA;
+ If Not WrAbs(0,M)Then Exit;
+ PartLBA:=Spt;PartSectors:=Size;
+ KernelRefresh;
+ CreatePartition:=True;
+End;
+
+{ Taille de grappe et de FAT d'une partition de Total secteurs (racine de 512
+  entrees, deux FAT) }
+Procedure CalcFormat(Total:LongInt;Var Spc:Byte;Var Spf:Word;Var F16:Boolean);
+Const
+ RootSecs=32;
+Var
+ I,K:Integer;
+ C,Need:LongInt;
+ Spf2:Word;
+Begin
+ Spc:=1;Spf:=1;F16:=True;
+ For I:=0 to 6 do Begin
+  Spc:=1 shl I;
+  Spf:=1;
+  For K:=1 to 6 do Begin
+   C:=(Total-1-RootSecs-LongInt(2)*Spf)div Spc;
+   F16:=C>=4085;
+   If F16 Then Need:=(C+2)*2 Else Need:=((C+2)*3+1)div 2;
+   Spf2:=Word((Need+511)div 512);
+   If Spf2=Spf Then Break;
+   Spf:=Spf2;
+  End;
+  If C<=65524 Then Exit;
+ End;
+End;
+
+Procedure FormatScreen;
+Begin
+ Clear;
+ Title;
+ PutStr(8,6,T('Formatage du disque dur '+InstDir[1]+': en cours...',
+              'Formatting hard disk '+InstDir[1]+': ...'),aNorm);
+ Box(4,17,5+GaugeW+1,19,False,aNorm);
+ StatusBar('');
+End;
+
+Procedure FormatGauge(Done,Total:LongInt);
+Var
+ Pct,N:LongInt;
+Begin
+ If Total>0 Then Pct:=Done*100 div Total Else Pct:=100;
+ N:=Pct*GaugeW div 100;
+ PutStr(5,16,NumStr(Pct)+T('% effectu‚','% complete')+'       ',aNorm);
+ Fill(6,18,5+GaugeW,18,' ',aNorm);
+ If N>0 Then Fill(6,18,5+N,18,' ',aGauge);
+End;
+
+{ Formatage rapide FAT12/FAT16 de la partition courante : secteur de boot MS-DOS
+  (BPB), deux FAT et racine vides }
+Function FormatPartition:Boolean;
+Var
+ B,M:TSec;
+ Total,Done,All:LongInt;
+ Spc:Byte;
+ Spf:Word;
+ F16:Boolean;
+ I,K,O:Integer;
+ S,Mi,Se,Hs:Word;
+ FS:String[8];
+Begin
+ FormatPartition:=False;
+ If Not RdAbs(0,M)Then Exit;
+ Total:=0;
+ For I:=0 to 3 do Begin
+  O:=$1BE+I*16;
+  If(M[O+4]<>0)and(LE32(M,O+8)=PartLBA)Then Total:=LE32(M,O+12);
+ End;
+ If Total<1000 Then Exit;
+ If Not DiskGeometry(Unit8)Then Exit;
+ CalcFormat(Total,Spc,Spf,F16);
+ Move(BootCode,B,512);
+ B[11]:=0;B[12]:=2;B[13]:=Spc;B[14]:=1;B[15]:=0;B[16]:=2;
+ B[17]:=0;B[18]:=2;
+ If Total<65536 Then Begin
+  B[19]:=Byte(Total and $FF);B[20]:=Byte(Total shr 8);
+  PutLE32b(B,32,0);
+ End
+ Else Begin
+  B[19]:=0;B[20]:=0;PutLE32b(B,32,Total);
+ End;
+ B[21]:=$F8;
+ B[22]:=Byte(Spf and $FF);B[23]:=Byte(Spf shr 8);
+ B[24]:=Byte(Spt);B[25]:=0;B[26]:=Byte(Heads);B[27]:=0;
+ PutLE32b(B,28,PartLBA);
+ B[36]:=$80;B[37]:=0;B[38]:=$29;
+ GetTime(S,Mi,Se,Hs);
+ B[39]:=Byte(Se);B[40]:=Byte(Hs);B[41]:=Byte(Mi);B[42]:=Byte(S);
+ For K:=43 to 53 do B[K]:=32;
+ B[43]:=Ord('N');B[44]:=Ord('O');B[46]:=Ord('N');B[47]:=Ord('A');
+ B[48]:=Ord('M');B[49]:=Ord('E');
+ If F16 Then FS:='FAT16   ' Else FS:='FAT12   ';
+ Move(FS[1],B[54],8);
+ B[510]:=$55;B[511]:=$AA;
+ FormatScreen;
+ All:=LongInt(2)*Spf+32;Done:=0;
+ FormatGauge(0,All);
+ If Not WrAbs(PartLBA,B)Then Exit;
+ For K:=0 to 1 do
+  For I:=0 to Spf-1 do Begin
+   FillChar(B,512,0);
+   If I=0 Then Begin
+    B[0]:=$F8;B[1]:=$FF;B[2]:=$FF;
+    If F16 Then B[3]:=$FF;
+   End;
+   If Not WrPart(1+LongInt(K)*Spf+I,B)Then Exit;
+   Inc(Done);
+   If Done mod 16=0 Then FormatGauge(Done,All);
+  End;
+ FillChar(B,512,0);
+ For I:=0 to 31 do Begin
+  If Not WrPart(1+LongInt(2)*Spf+I,B)Then Exit;
+  Inc(Done);
+ End;
+ FormatGauge(All,All);
+ FormatPartition:=LoadBpb;
+End;
+
+{ Ecran d'information puis partitionnement / formatage }
+Procedure ScreenDisk;
+Var
+ St:Integer;
+ K:Word;
+ Y:Integer;
+ Sz:LongInt;
+Begin
+ If UpCase(InstDir[1])<>'C' Then Exit;
+ St:=DiskState;
+ If St=dsReady Then Exit;
+ If St=dsNoDisk Then
+  Fatal('Install n''a d‚tect‚ aucun disque dur.',
+        'Setup did not detect any hard disk.');
+ Sz:=WholeDiskSize;
+ Repeat
+  Clear;
+  Title;
+  PutStr(8,6,T('Disque dur','Hard disk'),aTitle);
+  Case St of
+   dsNoPart:Begin
+    Y:=PutWrap(8,8,66,T('Le disque dur n''est pas partitionn‚.',
+      'The hard disk is not partitioned.'),aNorm);
+    Y:=PutWrap(8,Y+1,66,T('Install va cr‚er une partition MSDOS-0 de '+
+      MoStr(Sz)+' occupant tout le disque dur, puis la formater.',
+      'Setup will create a '+MoStr(Sz)+' MSDOS-0 partition using the whole '+
+      'hard disk, then format it.'),aNorm);
+   End;
+   dsOther:Begin
+    Y:=PutWrap(8,8,66,T('Le disque dur ne contient aucune partition MS-DOS.',
+      'The hard disk has no MS-DOS partition.'),aNorm);
+    Y:=PutWrap(8,Y+1,66,T('ATTENTION : pour continuer, Install doit SUPPRIMER '+
+      'toutes les partitions du disque dur, cr‚er une partition MSDOS-0 de '+
+      MoStr(Sz)+' et la formater. Toutes les donn‚es du disque dur seront '+
+      'perdues.','WARNING: to continue, Setup must DELETE all the partitions '+
+      'of the hard disk, create a '+MoStr(Sz)+' MSDOS-0 partition and format '+
+      'it. All the data on the hard disk will be lost.'),aNorm);
+   End;
+  Else Begin
+    Y:=PutWrap(8,8,66,T('Le disque dur n''est pas format‚.',
+      'The hard disk is not formatted.'),aNorm);
+    Y:=PutWrap(8,Y+1,66,T('Install va formater la partition '+InstDir[1]+
+      ': ('+MoStr(PartSectors)+'). Toutes les donn‚es de cette partition '+
+      'seront perdues.','Setup will format partition '+InstDir[1]+': ('+
+      MoStr(PartSectors)+'). All the data on this partition will be lost.'),
+      aNorm);
+   End;
+  End;
+  Y:=PutBullet(10,Y+2,64,T('Pour continuer, appuyez sur ENTREE.',
+    'To continue, press ENTER.'),aNorm);
+  Y:=PutBullet(10,Y+1,64,T('Pour quitter Install, appuyez sur F3.',
+    'To exit Setup, press F3.'),aNorm);
+  StatusBar(KeysEnterF1F3);
+  K:=GetKey;
+  If K=kEnter Then Break;
+  Nav(K,5);
+ Until False;
+ If St<>dsNoFormat Then
+  If Not CreatePartition Then
+   Fatal('Impossible de cr‚er la partition du disque dur.',
+         'Cannot create the hard disk partition.');
+ If Not FormatPartition Then
+  Fatal('Le formatage du disque dur a ‚chou‚.',
+        'Formatting the hard disk failed.');
+ If DiskState<>dsReady Then
+  Fatal('Le disque dur n''est pas utilisable aprŠs le formatage.',
+        'The hard disk is not usable after formatting.');
+End;
+
+{ ---------------------------------------------------------------------- }
+{ Fichiers d'amorcage en tete du disque (deplacement des fichiers)        }
+{ ---------------------------------------------------------------------- }
+
+Function MapLookup(C:Word):Word;
+Var
+ I:Integer;
+Begin
+ MapLookup:=0;
+ For I:=1 to MapCount do
+  If MapOld[I]=C Then MapLookup:=MapNew[I];
+End;
+
+Function FindFree(From:Word):Word;
+Var
+ C:Word;
+Begin
+ FindFree:=0;
+ C:=From;
+ While LongInt(C)<=BpbClusters+1 do Begin
+  If FatEntry(C)=0 Then Begin FindFree:=C;Exit;End;
+  Inc(C);
+ End;
+End;
+
+Function CopyCluster(Src,Dst:Word):Boolean;
+Var
+ B:TSec;
+ K:Word;
+Begin
+ CopyCluster:=False;
+ For K:=0 to BpbSpc-1 do Begin
+  If Not RdPart(DataStart+LongInt(Src-2)*BpbSpc+K,B)Then Exit;
+  If Not WrPart(DataStart+LongInt(Dst-2)*BpbSpc+K,B)Then Exit;
+ End;
+ CopyCluster:=True;
+End;
+
+Function IsEnd(V:Word):Boolean;
+Begin
+ If Fat16 Then IsEnd:=V>=$FFF8 Else IsEnd:=V>=$FF8;
+End;
+
+{ Les entrees 0 et 1 de la racine sont deplacees vers des emplacements libres }
+Function FreeRootSlots:Boolean;
+Var
+ M0,M:TSec;
+ RS:LongInt;
+ RootSecs,I,J,Sc:Integer;
+ Found:Boolean;
+Begin
+ FreeRootSlots:=False;
+ RS:=LongInt(BpbRes)+LongInt(BpbNf)*BpbSpf;
+ RootSecs:=(BpbRoot*32+511)div 512;
+ For I:=0 to 1 do Begin
+  If Not RdPart(RS,M0)Then Exit;
+  If(M0[I*32]<>0)and(M0[I*32]<>$E5)Then Begin
+   Found:=False;
+   For Sc:=0 to RootSecs-1 do
+    If Not Found Then Begin
+     If Sc>0 Then
+      If Not RdPart(RS+Sc,M)Then Exit;
+     For J:=0 to 15 do
+      If(Not Found)and((Sc>0)or(J>1))Then Begin
+       If Sc=0 Then Begin
+        If(M0[J*32]=0)or(M0[J*32]=$E5)Then Begin
+         Move(M0[I*32],M0[J*32],32);Found:=True;
+        End;
+       End
+       Else If(M[J*32]=0)or(M[J*32]=$E5)Then Begin
+        Move(M0[I*32],M[J*32],32);Found:=True;
+        If Not WrPart(RS+Sc,M)Then Exit;
+       End;
+      End;
+    End;
+   If Not Found Then Exit;
+   M0[I*32]:=$E5;
+   If Not WrPart(RS,M0)Then Exit;
+  End;
+ End;
+ FreeRootSlots:=True;
+End;
+
+{ Remplace dans une entree de repertoire les premieres grappes deplacees ;
+  empile les sous-repertoires }
+Procedure PatchSector(LBA:LongInt;Var Stop:Boolean);
+Var
+ M:TSec;
+ I,E:Integer;
+ St,Nw:Word;
+ Dirty:Boolean;
+Begin
+ If Not RdPart(LBA,M)Then Begin Stop:=True;Exit;End;
+ Dirty:=False;
+ For I:=0 to 15 do
+  If Not Stop Then Begin
+   E:=I*32;
+   If M[E]=0 Then Stop:=True
+   Else If(M[E]<>$E5)and(M[E+11]<>$0F)and((M[E+11]and 8)=0)Then Begin
+    St:=M[E+26]+M[E+27]*256;
+    Nw:=MapLookup(St);
+    If Nw<>0 Then Begin
+     M[E+26]:=Byte(Nw and $FF);M[E+27]:=Byte(Nw shr 8);
+     Dirty:=True;St:=Nw;
+    End;
+    If((M[E+11]and $10)<>0)and(M[E]<>$2E)and(St>=2)and(DSp<MaxStack)Then Begin
+     Inc(DSp);DStack[DSp]:=St;
+    End;
+   End;
+  End;
+ If Dirty Then
+  If Not WrPart(LBA,M)Then Stop:=True;
+End;
+
+{ Parcourt la racine et tous les sous-repertoires }
+Procedure PatchDirs;
+Var
+ D,C:Word;
+ K,Guard,RootSecs:Integer;
+ Stop:Boolean;
+Begin
+ RootSecs:=(BpbRoot*32+511)div 512;
+ DSp:=1;DStack[1]:=0;
+ While DSp>0 do Begin
+  D:=DStack[DSp];Dec(DSp);
+  Stop:=False;
+  If D=0 Then Begin
+   For K:=0 to RootSecs-1 do
+    If Not Stop Then
+     PatchSector(LongInt(BpbRes)+LongInt(BpbNf)*BpbSpf+K,Stop);
+  End
+  Else Begin
+   C:=D;Guard:=0;
+   While(Not Stop)and(C>=2)and(Not IsEnd(C))and(Guard<4096)do Begin
+    For K:=0 to BpbSpc-1 do
+     If Not Stop Then PatchSector(DataStart+LongInt(C-2)*BpbSpc+K,Stop);
+    C:=FatEntry(C);
+    Inc(Guard);
+   End;
+  End;
+ End;
+End;
+
+Procedure DeleteOld(Const Path:String);
+Var
+ F:File;
+ At:Word;
+ Err:Integer;
+Begin
+ Assign(F,Path);
+ {$I-}GetFAttr(F,At);{$I+}
+ Err:=IOResult;
+ If Err<>0 Then Exit;
+ {$I-}SetFAttr(F,0);Erase(F);{$I+}
+ Err:=IOResult;
+End;
+
+{ Libere les entrees 0 et 1 de la racine et les premieres grappes du disque
+  pour IO.SYS et MSDOS.SYS : les fichiers qui s'y trouvent sont deplaces
+  (donnees, FAT, repertoires) }
+Procedure PrepareSystemArea;
+Var
+ Drv:Char;
+ I:Integer;
+ Need,CB,Sz1,Sz2:LongInt;
+ C,F,Nx,V,N2,From:Word;
+Begin
+ Drv:=UpCase(InstDir[1]);
+ If Not PrepareUnit(Drv)Then Exit;
+ If Not LoadBpb Then Exit;
+ PutStr(5,20,T('Pr‚paration du disque...','Preparing the disk...')+
+        '                    ',aNorm);
+ DeleteOld(Drv+':\IO.SYS');
+ DeleteOld(Drv+':\MSDOS.SYS');
+ Sz1:=0;Sz2:=0;
+ For I:=1 to EntryCount do
+  If Entries[I].Root Then Begin
+   If Entries[I].Name='IO.SYS' Then Sz1:=Entries[I].Size;
+   If Entries[I].Name='MSDOS.SYS' Then Sz2:=Entries[I].Size;
+  End;
+ CB:=LongInt(BpbSpc)*512;
+ Need:=(Sz1+CB-1)div CB+(Sz2+CB-1)div CB;
+ If Need<1 Then Exit;
+ If Not FreeRootSlots Then
+  Fatal('Le r‚pertoire racine est plein : impossible de placer IO.SYS et '+
+        'MSDOS.SYS en tˆte du disque.',
+        'The root directory is full: cannot place IO.SYS and MSDOS.SYS at '+
+        'the start of the disk.');
+ MapCount:=0;
+ From:=Word(Need+2);
+ For C:=2 to Word(Need+1) do Begin
+  Nx:=FatEntry(C);
+  If Nx<>0 Then Begin
+   If(Nx=$FFF7)or((Not Fat16)and(Nx=$FF7))Then
+    Fatal('Une grappe d‚fectueuse se trouve au d‚but du disque.',
+          'A bad cluster is located at the start of the disk.');
+   F:=FindFree(From);
+   If(F=0)or(MapCount>=MaxMap)Then
+    Fatal('Espace disque insuffisant pour d‚placer les fichiers existants.',
+          'Not enough disk space to move the existing files.');
+   From:=F+1;
+   If(Not CopyCluster(C,F))or(Not FatPut(F,Nx))Then
+    Fatal('Erreur de lecture ou d''‚criture du disque.',
+          'Disk read or write error.');
+   Inc(MapCount);MapOld[MapCount]:=C;MapNew[MapCount]:=F;
+  End;
+ End;
+ If MapCount=0 Then Exit;
+ { les chaines FAT qui menent aux grappes deplacees }
+ For C:=2 to Word(BpbClusters+1) do Begin
+  V:=FatEntry(C);
+  If(V>=2)and(V<=Need+1)Then Begin
+   N2:=MapLookup(V);
+   If N2<>0 Then FatPut(C,N2);
+  End;
+ End;
+ For I:=1 to MapCount do FatPut(MapOld[I],0);
+ { les premieres grappes des fichiers et les entrees . et .. }
+ PatchDirs;
 End;
 
 Function WriteBootSector:Boolean;
@@ -1308,6 +1920,7 @@ BEGIN
  ScreenWelcome;
  ScreenSettings;
  ScreenDirectory;
+ ScreenDisk;
  CheckTarget;
  CopyFiles;
  MakeBootable;
