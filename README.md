@@ -35,6 +35,9 @@ Pour l'installation, il faut utiliser l'image INSTALL.IMG :
 		<td><img width="320" height="240" alt="image" src="https://github.com/user-attachments/assets/3bf8600c-e6e9-40d7-ad18-09474393675b" /></td>
 		<td><img width="320" height="240" alt="image" src="https://github.com/user-attachments/assets/43906b50-dac8-43ae-8173-551d64ea219e" /></td>
 	</tr>
+	<tr>
+		<td><img width="320" height="240" alt="image" src="https://github.com/user-attachments/assets/e5460c88-4027-4a08-a480-41e22de3553f" /></td>
+	</tr>
 </table>
 
 
