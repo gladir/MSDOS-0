@@ -1032,21 +1032,22 @@ Begin
  Percentage := (SectorsChecked * 100) div TotalSectors;
  If Percentage > 100 Then Percentage := 100;
  GotoXY(1, 24);
+ Write('     ');
  Case(Language)of
-  _English:Write(Percentage, '% complete  ');
-  Else Write(Percentage, '% termin‚  ');
+  _English:Write(Percentage, '% complete   ');
+  Else Write(Percentage, '% termin‚   ');
  End;
   { Barre de progression graphique }
- For i := 15 to 65 do Begin
+ For i := 20 to 66 do Begin
   GotoXY(i, 24);
-  If i <= (15 + (Percentage * 50 div 100)) Then Begin
-   TextColor(White);
+  If i < (20 + (Percentage * 47 div 100)) Then Begin
+   TextColor(Yellow);
    TextBackground(Blue);
    Write(#219)
   End
    Else
   Begin
-   TextColor(DarkGray);
+   TextColor(LightGray);
    TextBackground(Blue);
    Write(#177);
   End;
@@ -1623,6 +1624,53 @@ Begin
  FatByte := CacheBuf[O mod 512];
 End;
 
+Var
+ LastPct: Integer;
+
+{ Barre de progression en bas de l'ecran pendant les verifications }
+Procedure ShowProgress(Pct: Integer);
+Var
+ Attr: Byte;
+ i: Integer;
+Begin
+ If Pct > 100 Then Pct := 100;
+ If Pct < 0 Then Pct := 0;
+ If Pct = LastPct Then Exit;
+ LastPct := Pct;
+ Attr := TextAttr;
+ TextBackground(Blue);
+ TextColor(White);
+ GotoXY(1, 24);
+ Write('     ');
+ Case(Language)of
+  _English:Write(Pct, '% complete   ');
+  _Germany:Write(Pct, '% fertig     ');
+  _Italian:Write(Pct, '% completato ');
+  _Spain:Write(Pct, '% completado');
+  Else Write(Pct, '% termin' + #130 + '  ');
+ End;
+ GotoXY(20, 24);
+ For i := 0 to 46 do Begin
+  If i < (Pct * 47 div 100) Then Begin
+   TextColor(Yellow);
+   Write(#219);
+  End
+   Else
+  Begin
+   TextColor(LightGray);
+   Write(#177);
+  End;
+ End;
+ TextAttr := Attr;
+End;
+
+{ Progression de Done/Total ramenee a l'intervalle [Lo, Hi] pour cent }
+Procedure ProgressStep(Done, Total: LongInt; Lo, Hi: Integer);
+Begin
+ If Total < 1 Then Total := 1;
+ ShowProgress(Lo + Integer((Done * (Hi - Lo)) div Total));
+End;
+
 Procedure ReadFAT;
 Var
  i, j, FATIndex: Integer;
@@ -1646,6 +1694,8 @@ Begin
    B0 := FatByte(FatOfs);
    B1 := FatByte(FatOfs + 1);
    If FatReadErr Then Exit;
+   If (FATIndex and 63) = 0 Then
+    ProgressStep(FATIndex, MaxFATEntries, 0, 25);
    If (FATIndex and 1) = 0 Then
     FATValue := Word(B0) + (Word(B1 and $0F) shl 8)
    Else
@@ -1659,6 +1709,7 @@ Begin
   MaxEnt := LongInt(MaxClusters) + 2;
   MaxSec16 := (MaxEnt * 2 + 511) div 512;
   For i := 0 to Min(BootSector.SectorsPerFAT - 1, MaxSec16 - 1) do Begin
+   ProgressStep(i, MaxSec16, 0, 25);
    If ReadSector(BootSector.ReservedSectors + i) Then Begin
     { Lire les entrees FAT16 (2 octets par entree) }
     For j := 0 to 255 do Begin
@@ -1723,6 +1774,7 @@ Begin
   End;
    { Comparer les deux copies de la FAT secteur par secteur (sans memoire) }
   For i := 0 to Min(BootSector.SectorsPerFAT - 1, MaxSectors - 1) do Begin
+   ProgressStep(i, MaxSectors, 25, 32);
    If Not ReadSector(BootSector.ReservedSectors + i) Then Begin
     Inc(ErrorsFound);
     Exit;
@@ -1808,6 +1860,7 @@ Begin
  End;
   { V‚rifier les chaŒnes de clusters pour d‚tecter les boucles infinies }
  For i := 2 to MaxClusters + 1 do Begin
+  If (i and 255) = 0 Then ProgressStep(i, MaxClusters, 32, 40);
   If (GetFAT(i) <> 0) and (GetFAT(i) < EndOfChainMark) Then Begin
    NextCluster := GetFAT(i);
    j := 0;
@@ -1847,6 +1900,7 @@ Begin
  RootSectors := (BootSector.RootEntries * 32 + 511) div 512;
  FirstDataSector := BootSector.ReservedSectors + (BootSector.NumberOfFATs * BootSector.SectorsPerFAT);
  For i := 0 to RootSectors - 1 do Begin
+  ProgressStep(i, RootSectors, 40, 55);
   If ReadSector(FirstDataSector + i) Then Begin
    For j := 0 to 15 do Begin { 16 entrÃ©es par secteur }
     If (i * 16 + j) <= High(RootDir) Then Begin
@@ -1887,6 +1941,7 @@ Begin
   EndOfChainMark := $FFF8;
  End;
  For i := 2 to MaxClusters + 1 do Begin
+  If (i and 255) = 0 Then ProgressStep(i, MaxClusters, 55, 80);
   If (GetFAT(i) <> 0) and (GetFAT(i) < EndOfChainMark) Then Begin
    { Suivre la chaŒne de clusters }
    NextCluster := i;
@@ -1922,6 +1977,7 @@ Var
 Begin
  CheckStatus[ciFreeSpace] := False;
  For i := 2 to MaxClusters + 1 do Begin
+  If (i and 255) = 0 Then ProgressStep(i, MaxClusters, 80, 100);
   If (i <= MaxClusters + 1) and (GetFAT(i) <> 0) and (GetClusterMap(i) = 0) Then Begin
    Inc(LostClusters);
    Inc(ErrorsFound);
@@ -2023,12 +2079,8 @@ Begin
  ClrScr;
  ShowTitle;
  ShowCheckList;
- GotoXY(1, 24);
- Case(Language)of
-  _English:Write('examining drive ', DrivePath, '...');
-  Else Write('examen du lecteur ', DrivePath, '...');
- End;
- ClrEol;
+ LastPct := -1;
+ ShowProgress(0);
   { D‚terminer le d‚lai selon la taille du disque }
  If HasPartition or (TotalSectors > 10000) Then CheckDelay := 10 Else
  If TotalSectors > 2000 Then CheckDelay := 50
@@ -2042,18 +2094,22 @@ Begin
  Delay(CheckDelay);
  CheckStatus[ciFAT] := False;
  CheckStatus[ciFAT] := True;
+ ShowProgress(40);
  ShowCheckList;
  Delay(CheckDelay);
  CheckStatus[ciDirectory] := False;
  CheckDirectoryStructure;
+ ShowProgress(55);
  ShowCheckList;
  Delay(CheckDelay);
  CheckStatus[ciFileSystem] := False;
  CheckFileAllocation;
+ ShowProgress(80);
  ShowCheckList;
  Delay(CheckDelay);
  CheckStatus[ciFreeSpace] := False;
  CheckLostClusters;
+ ShowProgress(100);
  ShowCheckList;
  Delay(CheckDelay);
  { Demander pour le surface scan }
