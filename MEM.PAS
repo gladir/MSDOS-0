@@ -40,6 +40,33 @@ Begin
  GetConvMemory:=Regs.AX;
 End;
 
+{ Ko libres de la memoire conventionnelle : somme des blocs MCB sans
+  proprietaire ou appartenant a MEM lui-meme (rendus a la sortie) ; le
+  premier MCB est en ES:BX-2 apres INT 21h/52h }
+Function GetConvFree:Word;
+Var
+ Regs:Registers;
+ Seg,Sz:Word;
+ Tot:LongInt;
+ Stop:Boolean;
+Begin
+ Regs.AH:=$52;
+ Intr($21,Regs);
+ Seg:=MemW[Regs.ES:Regs.BX-2];
+ Tot:=0;
+ Stop:=False;
+ Repeat
+  If(Mem[Seg:0]<>Ord('M'))and(Mem[Seg:0]<>Ord('Z'))Then Stop:=True
+  Else Begin
+   Sz:=MemW[Seg:3];
+   If(MemW[Seg:1]=0)or(MemW[Seg:1]=PrefixSeg)Then Inc(Tot,Sz);
+   If Mem[Seg:0]=Ord('Z')Then Stop:=True
+                         Else Seg:=Seg+Sz+1;
+  End;
+ Until Stop;
+ GetConvFree:=Tot shr 6;
+End;
+
 Function XMSInit:Boolean;
 Var
  Regs:Registers;
@@ -144,9 +171,10 @@ BEGIN
    WriteLn('Type de memoire         Total = Utilise +    Libre');
    WriteLn('------------------- ---------   -------   --------- ');
    Inc(TotalSize,GetConvMemory);
-   Inc(TotalUsed,GetConvMemory-(MemAvail shr 10));
-   Inc(TotalFree,MemAvail shr 10);
-   WriteLn('Conventionnel          ',GetConvMemory:5,'K',GetConvMemory-(MemAvail shr 10):9,'K',MemAvail shr 10:11,'K');
+   Inc(TotalUsed,GetConvMemory-GetConvFree);
+   Inc(TotalFree,GetConvFree);
+   WriteLn('Conventionnel          ',GetConvMemory:5,'K',
+           GetConvMemory-GetConvFree:9,'K',GetConvFree:11,'K');
    If(XMSInit)Then Begin
     Used:=XMSUsed;
     Inc(TotalSize,Used+XMSFree);
