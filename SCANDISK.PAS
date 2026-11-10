@@ -955,9 +955,14 @@ Begin
  TextBackground(LightGray);
  Case(Language)of
   _English:Write(' some used sectors');
-  Else Write(' secteurs partiellement utilis‚s');
+  Else Begin
+   { texte long : sur deux lignes pour rester dans la boite }
+   Write(' secteurs en partie');
+   GotoXY(DialogX1 + 49, DialogY1 + 12);
+   Write('utilis‚s');
+  End;
  End;
- GotoXY(DialogX1 + 47, DialogY1 + 12);
+ GotoXY(DialogX1 + 47, DialogY1 + 13);
  TextColor(Yellow);
  TextBackground(Black);
  Write(#254);
@@ -967,7 +972,7 @@ Begin
   _English:Write(' used sectors');
   Else Write(' secteurs utilis‚s');
  End;
- GotoXY(DialogX1 + 47, DialogY1 + 13);
+ GotoXY(DialogX1 + 47, DialogY1 + 14);
  TextColor(Red);
  TextBackground(Black);
  Write('B');

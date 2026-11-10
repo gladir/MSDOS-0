@@ -1186,6 +1186,7 @@ Const
  dsOther=2;
  dsNoFormat=3;
  dsReady=4;
+ dsDamaged=5;
  MaxMap=200;
  MaxStack=48;
 
@@ -1291,6 +1292,8 @@ End;
 
 { Etat du disque dur : pas de disque, pas de partition, partitions autres que
   MS-DOS, partition non formatee, pret }
+Function FsDamaged:Boolean;Forward;
+
 Function DiskState:Integer;
 Var
  M:TSec;
@@ -1311,7 +1314,9 @@ Begin
   End;
  If Used=0 Then DiskState:=dsNoPart
  Else If PartLBA=0 Then DiskState:=dsOther
- Else If LoadBpb Then DiskState:=dsReady
+ Else If LoadBpb Then Begin
+  If FsDamaged Then DiskState:=dsDamaged Else DiskState:=dsReady;
+ End
  Else DiskState:=dsNoFormat;
 End;
 
@@ -1381,6 +1386,107 @@ End;
 
 { IO.SYS puis MSDOS.SYS doivent etre les deux premieres entrees de la racine,
   contigus : c'est ce que cherche le secteur de boot MS-DOS }
+{ Verification du systeme de fichiers existant : chaque fichier doit avoir une
+  chaine de clusters de la longueur de sa taille et aucun cluster ne doit
+  appartenir a deux fichiers (sinon la copie par-dessus propage les erreurs) }
+Var
+ Seen:Array[0..8191]of Byte;
+ DamageFlag:Boolean;
+
+Function ClusterEnd(V:Word):Boolean;
+Begin
+ If Fat16 Then ClusterEnd:=V>=$FFF8 Else ClusterEnd:=V>=$FF8;
+End;
+
+Procedure WalkChain(Start:Word;Var Len:LongInt);
+Var
+ C:Word;
+ Bit:Byte;
+Begin
+ Len:=0;
+ C:=Start;
+ While Not DamageFlag do Begin
+  If(C<2)or(C>BpbClusters+1)Then Begin DamageFlag:=True;Exit;End;
+  Bit:=1 shl(C and 7);
+  If(Seen[C shr 3]and Bit)<>0 Then Begin DamageFlag:=True;Exit;End;
+  Seen[C shr 3]:=Seen[C shr 3]or Bit;
+  Inc(Len);
+  C:=FatEntry(C);
+  If ClusterEnd(C)Then Exit;
+  If Len>BpbClusters Then DamageFlag:=True;
+ End;
+End;
+
+Procedure ScanDirChain(Start:Word;Depth:Integer);Forward;
+
+Procedure ScanDirSector(LBA:LongInt;Var Done:Boolean;Depth:Integer);
+Var
+ B:TSec;
+ I,O:Integer;
+ Cl:Word;
+ Attr:Byte;
+ Sz,Len,Bpc:LongInt;
+Begin
+ If DamageFlag Then Exit;
+ If Not RdPart(LBA,B)Then Begin DamageFlag:=True;Exit;End;
+ Bpc:=LongInt(BpbSpc)*512;
+ For I:=0 to 15 do Begin
+  O:=I*32;
+  If B[O]=0 Then Begin Done:=True;Exit;End;
+  Attr:=B[O+11];
+  If(B[O]<>$E5)and(Attr<>$0F)and((Attr and 8)=0)and(B[O]<>Ord('.'))Then Begin
+   Cl:=B[O+26]+B[O+27]*256;
+   Sz:=LE32(B,O+28);
+   If(Attr and $10)<>0 Then Begin
+    WalkChain(Cl,Len);
+    If(Depth<3)and(Not DamageFlag)Then ScanDirChain(Cl,Depth+1);
+   End
+   Else If(Sz>0)Then Begin
+    WalkChain(Cl,Len);
+    If(Not DamageFlag)and(Len<>(Sz+Bpc-1)div Bpc)Then DamageFlag:=True;
+   End;
+  End;
+  If DamageFlag Then Exit;
+ End;
+End;
+
+Procedure ScanDirChain(Start:Word;Depth:Integer);
+Var
+ C:Word;
+ S,Guard:Integer;
+ Done:Boolean;
+Begin
+ C:=Start;
+ Done:=False;
+ Guard:=0;
+ While(Not Done)and(Not DamageFlag)and(C>=2)and(Guard<2000)do Begin
+  For S:=0 to BpbSpc-1 do
+   If(Not Done)Then
+    ScanDirSector(DataStart+LongInt(C-2)*BpbSpc+S,Done,Depth);
+  C:=FatEntry(C);
+  If ClusterEnd(C)Then Exit;
+  Inc(Guard);
+ End;
+End;
+
+Function FsDamaged:Boolean;
+Var
+ S:Integer;
+ Done:Boolean;
+ RootSec:Integer;
+Begin
+ FillChar(Seen,SizeOf(Seen),0);
+ DamageFlag:=False;
+ Done:=False;
+ RootSec:=(BpbRoot*32+511)div 512;
+ S:=0;
+ While(S<RootSec)and(Not Done)and(Not DamageFlag)do Begin
+  ScanDirSector(LongInt(BpbRes)+LongInt(BpbNf)*BpbSpf+S,Done,0);
+  Inc(S);
+ End;
+ FsDamaged:=DamageFlag;
+End;
+
 Function SystemLayoutOk:Boolean;
 Const
  NmIo:String[11]='IO      SYS';
@@ -1633,6 +1739,24 @@ Begin
              ' ber die gesamte Festplatte an und formatiert sie '+
              'anschlieáend.'),aNorm);
    End;
+   dsDamaged:Begin
+    Y:=PutWrap(8,8,66,T('Le systŠme de fichiers du disque dur est '+
+      'endommag‚.','The hard disk file system is damaged.',
+             'Das Dateisystem der Festplatte ist besch„digt.'),aNorm);
+    Y:=PutWrap(8,Y+1,66,T('Des fichiers partagent ou perdent des unit‚s '+
+      'd''allocation : installer par-dessus donnerait un systŠme d‚fectueux. '+
+      'Install va formater la partition '+InstDir[1]+': ('+
+      MoStr(PartSectors)+'). Toutes les donn‚es de cette partition seront '+
+      'perdues.','Some files share or lose allocation units: installing '+
+      'over them would give a faulty system. Setup will format partition '+
+      InstDir[1]+': ('+MoStr(PartSectors)+'). All the data on this '+
+      'partition will be lost.',
+             'Einige Dateien teilen oder verlieren Zuordnungseinheiten: '+
+             'eine Installation darber erg„be ein fehlerhaftes System. '+
+             'Setup formatiert Partition '+InstDir[1]+': ('+
+             MoStr(PartSectors)+'). Alle Daten dieser Partition gehen '+
+             'verloren.'),aNorm);
+   End;
    dsOther:Begin
     Y:=PutWrap(8,8,66,T('Le disque dur ne contient aucune partition MS-DOS.',
       'The hard disk has no MS-DOS partition.',
@@ -1673,7 +1797,7 @@ Begin
   If K=kEnter Then Break;
   Nav(K,5);
  Until False;
- If St<>dsNoFormat Then
+ If(St<>dsNoFormat)and(St<>dsDamaged)Then
   If Not CreatePartition Then
    Fatal('Impossible de cr‚er la partition du disque dur.',
          'Cannot create the hard disk partition.',

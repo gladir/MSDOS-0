@@ -14,6 +14,17 @@ Const
  MaxPathLength=79;
  ScanBufferSize=512;
  ScanLimit=255;
+{ Signatures de virus : stockees chiffrees (XOR + decalage selon la
+  position) pour que le programme ne contienne aucune signature en clair ;
+  elles sont dechiffrees uniquement au moment de l'analyse }
+ SigCount=5;
+ SigKey=$A5;
+ SigLength:Array[0..SigCount-1]of Byte=(12,12,6,6,5);
+ SigData:Array[0..40]of Byte=(
+  $E1,$ED,$C5,$C5,$99,$C1,$25,$D3,$23,$23,$2E,$3A,
+  $04,$01,$00,$14,$10,$66,$1A,$76,$76,$7D,$43,$55,
+  $5B,$5D,$5E,$AE,$B7,$A9,$80,$88,$8A,$90,$96,$9C,
+  $F7,$E9,$F9,$C3,$CE);
 
 Type
  TScanState=Record
@@ -94,7 +105,7 @@ Procedure DrawHeader;
 Begin
  TextBackground(1);TextColor(15);ClrScr;
  GotoXY(1,1);Write(RepeatChar(' ',80));
- GotoXY(28,1);Write('Microsoft Anti-Virus');
+ GotoXY(34,1);Write('MS Anti-Virus');
  TextBackground(7);TextColor(0);
  GotoXY(1,3);Write(RepeatChar(' ',80));
  GotoXY(33,3);Write('Menu Express');
@@ -127,7 +138,7 @@ Begin
  GotoXY(38,15);Write('Resultats        : ',ScanState.Infected:6,' alerte(s)');
  GotoXY(38,17);Write('Progression :');
  DrawBar(38,18,35,ScanState.Scanned,ScanState.Files);
- GotoXY(3,20);TextColor(4);Write('Microsoft');
+ GotoXY(3,20);TextColor(4);Write('MS');
  GotoXY(3,21);Write('Anti-Virus');
  TextColor(0);
 End;
@@ -162,12 +173,30 @@ Begin
  End;
 End;
 
+{ Dechiffre la signature numero Index (0..SigCount-1) }
+Function GetSignature(Index:Byte):String;
+Var
+ I,Start,Pos:Word;
+ S:String;
+Begin
+ Start:=0;
+ For I:=0 to Index-1 do Inc(Start,SigLength[I]);
+ S:='';
+ For I:=0 to SigLength[Index]-1 do Begin
+  Pos:=Start+I;
+  S:=S+Chr(Byte((SigData[Pos]xor SigKey)-Byte(Pos*7)));
+ End;
+ GetSignature:=S;
+End;
+
 Function ScanFile(FileName:String):Byte;
 Var
  F:File;
  Buffer:Array[1..ScanBufferSize]of Char;
  ReadCount,TotalRead:Word;
  Header:String;
+ SigIndex:Byte;
+ Found:Boolean;
 begin
  ScanFile:=0;
  Assign(F,FileName);
@@ -181,11 +210,10 @@ begin
   TotalRead:=ReadCount;
  End;
  Close(F);
- If ContainsText(Header,'DARK AVENGER')or
-    ContainsText(Header,'MICHELANGELO')or
-    ContainsText(Header,'VIENNA')or
-    ContainsText(Header,'STONED')or
-    ContainsText(Header,'VIRUS')Then ScanFile:=2
+ Found:=False;
+ For SigIndex:=0 to SigCount-1 do
+  If ContainsText(Header,GetSignature(SigIndex))Then Found:=True;
+ If Found Then ScanFile:=2
   Else
  If
    IsDOSProgram(FileName)and(TotalRead>=
@@ -235,7 +263,7 @@ End;
 Procedure ShowHelp;
 Begin
  ClrScr;TextColor(15);TextBackground(1);
- WriteLn('MSAV - Microsoft Anti-Virus pour DOS');
+ WriteLn('MSAV - MS Anti-Virus pour DOS');
  TextBackground(7);TextColor(0);
  WriteLn;
    WriteLn('Analyse en lecture seule des fichiers du repertoire courant.');
