@@ -20,9 +20,22 @@ Const
  POPUP_HEIGHT = 15;
  VIDEO_SEG = $B800;
 
- JerusalemSignature:Array[1..5]of Byte = ($B8, $21, $35, $CD, $21);
- StonedSignature:Array[1..5]of Byte = ($B4, $02, $B0, $03, $CD);
- MichelangeloSignature:Array[1..5]of Byte = ($FA, $B8, $C2, $34, $B1);
+
+{ Signatures et noms des virus connus : stockes chiffres (XOR + decalage selon
+  la position), dechiffres en memoire par InitVirusDB, pour qu'aucune
+  signature ni nom de virus ne figure en clair dans le programme }
+ VIRUS_COUNT=3;
+ SIG_KEY=$5C;
+ SigLen=5;
+ EncSig:Array[0..14]of Byte=(
+  $E4,$72,$13,$A8,$09,$A9,$0C,$57,$37,$1E,
+  $20,$1B,$02,$81,$3B);
+ NameLen:Array[1..VIRUS_COUNT]of Byte=(9,6,12);
+ EncName:Array[0..26]of Byte=(
+  $16,$34,$24,$22,$23,$2C,$22,$26,$D9,$32,
+  $CE,$CC,$CE,$D0,$D2,$26,$C5,$CA,$C2,$C2,
+  $F4,$FC,$EC,$F0,$F1,$EB,$E1);
+ SigOffset:Array[1..VIRUS_COUNT]of Word=(1,32,128);
 
 Type
  TOptions=Record
@@ -163,6 +176,7 @@ Var
  RFile:File;
  SFile:FileRec Absolute RFile;
  BytesRead:Word;
+ K:Integer;
 Begin
  Case AX shr 8 of  { AH }
   $31:If Options.TSRWarning Then Begin { TSR }
@@ -176,12 +190,13 @@ Begin
      { Lire le dÃ©but du fichier }
     BlockRead(RFile,Buffer,SizeOf(Buffer),BytesRead);
      { VÃ©rifier les signatures connues }
-    If CompareMem(Buffer[1],JerusalemSignature,5)Then
-     ShowWarning('Virus Jerusalem d‚tect‚ dans un fichier !')
-    Else If CompareMem(Buffer[32], StonedSignature, 5)Then
-     ShowWarning('Virus Stoned d‚tect‚ dans un fichier !')
-    Else If CompareMem(Buffer[128], MichelangeloSignature, 5)Then
-     ShowWarning('Virus Michelangelo d‚tect‚ dans un fichier !');
+    For K:=1 to SignatureCount do
+     If CompareMem(Buffer[VirusDB[K].Offset],VirusDB[K].Signature,
+                   SigLen)Then Begin
+      ShowWarning('Virus '+VirusDB[K].Name+' d'+#130+'tect'+#130+
+                  ' dans un fichier !');
+      Break;
+     End;
     If IOResult<>0 Then;  { R‚initialise l'‚tat d'erreur }
    End;
   End;
@@ -233,25 +248,25 @@ Begin
  WriteLn('VSAFE n''est pas charg‚');
 End;
 
-Procedure InitVirusDB;Begin
- SignatureCount := 3;     { 3 signatures }
- With VirusDB[1]do Begin  { Jerusalem }
-  Name:='Jerusalem';
-  Signature[1] := $B8; Signature[2] := $21; Signature[3] := $35;
-  Signature[4] := $CD; Signature[5] := $21;
-  Offset := 0;
- End;
- With VirusDB[2] do Begin  { Stoned }
-  Name:='Stoned';
-  Signature[1] := $B4; Signature[2] := $02; Signature[3] := $B0;
-  Signature[4] := $03; Signature[5] := $CD;
-  Offset := 32;
- End;
- With VirusDB[3] do Begin  { Brain }
-  Name:='Brain';
-  Signature[1] := $FA; Signature[2] := $B8; Signature[3] := $C2;
-  Signature[4] := $34; Signature[5] := $B1;
-  Offset := 0;
+Procedure InitVirusDB;
+Var
+ V,J,P,Q:Integer;
+Begin
+ SignatureCount:=VIRUS_COUNT;
+ P:=0;
+ Q:=0;
+ For V:=1 to VIRUS_COUNT do With VirusDB[V] do Begin
+  Name:='';
+  For J:=1 to NameLen[V] do Begin
+   Name:=Name+Chr(Byte((EncName[P]xor SIG_KEY)-Byte(P*3)));
+   Inc(P);
+  End;
+  FillChar(Signature,SizeOf(Signature),0);
+  For J:=1 to SigLen do Begin
+   Signature[J]:=Byte((EncSig[Q]xor SIG_KEY)-Byte(Q*13));
+   Inc(Q);
+  End;
+  Offset:=SigOffset[V];
  End;
 End;
 
@@ -264,9 +279,9 @@ Begin
  CheckVirusSignature:='';
  BufPtr:=@Buffer;
  For i:=1 to SignatureCount do With VirusDB[i] do Begin
-  If Size<(Offset + SIG_LENGTH)Then Continue;
+  If Size<(Offset + SigLen)Then Continue;
   Match:=True;
-  For j:=1 to SIG_LENGTH do If BufPtr^[Offset+j-1]<>Signature[j]Then Begin
+  For j:=1 to SigLen do If BufPtr^[Offset-1+j-1]<>Signature[j]Then Begin
    Match := False;
    Break;
   End;
