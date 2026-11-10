@@ -26,6 +26,14 @@ Const
   $5B,$5D,$5E,$AE,$B7,$A9,$80,$88,$8A,$90,$96,$9C,
   $F7,$E9,$F9,$C3,$CE);
 
+Const
+ MenuCount=5;
+ MenuText:Array[0..4]of String[24]=('Detecter','Detecter & Nettoyer',
+  'Selectionner un lecteur','Options','Quitter');
+ MenuDesc:Array[0..4]of String[40]=('Recherche des fichiers infectes',
+  'Detecte et isole les fichiers infectes','Choisit le lecteur a examiner',
+  'Modifie les options de l''analyse','Retourne au DOS');
+
 Type
  TScanState=Record
   Files:LongInt;
@@ -41,6 +49,10 @@ Var
  ScanState:TScanState;
  RootPath:String;
  Recursive:Boolean;
+ ReportDos:Boolean;
+ CleanMode:Boolean;
+ MenuSel:Integer;
+ Isolated:LongInt;
 
 Function StrToUpper(S:String):String;
 Var
@@ -114,6 +126,24 @@ Begin
  TextBackground(7);TextColor(0);
 End;
 
+{ Menu de gauche (element choisi en surbrillance) et description a droite }
+Procedure DrawMenu;
+Var
+ I:Integer;
+Begin
+ For I:=0 to MenuCount-1 do Begin
+  GotoXY(3,5+I*2);
+  If I=MenuSel Then Begin TextColor(15);TextBackground(1);End
+               Else Begin TextColor(0);TextBackground(7);End;
+  Write(PadRight(MenuText[I],24));
+ End;
+ TextBackground(7);TextColor(0);
+ GotoXY(38,5);TextColor(15);TextBackground(1);
+ Write(PadRight(MenuText[MenuSel],30));
+ TextBackground(7);TextColor(0);
+ GotoXY(38,7);Write(PadRight(MenuDesc[MenuSel],39));
+End;
+
 Procedure DrawScreen;
 Begin
  DrawHeader;
@@ -121,15 +151,7 @@ Begin
  TextBackground(7);TextColor(0);ClrScr;
  Window(1,1,80,25);
  TextBackground(7);TextColor(0);
- GotoXY(3,5);Write('Detecter');
- GotoXY(3,7);Write('Detecter & Nettoyer');
- GotoXY(3,9);Write('Selectionner un lecteur');
- GotoXY(3,11);Write('Options');
- GotoXY(3,13);Write('Quitter');
- TextColor(15);TextBackground(1);
- GotoXY(38,5);Write('Detecter');
- TextBackground(7);TextColor(0);
- GotoXY(38,7);Write('Recherche recursive des fichiers DOS');
+ DrawMenu;
  GotoXY(38,9);Write('Lecteur examine : ',RootPath);
  GotoXY(38,10);Write('Dernier fichier :');
  GotoXY(38,11);Write('Derniere action : Pret a commencer');
@@ -221,6 +243,26 @@ begin
   ScanFile:=1;
 End;
 
+{ Isole un fichier infecte : renomme en .VIR (reversible) }
+Procedure IsolateFile(FileName:String);
+Var
+ F:File;
+ D:DirStr;
+ N:NameStr;
+ E:ExtStr;
+ NewName:String;
+Begin
+ FSplit(FileName,D,N,E);
+ NewName:=D+N+'.VIR';
+ Assign(F,FileName);
+ {$I-}SetFAttr(F,0);Rename(F,NewName);{$I+}
+ If IOResult=0 Then Begin
+  Inc(Isolated);
+  UpdateScreen('Fichier isole : '+N+'.VIR');
+ End
+  Else UpdateScreen('Isolement impossible');
+End;
+
 Procedure ScanFiles(DirPath:String);
 Var
  Info:SearchRec;
@@ -240,9 +282,11 @@ Begin
     ScanState.CurrentDirectory:=DirPath;
     ResultCode:=ScanFile(Child);
     Inc(ScanState.Scanned);
+    If(ResultCode=1)and(Not ReportDos)Then ResultCode:=0;
     If ResultCode=2 Then Begin
      Inc(ScanState.Infected);
      UpdateScreen('Alerte : signature suspecte');
+     If CleanMode Then IsolateFile(Child);
     End
      Else
     If ResultCode=1 Then Begin
@@ -275,12 +319,161 @@ Begin
  ReadKey;
 End;
 
+{ Lecture d'une touche : les touches etendues (fleches, F1..F5) donnent
+  256 + code de balayage }
+Function GetKey:Word;
+Var
+ C:Char;
+Begin
+ C:=ReadKey;
+ If C=#0 Then GetKey:=256+Ord(ReadKey)
+         Else GetKey:=Ord(C);
+End;
+
+Procedure DrawPopup(X1,Y1,X2,Y2:Byte;Title:String);
+Var
+ Y:Byte;
+Begin
+ TextBackground(1);TextColor(15);
+ For Y:=Y1 to Y2 do Begin
+  GotoXY(X1,Y);Write(RepeatChar(' ',X2-X1+1));
+ End;
+ GotoXY(X1+((X2-X1+1-Length(Title))div 2),Y1);Write(Title);
+End;
+
+Procedure ShowKeysHelp;
+Begin
+ DrawPopup(10,6,70,19,'Aide de MS Anti-Virus');
+ GotoXY(12,8);Write('F1  Aide          Affiche cette aide');
+ GotoXY(12,9);Write('F2  Lecteur       Choisit le lecteur a examiner');
+ GotoXY(12,10);Write('F3  Quitter       Quitte MS Anti-Virus');
+ GotoXY(12,11);Write('F4  Detecter      Recherche les virus connus');
+ GotoXY(12,12);Write('F5  Options       Modifie les options de l''analyse');
+ GotoXY(12,14);Write('Haut/Bas + Entree : choisit une commande du menu.');
+ GotoXY(12,15);Write('Echap : quitte, ou interrompt une analyse.');
+ GotoXY(12,16);Write('Detecter & Nettoyer renomme les fichiers infectes en');
+ GotoXY(12,17);Write('.VIR (ils ne sont jamais effaces).');
+ GotoXY(12,19);Write('Appuyez sur une touche pour continuer.');
+ GetKey;
+End;
+
+Procedure ChooseDrive;
+Var
+ D:Byte;
+ Line:String;
+ K:Word;
+ Ok:Boolean;
+Begin
+ DrawPopup(20,8,60,15,'Selectionner un lecteur');
+ Line:='';
+ For D:=1 to 26 do
+  If DiskSize(D)>=0 Then Line:=Line+Chr(64+D)+': ';
+ GotoXY(22,10);Write('Lecteurs disponibles : ',Line);
+ GotoXY(22,12);Write('Tapez la lettre du lecteur.');
+ GotoXY(22,13);Write('Echap annule.');
+ Repeat
+  K:=GetKey;
+  Ok:=False;
+  If(K>=Ord('a'))and(K<=Ord('z'))Then Dec(K,32);
+  If(K>=Ord('A'))and(K<=Ord('Z'))Then
+   If DiskSize(K-64)>=0 Then Begin
+    RootPath:=Chr(K)+':\';
+    Ok:=True;
+   End;
+ Until Ok or(K=27);
+End;
+
+Procedure ShowOptions;
+Var
+ Sel:Integer;
+ K:Word;
+Begin
+ Sel:=0;
+ DrawPopup(15,8,65,15,'Options');
+ Repeat
+  TextBackground(1);TextColor(15);
+  GotoXY(17,10);If Sel=0 Then TextColor(14);
+  Write('[',Chr(32+Ord(Recursive)*56),'] Examiner les sous-repertoires    ');
+  TextColor(15);
+  GotoXY(17,11);If Sel=1 Then TextColor(14);
+  Write('[',Chr(32+Ord(ReportDos)*56),'] Signaler les programmes DOS       ');
+  TextColor(15);
+  GotoXY(17,13);Write('Haut/Bas : choisir   Espace : changer   Echap : fin');
+  K:=GetKey;
+  If(K=$148)or(K=$150)Then Sel:=1-Sel
+  Else If(K=32)or(K=13)Then Begin
+   If Sel=0 Then Recursive:=Not Recursive
+            Else ReportDos:=Not ReportDos;
+  End;
+ Until(K=27)or(K=$13F)or(K=$13D);
+End;
+
+Procedure RunScan(Clean:Boolean);
+Begin
+ CleanMode:=Clean;
+ FillChar(ScanState,SizeOf(ScanState),0);
+ Isolated:=0;
+ DrawScreen;
+ GotoXY(38,11);Write('Comptage des fichiers...   ');
+ CountFiles(RootPath);
+ UpdateScreen('Analyse en cours');
+ ScanFiles(RootPath);
+ GotoXY(38,20);
+ If ScanState.Stop Then Write('Analyse interrompue.') Else
+   Write('Analyse terminee.');
+ GotoXY(38,21);Write(ScanState.Infected,' alerte(s), ',ScanState.Suspicious,
+   ' programme(s) DOS.');
+ If Clean Then Begin
+  GotoXY(38,22);Write(Isolated,' fichier(s) isole(s).');
+ End;
+ GotoXY(38,23);Write('Une touche : retour au menu.');
+ GetKey;
+End;
+
+Procedure MainLoop;
+Var
+ K:Word;
+ Item:Integer;
+ Done:Boolean;
+Begin
+ Done:=False;
+ MenuSel:=0;
+ DrawScreen;
+ Repeat
+  K:=GetKey;
+  Item:=-1;
+  Case K of
+   $148:Begin
+    If MenuSel>0 Then Dec(MenuSel) Else MenuSel:=MenuCount-1;
+    DrawMenu;
+   End;
+   $150:Begin
+    If MenuSel<MenuCount-1 Then Inc(MenuSel) Else MenuSel:=0;
+    DrawMenu;
+   End;
+   13:Item:=MenuSel;
+   $13B:Begin ShowKeysHelp;DrawScreen;End;
+   $13C:Item:=2;
+   $13D,27:Item:=4;
+   $13E:Item:=0;
+   $13F:Item:=3;
+  End;
+  Case Item of
+   0:Begin MenuSel:=0;RunScan(False);DrawScreen;End;
+   1:Begin MenuSel:=1;RunScan(True);DrawScreen;End;
+   2:Begin MenuSel:=2;ChooseDrive;DrawScreen;End;
+   3:Begin MenuSel:=3;ShowOptions;DrawScreen;End;
+   4:Done:=True;
+  End;
+ Until Done;
+End;
+
 Procedure ReadParameters;
 Var
  I:Byte;
  P:String;
 Begin
- Recursive:=True;RootPath:='';
+ Recursive:=True;ReportDos:=True;RootPath:='';
  For I:=1 to ParamCount do Begin
   P:=ParamStr(I);
   If(P='/?')or(StrToUpper(P)='-H')or(StrToUpper(P)='--HELP')or
@@ -300,17 +493,6 @@ Begin
  {$ENDIF}
  ReadParameters;
  FillChar(ScanState,SizeOf(ScanState),0);
- DrawScreen;
- GotoXY(38,11);Write('Comptage des fichiers...');
- CountFiles(RootPath);
- UpdateScreen('Analyse en cours');
- ScanFiles(RootPath);
- GotoXY(38,20);
- If ScanState.Stop Then Write('Analyse interrompue.') Else
-   Write('Analyse terminee.');
- GotoXY(38,21);Write(ScanState.Infected,' alerte(s), ',ScanState.Suspicious,
-   ' programme(s) DOS.');
- GotoXY(38,23);Write('Appuyez sur une touche pour quitter.');
- ReadKey;
+ MainLoop;
  TextBackground(0);TextColor(7);ClrScr;
 End.
