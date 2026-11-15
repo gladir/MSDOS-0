@@ -12,7 +12,7 @@ Clone de MS-DOS en langage de programmation Pascal (Turbo Pascal ou Free Pascal)
 
 <h2>Images disque amorcables</h2>
 
-Le dossier [IMAGE](IMAGE/LISEZMOI.TXT) contient `DOS144A.IMG` (disquette 1,44 Mo amorcable : noyau + commandes), `DOS144B.IMG` (suite des commandes), `DOSCD.ISO` (CD-ROM amorcable) et `INSTALL.IMG` / `INSTALL2.IMG` (disquettes d'installation de MSDOS-0 sur disque dur, voir `INSTALL.PAS`). Le programme `TOOLS\MAKEDISK.PAS` permet de créer des images de disquette (réparties sur plusieurs disquettes si nécessaire), de disque dur ou de CD-ROM à l'aide de `FORMAT`, `SYS`, `DISKPC` et `UNDISKPC`.
+Le dossier [IMAGE](IMAGE/LISEZMOI.TXT) contient `DOS144A.IMG` (disquette 1,44 Mo amorcable : noyau + commandes), `DOS144B.IMG` (suite des commandes), `DOSCD.ISO` (CD-ROM amorcable) et `INSTALL.IMG` / `INSTALL2.IMG` (disquettes d'installation de MSDOS-0 sur disque dur, voir `INSTALL.PAS`) et `INSTALLCD.ISO` (CD-ROM d'installation amorçable, sans changement de disquette). Le programme `TOOLS\MAKEDISK.PAS` permet de créer des images de disquette (réparties sur plusieurs disquettes si nécessaire), de disque dur ou de CD-ROM à l'aide de `FORMAT`, `SYS`, `DISKPC` et `UNDISKPC`.
 
 <h2>Liste des fichiers</h2>
 
@@ -137,7 +137,7 @@ Voici la liste des différents fichiers proposés dans MSDOS-0 :
 		</tr>
 		<tr>
 			<td><b>INSTALL.PAS</b></td>
-			<td>Cette commande permet d'installer MSDOS-0 sur un disque dur : écrans bleus dans le style de l'installation de MS-DOS 6.22, copie des fichiers depuis les disquettes d'installation (<code>IMAGE\INSTALL.IMG</code>), disque amorçable (secteur de boot, MBR), <i>CONFIG.SYS</i> et <i>AUTOEXEC.BAT</i>.</td>
+			<td>Cette commande permet d'installer MSDOS-0 sur un disque dur : écrans bleus dans le style de l'installation de MS-DOS 6.22, copie des fichiers depuis les disquettes d'installation (<code>IMAGE\INSTALL.IMG</code>) ou le CD-ROM (<code>IMAGE\INSTALLCD.ISO</code>), disque amorçable (secteur de boot, MBR), <i>CONFIG.SYS</i> et <i>AUTOEXEC.BAT</i>.</td>
 		</tr>
 		<tr>
 			<td><b>INTERLNK.PAS</b></td>
