@@ -132,3 +132,14 @@ Demarrage
   Pour tester l'ISO : devenv /KERNELTEST,dossier /KTBOOTIMG:IMAGE\DOSCD.ISO ...
   ou, dans l'IDE : devenv /CDROM:IMAGE\DOSCD.ISO puis la commande BOOT du
   terminal (emulation disquette El Torito : l'image de boot est montee sur A:).
+
+Compatibilite BIOS (VirtualBox, Bochs, PC reels)
+-----------------------------------------------
+Le noyau (IO.SYS) travaille sur une pile privee en 9000:C000. Le BIOS de
+VirtualBox/Bochs place son EBDA (zone de donnees du BIOS : ports ATA du
+lecteur de CD, etc.) a la fin des 640 Ko (en 9FC00h) : une pile qui montait
+jusqu'en 9000:FFF0 l'ecrasait, le BIOS ne trouvait plus le lecteur et toutes
+les lectures de la disquette emulee echouaient (INT 13h erreur 02), donc
+pas de message "Demarrage du MSDOS-0". La pile reste desormais sous
+9C000h. Verifie avec le BIOS de Bochs (ancetre de celui de VirtualBox) et
+celui de QEMU (SeaBIOS) : DOSCD.ISO et INSTALLCD.ISO demarrent.
