@@ -20,6 +20,14 @@ INSTALL2.IMG  INSTALL.INF, FORMAT, FDISK, SYS... La disquette 1 demarre
               INSTALL2.IMG (et les suivantes) contient la suite des
               commandes a installer. Voir "INSTALL" plus bas.
 
+INSTALLCD.ISO CD-ROM d'INSTALLATION amorcable (El Torito, emulation de
+              disquette 2,88 Mo) : tout le jeu d'installation tient sur
+              une seule image (noyau, INSTALL.EXE, INSTALL.INF, FORMAT,
+              FDISK, SYS et toutes les commandes) : aucun changement de
+              disquette. Le CD demarre directement sur INSTALL (meme
+              AUTOEXEC.BAT que INSTALL.IMG) ; le lecteur source est le
+              lecteur d'amorcage emule (A:). Dans l'IDE DEVENV :
+              devenv /CDROM:IMAGE\INSTALLCD.ISO puis la commande BOOT.
 INSTALL\      CONFIG.SYS et AUTOEXEC.BAT de la disquette d'installation.
 SYSTEM\       Fichiers systeme utilises pour fabriquer les images.
 MAKEIMG.BAT   Reconstruit les images avec TOOLS\MAKEDISK.EXE.
@@ -101,6 +109,10 @@ Fabrication : MAKEIMG.BAT, ou
     /BOOT:INSTALL\AUTOEXEC.BAT /BOOT:INSTALL\CONFIG.SYS
 (/BOOT = fichiers imposes sur la disquette 1, /INF = liste INSTALL.INF des
 fichiers a installer, /NUMBER = disquettes INSTALL2.IMG, INSTALL3.IMG...).
+
+CD-ROM : MAKEIMG.BAT fabrique aussi INSTALLCD.ISO (MAKEDISK /FLOPPY:2880
+  ... /ISO:INSTALLCD.ISO) ; test headless :
+  devenv /KERNELTEST,dossier /KTBOOTIMG:INSTALLCD.ISO /KTHD:disque.img
 
 Test dans l'emulateur DEVENV (disquette A: + disque dur C:) :
   devenv /KERNELTEST,dossier /KTBOOTIMG:INSTALL.IMG /KTHD:disque.img
