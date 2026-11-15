@@ -926,14 +926,16 @@ Begin
      IO.SYS (> 30 Ko) recouvre la pile
    du secteur de boot (0000:7C00) et le BPB,
      le chargeur copie ce dont il a besoin et passe sur une pile privee
-   9000:FFF0 sur laquelle le noyau continue de s'executer. }
+   9000:C000 sur laquelle le noyau continue de s'executer (le sommet doit
+   rester sous l'EBDA du BIOS, en general 9FC00h, sinon le BIOS perd ses
+   ports ATA/CD et les lectures INT 13h de la disquette emulee echouent). }
  ASM
   MOV BX,SS
   MOV CX,SP
   CLI
   MOV AX,9000h
   MOV SS,AX
-  MOV SP,0FFF0h
+  MOV SP,0C000h
   STI
   PUSH BX
   PUSH CX
