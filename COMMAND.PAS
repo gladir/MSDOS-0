@@ -2583,6 +2583,19 @@ Begin
  RedirIn:='';RedirOut:='';RedirAppend:=False;
 End;
 
+{ Saisie : les caracteres de controle laisses dans le tampon clavier du BIOS
+  (Echap, Ctrl+lettre, touche tapee pendant le demarrage...) ne
+  font pas partie de la commande : ils la rendaient "non reconnue". }
+Procedure CleanCmd;
+Var I,J:Byte;
+Begin
+ J:=0;
+ For I:=1 to Length(CmdStr)do If CmdStr[I]>=#32 Then Begin
+  Inc(J);CmdStr[J]:=CmdStr[I];
+ End;
+ CmdStr[0]:=Chr(J);
+End;
+
 BEGIN
  {$IFDEF FPC}
   {$IFDEF WINDOWS}
@@ -2662,6 +2675,7 @@ BEGIN
   Repeat
    ShowPrompt;
    ReadLn(CmdStr);
+   CleanCmd;
    RunCommand;
   Until Terminated;
  End;
